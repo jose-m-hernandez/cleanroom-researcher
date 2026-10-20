@@ -13,10 +13,12 @@ This is the ledger. Every file in the repository has exactly one row below sayin
 | sources/SRC-0001/source.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | tests/__init__.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | tests/test_check_admission.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
+| tests/test_check_vocabulary.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | tests/test_gate.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | tests/test_header.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | tests/test_stdlib_only.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | tools/check_admission.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
+| tools/check_vocabulary.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | tools/gate.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | tools/lib/__init__.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | tools/lib/header.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |

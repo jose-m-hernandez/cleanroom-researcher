@@ -2,7 +2,8 @@
 
 Usage: python3 tools/gate.py [--root PATH] [--checks-only]
 
-Runs every stage, whatever an earlier one reported. The last line is exactly
+Runs every stage (admission, vocabulary, tests), whatever an earlier one
+reported. The last line is exactly
 ``gate: PASS``, ``gate: FAIL`` or ``gate: DEAD`` (``gate: PASS (checks only)``
 with --checks-only). Exit 0 pass, 1 findings, 2 dead or usage error.
 """
@@ -20,10 +21,41 @@ import unittest
 from typing import Callable, List, Optional, Tuple
 
 TEST_PATTERN = "test_*.py"
+CHILD_PREFIX = "tests-child:"
+
+
+def _unittest_names(tree: ast.AST) -> Tuple[set, set]:
+    """Local names bound to the unittest module, and to unittest.TestCase."""
+    modules = set()
+    classes = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.split(".")[0] == "unittest":
+                    # "import unittest.mock" binds unittest; "import unittest.mock as m" binds m.
+                    if alias.asname:
+                        if alias.name == "unittest":
+                            modules.add(alias.asname)
+                    else:
+                        modules.add("unittest")
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module == "unittest":
+            for alias in node.names:
+                if alias.name == "TestCase":
+                    classes.add(alias.asname or "TestCase")
+    return modules, classes
+
+
+def _is_testcase_base(base: ast.expr, modules: set, classes: set) -> bool:
+    if isinstance(base, ast.Name):
+        return base.id in classes
+    if isinstance(base, ast.Attribute) and isinstance(base.value, ast.Name):
+        return base.attr == "TestCase" and base.value.id in modules
+    return False
 
 
 def t1_findings(source: str, label: str) -> List[str]:
-    """Rule T1: a test file may not define module-level test functions."""
+    """Rule T1: a test file defines no module-level test function, and every
+    class named Test* subclasses unittest.TestCase directly."""
     try:
         tree = ast.parse(source)
     except SyntaxError:
@@ -32,6 +64,13 @@ def t1_findings(source: str, label: str) -> List[str]:
     for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test"):
             found.append("tests: %s:%d: module-level test function" % (label, node.lineno))
+    modules, classes = _unittest_names(tree)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name.startswith("Test"):
+            if not any(_is_testcase_base(b, modules, classes) for b in node.bases):
+                found.append(
+                    "tests: %s:%d: test class is not a unittest.TestCase" % (label, node.lineno)
+                )
     return found
 
 
@@ -40,6 +79,13 @@ def run_admission(root: str) -> Tuple[int, List[str]]:
     import check_admission
 
     return check_admission.run(root)
+
+
+def run_vocabulary(root: str) -> Tuple[int, List[str]]:
+    # Imported here so that a broken import is reported by the stage guard.
+    import check_vocabulary
+
+    return check_vocabulary.run(root)
 
 
 def guarded(
@@ -62,6 +108,8 @@ def t1_scan(tests_dir: str) -> List[str]:
                 continue
             full = os.path.join(dirpath, name)
             label = os.path.relpath(full, os.path.dirname(tests_dir)).replace(os.sep, "/")
+            if name.endswith("_test.py"):
+                found.append("tests: %s: test file pattern is test_*.py" % label)
             with open(full, encoding="utf-8") as handle:
                 found.extend(t1_findings(handle.read(), label))
     return found
@@ -132,7 +180,7 @@ def _output_lines(proc: "subprocess.CompletedProcess[bytes]") -> List[str]:
     for blob in (proc.stdout, proc.stderr):
         text = blob.decode("utf-8", "replace").rstrip()
         if text:
-            lines.extend(text.split("\n"))
+            lines.extend(l for l in text.split("\n") if not l.startswith(CHILD_PREFIX))
     return lines
 
 
@@ -216,10 +264,17 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = parser.parse_args(argv)
     root = os.path.abspath(args.root)
     if args.tests_result:
-        return child_run(root, os.path.abspath(args.tests_result))
+        code = child_run(root, os.path.abspath(args.tests_result))
+        print(CHILD_PREFIX + " result written")
+        sys.stdout.flush()
+        return code
 
     codes = []
     code, lines = guarded("admission", run_admission, root)
+    codes.append(code)
+    for line in lines:
+        print(line)
+    code, lines = guarded("vocabulary", run_vocabulary, root)
     codes.append(code)
     for line in lines:
         print(line)
