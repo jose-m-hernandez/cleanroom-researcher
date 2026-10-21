@@ -20,6 +20,12 @@ WORD = "qz" + "xw"
 SPACED = "zq-" + "two words"
 LIST = CANARY + "\n" + TERM + "\n" + WORD + "\tword\n"
 CLEAN = ("Ann Example", "ann@example.invalid")
+CLEAN_IDENT = {
+    "GIT_AUTHOR_NAME": CLEAN[0],
+    "GIT_AUTHOR_EMAIL": CLEAN[1],
+    "GIT_COMMITTER_NAME": CLEAN[0],
+    "GIT_COMMITTER_EMAIL": CLEAN[1],
+}
 NOTE = "some note"
 
 
@@ -44,12 +50,7 @@ def commit(root, message="Work", files=None, env=None):
     """One commit as a clean identity; env entries apply to this call only."""
     for path, text in (files or {}).items():
         write(root, path, text)
-    ident = {
-        "GIT_AUTHOR_NAME": CLEAN[0],
-        "GIT_AUTHOR_EMAIL": CLEAN[1],
-        "GIT_COMMITTER_NAME": CLEAN[0],
-        "GIT_COMMITTER_EMAIL": CLEAN[1],
-    }
+    ident = dict(CLEAN_IDENT)
     ident.update(env or {})
     git(root, "add", "-A", env=ident)
     git(root, "commit", "-q", "--allow-empty", "-m", message, env=ident)
@@ -548,7 +549,7 @@ class ScopeTests(Base):
         commit(self.root, "Side " + TERM)
         git(self.root, "checkout", "-q", "main")
         commit(self.root, "Main work")
-        git(self.root, "merge", "-q", "--no-ff", "-m", "Merge side", "side")
+        git(self.root, "merge", "-q", "--no-ff", "-m", "Merge side", "side", env=CLEAN_IDENT)
         code, lines = self.scan()
         self.assertEqual(code, 1, lines)
         self.assertTrue([l for l in lines if l.endswith("entry #2 (message)")], lines)
@@ -799,12 +800,7 @@ class HeaderTests(Base):
 
     def test_f3_a_deleted_gitlink_path_is_still_a_path(self):
         make_repo(self.root)
-        ident = {
-            "GIT_AUTHOR_NAME": CLEAN[0],
-            "GIT_AUTHOR_EMAIL": CLEAN[1],
-            "GIT_COMMITTER_NAME": CLEAN[0],
-            "GIT_COMMITTER_EMAIL": CLEAN[1],
-        }
+        ident = CLEAN_IDENT
         link = TERM + "-mod"
         head = git(self.root, "rev-parse", "HEAD")
         git(self.root, "update-index", "--add", "--cacheinfo", "160000,%s,%s" % (head, link))
