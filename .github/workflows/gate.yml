@@ -38,3 +38,25 @@ jobs:
           python-version: "3.13"
       - run: python3 -m pip install -r requirements-dev.txt
       - run: python3 -m pytest -q -p no:cacheprovider
+
+  barred:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Fork guard
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        run: 'echo "barred: skipped on a fork pull request (no secrets); a maintainer re-runs it after merge"'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) }}
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.head_ref || github.ref_name }}
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) }}
+        with:
+          python-version: "3.13"
+      - run: python3 tools/barred_scan.py
+        if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) }}
+        env:
+          BARRED_STRINGS: ${{ secrets.BARRED_STRINGS }}

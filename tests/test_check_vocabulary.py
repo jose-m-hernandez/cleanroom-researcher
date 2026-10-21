@@ -261,6 +261,29 @@ class V5Tests(Base):
         flat = " ".join(check_vocabulary.__doc__.split())
         self.assertIn(sentence, flat)
 
+    def test_s1_a_quoted_home_key_outside_tests_is_a_hit(self):
+        # Passes today by design: a pin.
+        self.assertHit(self.check({"tools/x.py": "e = {" + HOME_KEY + ": 1}\n"}), "V5", "tools/x.py:1:")
+
+    def test_s2_a_quoted_home_key_in_tests_is_clean(self):
+        self.assertClean(self.check({"tests/x.py": "e = {" + HOME_KEY + ": 1}\n"}))
+
+    def test_s3_an_expanduser_call_in_tests_is_a_hit(self):
+        # Passes today by design: a pin.
+        self.assertHit(self.check({"tests/x.py": "p = " + EXPAND + ")\n"}), "V5", "tests/x.py:1:")
+
+    def test_s4_a_path_home_call_in_tests_is_a_hit(self):
+        # Passes today by design: a pin.
+        self.assertHit(self.check({"tests/x.py": "p = " + PATH_HOME + ")\n"}), "V5", "tests/x.py:1:")
+
+    def test_s5_tests_elsewhere_in_the_path_is_not_scoped(self):
+        # Passes today by design: a pin.
+        for path in ("tools/tests_helper.py", "docs/tests/x.py", "tests_x/y.py"):
+            with self.subTest(path=path):
+                with tempfile.TemporaryDirectory() as tmp:
+                    make_repo(tmp, {path: "e = {" + HOME_KEY + ": 1}\n"})
+                    self.assertHit(check_vocabulary.run(tmp), "V5", path + ":1:")
+
 
 class V6Tests(Base):
     def vocab_with(self, rows):
@@ -582,6 +605,17 @@ class RawCommitTests(Base):
         self.assertEqual(code, 2, lines)
         self.assertEqual(lines, ["vocabulary: DEAD commit %s holds a NUL byte" % cid[:7]])
 
+    def test_the_nul_byte_reason_names_the_commit_by_its_percent_h(self):
+        make_repo(self.root, {"a.txt": "x\n"})
+        git(self.root, "config", "core.abbrev", "12")
+        cid = raw_commit(self.root, b"", b"fine\0more\n")
+        short = out(self.root, "log", "-1", "--format=%h")
+        self.assertEqual(len(short), 12)
+        code, lines = check_vocabulary.run(self.root)
+        self.assertEqual(code, 2, lines)
+        self.assertEqual(lines, ["vocabulary: DEAD commit %s holds a NUL byte" % short])
+        self.assertTrue(cid.startswith(short))
+
     def test_a_declared_non_utf8_encoding_is_dead(self):
         make_repo(self.root, {"a.txt": "x\n"})
         cid = raw_commit(self.root, b"encoding ISO-8859-1\n", b"caf\xe9\n")
@@ -673,6 +707,189 @@ class GitEnvironmentTests(Base):
         self.assertTrue(
             any(l.startswith("vocabulary: commit %s: V2 " % bad[:7]) for l in lines), lines
         )
+
+    def graft_repo(self):
+        """Three commits; returns the newest commit's full id."""
+        make_repo(self.root, {"a.txt": "x\n"}, messages=["One", "Two", "Three"])
+        return out(self.root, "rev-parse", "HEAD")
+
+    def assert_graft_is_live_but_harmless(self, newest):
+        # Control: plain git, with the same environment, sees only one commit.
+        self.assertEqual(out(self.root, "rev-list", "HEAD").split(), [newest])
+        self.assertEqual(len(repofiles.commit_short_ids(self.root)), 3)
+        self.assertEqual(len(repofiles.commit_messages(self.root)), 3)
+
+    def test_f1_env_a_graft_file_named_in_the_environment_does_not_hide_history(self):
+        newest = self.graft_repo()
+        graft = os.path.join(self.tmp.name, "grafts")
+        with open(graft, "w", encoding="utf-8") as handle:
+            handle.write(newest + "\n")
+        with mock.patch.dict(os.environ, {"GIT_GRAFT_FILE": graft}):
+            self.assert_graft_is_live_but_harmless(newest)
+
+    def test_f1_file_the_repositorys_own_graft_file_does_not_hide_history(self):
+        newest = self.graft_repo()
+        graft = os.path.join(self.root, ".git", "info", "grafts")
+        os.makedirs(os.path.dirname(graft), exist_ok=True)
+        with open(graft, "w", encoding="utf-8") as handle:
+            handle.write(newest + "\n")
+        self.assert_graft_is_live_but_harmless(newest)
+
+
+class GitConfigRedirectTests(Base):
+    """Config variables that set core.excludesFile must not hide a file."""
+
+    def planted(self):
+        make_repo(self.root, {"a.txt": "x\n"}, messages=["One"])
+        write(self.root, "hidden.txt", "y\n")
+        ignore = os.path.join(self.tmp.name, "ignore")
+        with open(ignore, "w", encoding="utf-8") as handle:
+            handle.write("hidden.txt\n")
+        return ignore
+
+    def assertStillListed(self, extra):
+        # Control: git itself, given these variables, does hide the file.
+        # The control is isolated from the user's own git config, so it
+        # measures only the variable under test.
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if k
+            not in (
+                "GIT_CONFIG_GLOBAL",
+                "GIT_CONFIG_NOSYSTEM",
+                "GIT_CONFIG_PARAMETERS",
+                "GIT_CONFIG_COUNT",
+            )
+            and not k.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_"))
+        }
+        env["HOME"] = tempfile.mkdtemp(dir=self.tmp.name)
+        env["XDG_CONFIG_HOME"] = tempfile.mkdtemp(dir=self.tmp.name)
+        env.update(extra)
+        raw = subprocess.run(
+            ["git", "-C", self.root, "ls-files", "--others", "--exclude-standard"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+            env=env,
+        ).stdout
+        self.assertNotIn(b"hidden.txt", raw)
+        with mock.patch.dict(os.environ, extra):
+            self.assertIn("hidden.txt", repofiles.file_set(self.root))
+
+    def test_a_global_config_file_does_not_hide_a_file(self):
+        ignore = self.planted()
+        config = os.path.join(self.tmp.name, "gitconfig")
+        with open(config, "w", encoding="utf-8") as handle:
+            handle.write("[core]\n\texcludesFile = %s\n" % ignore)
+        self.assertStillListed({"GIT_CONFIG_GLOBAL": config})
+
+    def test_a_system_config_file_does_not_hide_a_file(self):
+        ignore = self.planted()
+        config = os.path.join(self.tmp.name, "gitconfig")
+        with open(config, "w", encoding="utf-8") as handle:
+            handle.write("[core]\n\texcludesFile = %s\n" % ignore)
+        self.assertStillListed({"GIT_CONFIG_SYSTEM": config})
+
+    def test_config_parameters_do_not_hide_a_file(self):
+        ignore = self.planted()
+        self.assertStillListed(
+            {"GIT_CONFIG_PARAMETERS": "'core.excludesfile'='%s'" % ignore}
+        )
+
+    def test_a_config_count_with_key_and_value_does_not_hide_a_file(self):
+        ignore = self.planted()
+        self.assertStillListed(
+            {
+                "GIT_CONFIG_COUNT": "1",
+                "GIT_CONFIG_KEY_0": "core.excludesFile",
+                "GIT_CONFIG_VALUE_0": ignore,
+            }
+        )
+
+    def test_every_numbered_key_and_value_is_dropped(self):
+        planted = {
+            "GIT_CONFIG_COUNT": "20",
+            "GIT_CONFIG_KEY_0": "a.b",
+            "GIT_CONFIG_VALUE_0": "c",
+            "GIT_CONFIG_KEY_19": "a.b",
+            "GIT_CONFIG_VALUE_19": "c",
+            "GIT_CONFIG_KEYS": "kept",
+        }
+        with mock.patch.dict(os.environ, planted):
+            env = repofiles._env()
+        self.assertEqual(
+            {k for k in env if k.startswith("GIT_CONFIG")},
+            {"GIT_CONFIG_GLOBAL", "GIT_CONFIG_KEYS", "GIT_CONFIG_NOSYSTEM"},
+        )
+
+
+class AmbientGitConfigTests(Base):
+    """The user's own git config and default ignore file must not hide a file."""
+
+    AMBIENT = ("XDG_CONFIG_HOME", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM",
+               "GIT_CONFIG_NOSYSTEM", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT")
+
+    def planted(self):
+        make_repo(self.root, {"a.txt": "x\n"}, messages=["One"])
+        write(self.root, "planted.txt", "y\n")
+
+    def ignore_file(self, *parts):
+        path = os.path.join(self.tmp.name, *parts)
+        write(self.tmp.name, "/".join(parts), "planted.txt\n")
+        return path
+
+    def assertRouteLiveThenListed(self, env):
+        """Control: plain git, run with env, hides the file; file_set does not."""
+        with mock.patch.dict(os.environ, env):
+            for key in self.AMBIENT:
+                if key not in env:
+                    os.environ.pop(key, None)
+            raw = subprocess.run(
+                ["git", "-C", self.root, "ls-files", "--others", "--exclude-standard"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=True,
+                env=dict(os.environ),
+            ).stdout
+            self.assertNotIn(b"planted.txt", raw)
+            self.assertIn("planted.txt", repofiles.file_set(self.root))
+
+    def test_a1_a_global_gitconfig_in_home_does_not_hide_a_file(self):
+        self.planted()
+        home = os.path.join(self.tmp.name, "profile")
+        os.makedirs(home)
+        ignore = self.ignore_file("ignore-a1")
+        write(home, ".gitconfig", "[core]\n\texcludesFile = %s\n" % ignore)
+        self.assertRouteLiveThenListed({"HOME": home})
+
+    def test_a2_the_default_ignore_file_under_home_does_not_hide_a_file(self):
+        self.planted()
+        home = os.path.join(self.tmp.name, "profile")
+        write(home, ".config/git/ignore", "planted.txt\n")
+        self.assertRouteLiveThenListed({"HOME": home})
+
+    def test_a3_the_default_ignore_file_under_xdg_does_not_hide_a_file(self):
+        self.planted()
+        xdg = os.path.join(self.tmp.name, "xdg")
+        write(xdg, "git/ignore", "planted.txt\n")
+        home = os.path.join(self.tmp.name, "profile")
+        os.makedirs(home)
+        self.assertRouteLiveThenListed({"HOME": home, "XDG_CONFIG_HOME": xdg})
+
+    def test_a4_the_environment_pins_config_and_points_xdg_at_an_empty_directory(self):
+        planted = {
+            "GIT_CONFIG_GLOBAL": "/nowhere",
+            "XDG_CONFIG_HOME": "/nowhere",
+            "GIT_CONFIG_NOSYSTEM": "0",
+        }
+        with mock.patch.dict(os.environ, planted):
+            env = repofiles._env()
+        self.assertEqual(env["GIT_CONFIG_GLOBAL"], os.devnull)
+        self.assertEqual(env["GIT_CONFIG_NOSYSTEM"], "1")
+        self.assertTrue(os.path.isdir(env["XDG_CONFIG_HOME"]))
+        self.assertEqual(os.listdir(env["XDG_CONFIG_HOME"]), [])
+        self.assertNotEqual(env["XDG_CONFIG_HOME"], "/nowhere")
 
 
 class LengthGuardTests(Base):

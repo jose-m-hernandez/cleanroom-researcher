@@ -22,6 +22,7 @@ STDLIB_ALLOWED = frozenset(
         "sys",
         "tempfile",
         "typing",
+        "unicodedata",
         "unittest",
     ]
 )

@@ -345,7 +345,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_every_job_declares_a_ten_minute_timeout(self):
         lines = read_workflow().split("\n")
-        for job in ("gate", "dev-tools"):
+        for job in ("gate", "dev-tools", "barred"):
             start = lines.index("  %s:" % job)
             block = []
             for line in lines[start + 1:]:
@@ -353,6 +353,79 @@ class WorkflowTests(unittest.TestCase):
                     break
                 block.append(line)
             self.assertIn("    timeout-minutes: 10", block, job)
+
+
+FORK = "github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository"
+NOT_FORK = "${{ !(" + FORK + ") }}"
+
+
+def job_block(name):
+    lines = read_workflow().split("\n")
+    start = lines.index("  %s:" % name)
+    block = []
+    for line in lines[start + 1:]:
+        if re.match(r"^  \S", line):
+            break
+        block.append(line)
+    return block
+
+
+def steps_of(name):
+    """The job's steps, each as the list of its lines."""
+    steps = []
+    for line in job_block(name):
+        if line.startswith("      - "):
+            steps.append([line])
+        elif steps and line.startswith("        "):
+            steps[-1].append(line)
+    return steps
+
+
+class BarredWorkflowTests(unittest.TestCase):
+    def test_the_job_has_a_ten_minute_timeout_and_the_pinned_runner(self):
+        block = job_block("barred")
+        self.assertIn("    timeout-minutes: 10", block)
+        self.assertIn("    runs-on: ubuntu-24.04", block)
+
+    def test_both_actions_are_pinned_to_a_commit(self):
+        uses = [l for l in job_block("barred") if re.match(r"^\s*(- )?uses:", l)]
+        self.assertEqual(len(uses), 2, uses)
+        self.assertIn("actions/checkout@", uses[0])
+        self.assertIn("actions/setup-python@", uses[1])
+        for line in uses:
+            self.assertRegex(line, r"@[0-9a-f]{40}(\s|$)")
+
+    def test_the_checkout_reads_the_branch_by_name_with_full_history(self):
+        checkout = "\n".join(steps_of("barred")[1])
+        self.assertIn("ref: ${{ github.head_ref || github.ref_name }}", checkout)
+        self.assertIn("fetch-depth: 0", checkout)
+        self.assertIn("persist-credentials: false", checkout)
+
+    def test_the_fork_guard_comes_first_and_checks_nothing_out(self):
+        steps = steps_of("barred")
+        first = "\n".join(steps[0])
+        self.assertIn("        if: " + FORK, steps[0])
+        self.assertIn("barred: skipped on a fork pull request (no secrets)", first)
+        self.assertNotIn("uses:", first)
+        uses_at = [i for i, s in enumerate(steps) if "uses: actions/checkout@" in s[0]]
+        self.assertEqual(uses_at, [1])
+
+    def test_every_later_step_carries_the_negated_condition(self):
+        steps = steps_of("barred")
+        self.assertEqual(len(steps), 4)
+        for step in steps[1:]:
+            with self.subTest(step=step[0]):
+                self.assertIn("        if: " + NOT_FORK, step)
+
+    def test_the_scan_step_gets_the_secret_and_nothing_else_runs(self):
+        scan = steps_of("barred")[3]
+        self.assertEqual(scan[0], "      - run: python3 tools/barred_scan.py")
+        self.assertIn("          BARRED_STRINGS: ${{ secrets.BARRED_STRINGS }}", scan)
+        runs = [l for l in job_block("barred") if re.match(r"^\s*(- )?run:", l)]
+        self.assertEqual(len(runs), 2, runs)
+
+    def test_no_pull_request_target_anywhere(self):
+        self.assertNotIn("pull_request_target", read_workflow())
 
 
 class StageOrderTests(unittest.TestCase):

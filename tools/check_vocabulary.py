@@ -15,7 +15,8 @@ Rules, case-insensitive unless stated:
 - V3 that word, whitespace, then the word for a lane.
 - V4 home and machine paths: a tilde-slash anywhere, a users or home directory
   followed by a letter, and the usual home-directory variables.
-- V5 in .py files only: a home-directory lookup call, or a quoted home key.
+- V5 in .py files only: a home-directory lookup call anywhere, or a quoted home
+  key outside tests/ (a test may set a temporary HOME for a child process).
   V5 matches names as written: an aliased expanduser or Path.home, and a HOME
   key built at runtime, are not tracked.
   Rules are ASCII-defined; Unicode lookalikes are not matched.
@@ -70,11 +71,12 @@ V4_PIECES = [
     re.escape("%USER" + "PROFILE%"),
     re.escape("C:" + "\\Us" + "ers\\"),
 ]
-V5_PIECES = [
+V5_CALL_PIECES = [
     re.escape("Path" + ".home("),
     re.escape("expand" + "user("),
-    r"([\"'])" + "HO" + r"ME\1",
 ]
+V5_KEY_PIECE = r"([\"'])" + "HO" + r"ME\1"
+TESTS_DIR = "tests"
 
 # (rule, compiled pattern, reason). V1 is case-sensitive; the rest are not.
 TEXT_RULES = [
@@ -83,9 +85,10 @@ TEXT_RULES = [
     ("V3", re.compile(V3_PATTERN, re.IGNORECASE), "reserved word followed by lane"),
     ("V4", re.compile("|".join(V4_PIECES), re.IGNORECASE), "home or machine path"),
 ]
-PY_RULES = [
-    ("V5", re.compile("|".join(V5_PIECES), re.IGNORECASE), "home lookup in code"),
-]
+# Both V5 entries report as V5 with the same reason; the key entry is skipped
+# for files under tests/.
+V5_CALLS = ("V5", re.compile("|".join(V5_CALL_PIECES), re.IGNORECASE), "home lookup in code")
+V5_KEY = ("V5", re.compile(V5_KEY_PIECE, re.IGNORECASE), "home lookup in code")
 COMMIT_RULES = ("V1", "V2", "V3", "V4")
 IDENTITY_FIELDS = ("author", "author email", "committer", "committer email")
 
@@ -104,9 +107,16 @@ CONTROLS: Dict[str, str] = {
 Finding = Tuple[str, Optional[int], str]
 
 
-def scan_text(text: str, is_py: bool) -> List[Tuple[str, int, str]]:
-    """Hits of V1 to V5 in text as (rule, line, reason), one per rule and line."""
-    rules = TEXT_RULES + (PY_RULES if is_py else [])
+def scan_text(text: str, is_py: bool, in_tests: bool = False) -> List[Tuple[str, int, str]]:
+    """Hits of V1 to V5 in text as (rule, line, reason), one per rule and line.
+
+    in_tests drops the quoted-key piece of V5; the call pieces still apply.
+    """
+    rules = list(TEXT_RULES)
+    if is_py:
+        rules.append(V5_CALLS)
+        if not in_tests:
+            rules.append(V5_KEY)
     seen = set()
     found: List[Tuple[str, int, str]] = []
     for rule, pattern, reason in rules:
@@ -203,7 +213,8 @@ def run(root: str) -> Tuple[int, List[str]]:
         full = os.path.join(root, *path.split("/"))
         with open(full, encoding="utf-8", errors="replace") as handle:
             texts[path] = handle.read()
-        for rule, line, reason in scan_text(texts[path], path.endswith(".py")):
+        in_tests = path.split("/")[0] == TESTS_DIR and "/" in path
+        for rule, line, reason in scan_text(texts[path], path.endswith(".py"), in_tests):
             findings.append((path, line, "%s %s" % (rule, reason)))
     findings.extend(check_v6(texts))
 
