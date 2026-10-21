@@ -338,6 +338,43 @@ def check_a9(sizes: Dict[str, int], classes: Dict[str, str]) -> List[Finding]:
     return found
 
 
+def raw_segment_paths(paths: List[str]) -> List[str]:
+    """The paths in which some segment is named _raw, in any letter case."""
+    return [p for p in paths if any(seg.lower() == "_raw" for seg in p.split("/"))]
+
+
+def check_a10(root: str) -> List[Finding]:
+    """No path segment named _raw in any commit or on disk, ignored paths included."""
+    found: List[Finding] = []
+    _blobs, historic = repofiles.historic_blobs(root)
+    for path in raw_segment_paths(historic):
+        found.append(
+            (path, None, "A10 _raw path in history; remove it from history, raw output stays outside the repository")
+        )
+    def unreadable(err: OSError) -> None:
+        where = os.path.relpath(str(err.filename), root).replace(os.sep, "/")
+        found.append(
+            (where, None, "A10 cannot read this directory, so a _raw path inside it could be missed; make it readable")
+        )
+
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False, onerror=unreadable):
+        rel_dir = os.path.relpath(dirpath, root).replace(os.sep, "/")
+        prefix = "" if rel_dir == "." else rel_dir + "/"
+        if prefix == "":
+            dirnames[:] = [d for d in dirnames if d != ".git"]
+        hit_dirs = set()
+        for name in sorted(dirnames + filenames):
+            rel = prefix + name
+            if raw_segment_paths([rel]):
+                found.append(
+                    (rel, None, "A10 _raw path on disk; move raw output outside the repository")
+                )
+                if name in dirnames:
+                    hit_dirs.add(name)
+        dirnames[:] = [d for d in dirnames if d not in hit_dirs]
+    return found
+
+
 def control() -> bool:
     """A known-bad in-memory input must produce a finding from each rule used."""
     bad_id = "SRC-" + "9999"
@@ -345,7 +382,8 @@ def control() -> bool:
     one = any(r.startswith("A1 not admitted") for _, _, r in check_a1(["control.txt"], []))
     five = bool(check_a5({"control.txt": bad_id + "\n"}, set()))
     six = bool(check_a6({"control.txt": bad_url + "\n"}, set()))
-    return one and five and six
+    ten = bool(raw_segment_paths(["x/_raw/y"]))
+    return one and five and six and ten
 
 
 def format_finding(finding: Finding) -> str:
@@ -416,6 +454,7 @@ def run(root: str) -> Tuple[int, List[str]]:
     findings.extend(check_a7(contents, classes))
     findings.extend(check_a8({p: texts[p] for p in source_paths}, types))
     findings.extend(check_a9({p: len(d) for p, d in contents.items()}, classes))
+    findings.extend(check_a10(root))
 
     lines = [format_finding(f) for f in findings]
     if findings:

@@ -493,6 +493,115 @@ class A9Tests(RepoCase):
         self.assertClean()
 
 
+class A10Tests(RepoCase):
+    def commit(self, message):
+        subprocess.run(
+            ["git", "-C", self.root, "add", "-A"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True,
+        )
+        subprocess.run(
+            ["git", "-C", self.root, "-c", "user.name=t", "-c", "user.email=t@example.com",
+             "commit", "-q", "-m", message],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True,
+        )
+
+    def test_ignored_raw_directory_on_disk_is_found(self):
+        files = base_files()
+        files[".gitignore"] = "_raw/\n"
+        self.build(files)
+        write(self.root, "_raw/x", "raw\n")
+        self.assertFinding("A10 _raw path on disk", "_raw")
+
+    def test_raw_path_in_history_is_found(self):
+        files = base_files()
+        files["_raw/x"] = "raw\n"
+        self.build(files)
+        self.commit("add")
+        subprocess.run(
+            ["git", "-C", self.root, "rm", "-q", "-r", "-f", "_raw"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True,
+        )
+        self.build(base_files())
+        self.commit("remove")
+        self.assertFinding("A10 _raw path in history", "_raw/x")
+
+    def test_upper_case_raw_segment_on_disk_is_found(self):
+        files = base_files()
+        files["a/_RAW/x"] = "raw\n"
+        self.build(files)
+        self.assertFinding("A10 _raw path on disk", "a/_RAW")
+
+    def test_one_raw_directory_gives_one_disk_finding(self):
+        files = base_files()
+        files["_raw/x"] = "raw\n"
+        files["_raw/y"] = "raw\n"
+        self.build(files)
+        code, out = self.result()
+        self.assertEqual(out.count("A10 _raw path on disk"), 1, out)
+
+    def test_near_misses_are_clean(self):
+        files = base_files()
+        files["raw/x"] = "a\n"
+        files["_rawx/y"] = "a\n"
+        files["x_raw/y"] = "a\n"
+        self.build(files)
+        self.assertClean()
+
+    def test_raw_under_a_dot_directory_is_found(self):
+        # One repo, two ignored _raw directories; each case needs its own line.
+        files = base_files()
+        files[".gitignore"] = ".cache/\na/.hidden/\n"
+        self.build(files)
+        write(self.root, ".cache/_raw/x", "raw\n")
+        write(self.root, "a/.hidden/_raw/x", "raw\n")
+        code, out = self.result()
+        self.assertEqual(code, 1, out)
+        lines = [ln for ln in out.splitlines() if "A10 _raw path on disk" in ln]
+        for raw_dir in (".cache/_raw", "a/.hidden/_raw"):
+            with self.subTest(raw_dir=raw_dir):
+                self.assertEqual(len([ln for ln in lines if raw_dir in ln]), 1, out)
+
+    def test_unreadable_directory_is_a_finding(self):
+        # Root can read a chmod 000 directory, so the failure is injected.
+        files = base_files()
+        files[".gitignore"] = "u/\n"
+        self.build(files)
+        os.makedirs(os.path.join(self.root, "u"))
+        real_walk = os.walk
+        target = os.path.join(self.root, "u")
+
+        def walk(top, *args, **kwargs):
+            onerror = kwargs.get("onerror")
+            self.assertIsNotNone(onerror)
+            onerror(OSError(13, "Permission denied", target))
+            return real_walk(top, *args, **kwargs)
+
+        with mock.patch.object(check_admission.os, "walk", side_effect=walk):
+            code, out = self.result()
+        self.assertEqual(code, 1, out)
+        self.assertTrue(
+            any("A10 cannot read" in ln and "u" in ln for ln in out.splitlines()), out
+        )
+
+    def test_file_named_raw_is_found(self):
+        files = base_files()
+        files[".gitignore"] = "_raw\n"
+        self.build(files)
+        write(self.root, "a/_raw", "raw\n")
+        self.assertFinding("A10 _raw path on disk", "a/_raw")
+
+    def test_raw_inside_a_nested_git_directory_is_found(self):
+        files = base_files()
+        files[".gitignore"] = "n/\n"
+        self.build(files)
+        write(self.root, "n/.git/_raw/x", "raw\n")
+        self.assertFinding("A10 _raw path on disk", "n/.git/_raw")
+
+    def test_raw_segment_paths_helper(self):
+        paths = ["x/_raw/y", "x/_Raw", "raw/y", "x_raw"]
+        self.assertEqual(check_admission.raw_segment_paths(paths), paths[:2])
+
+
 class ControlAndCliTests(RepoCase):
     def test_dead_control_gives_exit_two(self):
         self.build()
@@ -500,6 +609,13 @@ class ControlAndCliTests(RepoCase):
             code, lines = check_admission.run(self.root)
         self.assertEqual(code, 2)
         self.assertIn("admission: DEAD", lines[0])
+
+    def test_control_needs_the_raw_rule(self):
+        self.build()
+        with mock.patch.object(check_admission, "raw_segment_paths", return_value=[]):
+            code, lines = check_admission.run(self.root)
+        self.assertEqual(code, 2)
+        self.assertIn("DEAD", "\n".join(lines))
 
     def test_non_checkout_gives_exit_two(self):
         with tempfile.TemporaryDirectory() as plain:

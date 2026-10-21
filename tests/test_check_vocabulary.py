@@ -242,6 +242,10 @@ class V5Tests(Base):
                     make_repo(tmp, {"a.py": "x = " + shape + "\n"})
                     self.assertHit(check_vocabulary.run(tmp), "V5", "a.py:1:")
 
+    def test_r5_runner_root_is_anchored_at_the_repository_root(self):
+        path = "tools/experiments/EXP-0001/harness/runner/r.py"
+        self.assertHit(self.check({path: "x = " + EXPAND + ")\n"}), "V5", path + ":1:")
+
     def test_ascii_limit_is_stated_for_v5_and_v7(self):
         flat = " ".join(check_vocabulary.__doc__.split())
         sentence = "Rules are ASCII-defined; Unicode lookalikes are not matched."
@@ -282,6 +286,50 @@ class V5Tests(Base):
             with self.subTest(path=path):
                 with tempfile.TemporaryDirectory() as tmp:
                     make_repo(tmp, {path: "e = {" + HOME_KEY + ": 1}\n"})
+                    self.assertHit(check_vocabulary.run(tmp), "V5", path + ":1:")
+
+    def test_r1_runner_root_skips_v5(self):
+        path = "experiments/EXP-0001/harness/runner/r.py"
+        for text in (
+            "p = " + EXPAND + ")\n",
+            "p = " + PATH_HOME + ")\n",
+            "e = {" + HOME_KEY + ": 1}\n",
+        ):
+            with self.subTest(text=text):
+                with tempfile.TemporaryDirectory() as tmp:
+                    make_repo(tmp, {path: text})
+                    self.assertClean(check_vocabulary.run(tmp))
+
+    def test_r2_outside_the_runner_root_v5_hits(self):
+        for path in (
+            "experiments/EXP-0001/harness/x.py",
+            "experiments/EXP-0001/harness/runner.py",
+            "tools/x.py",
+        ):
+            for text in (
+                "p = " + EXPAND + ")\n",
+                "p = " + PATH_HOME + ")\n",
+                "e = {" + HOME_KEY + ": 1}\n",
+            ):
+                with self.subTest(path=path, text=text):
+                    with tempfile.TemporaryDirectory() as tmp:
+                        make_repo(tmp, {path: text})
+                        self.assertHit(check_vocabulary.run(tmp), "V5", path + ":1:")
+
+    def test_r3_runner_root_still_gets_v4(self):
+        path = "experiments/EXP-0001/harness/runner/r.py"
+        self.assertHit(self.check({path: "p = '" + TILDE + "x'\n"}), "V4", path + ":1:")
+
+    def test_r4_near_miss_runner_paths_still_hit(self):
+        for path in (
+            "experiments/a/b/harness/runner/r.py",
+            "experiments/EXP-0001/runner/r.py",
+            "experiments/EXP-0001/other/runner/r.py",
+            "experiments/EXP-0001/harness/x/runner/r.py",
+        ):
+            with self.subTest(path=path):
+                with tempfile.TemporaryDirectory() as tmp:
+                    make_repo(tmp, {path: "p = " + EXPAND + ")\n"})
                     self.assertHit(check_vocabulary.run(tmp), "V5", path + ":1:")
 
 

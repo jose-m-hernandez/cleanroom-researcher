@@ -17,6 +17,8 @@ Rules, case-insensitive unless stated:
   followed by a letter, and the usual home-directory variables.
 - V5 in .py files only: a home-directory lookup call anywhere, or a quoted home
   key outside tests/ (a test may set a temporary HOME for a child process).
+  Python files under experiments/<name>/harness/runner/ are not checked for V5:
+  runner code builds the isolated environment for a live run.
   V5 matches names as written: an aliased expanduser or Path.home, and a HOME
   key built at runtime, are not tracked.
   Rules are ASCII-defined; Unicode lookalikes are not matched.
@@ -77,6 +79,7 @@ V5_CALL_PIECES = [
 ]
 V5_KEY_PIECE = r"([\"'])" + "HO" + r"ME\1"
 TESTS_DIR = "tests"
+RUNNER_ROOT = re.compile(r"^experiments/[^/]+/harness/runner/")
 
 # (rule, compiled pattern, reason). V1 is case-sensitive; the rest are not.
 TEXT_RULES = [
@@ -107,13 +110,16 @@ CONTROLS: Dict[str, str] = {
 Finding = Tuple[str, Optional[int], str]
 
 
-def scan_text(text: str, is_py: bool, in_tests: bool = False) -> List[Tuple[str, int, str]]:
+def scan_text(
+    text: str, is_py: bool, in_tests: bool = False, in_runner: bool = False
+) -> List[Tuple[str, int, str]]:
     """Hits of V1 to V5 in text as (rule, line, reason), one per rule and line.
 
     in_tests drops the quoted-key piece of V5; the call pieces still apply.
+    in_runner drops both V5 entries; V1 to V4 still apply.
     """
     rules = list(TEXT_RULES)
-    if is_py:
+    if is_py and not in_runner:
         rules.append(V5_CALLS)
         if not in_tests:
             rules.append(V5_KEY)
@@ -214,7 +220,10 @@ def run(root: str) -> Tuple[int, List[str]]:
         with open(full, encoding="utf-8", errors="replace") as handle:
             texts[path] = handle.read()
         in_tests = path.split("/")[0] == TESTS_DIR and "/" in path
-        for rule, line, reason in scan_text(texts[path], path.endswith(".py"), in_tests):
+        in_runner = RUNNER_ROOT.match(path) is not None
+        for rule, line, reason in scan_text(
+            texts[path], path.endswith(".py"), in_tests, in_runner
+        ):
             findings.append((path, line, "%s %s" % (rule, reason)))
     findings.extend(check_v6(texts))
 

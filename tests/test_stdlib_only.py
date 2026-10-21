@@ -1,5 +1,7 @@
 import ast
 import os
+import re
+import tempfile
 import unittest
 
 REAL_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -10,22 +12,34 @@ STDLIB_ALLOWED = frozenset(
         "__future__",
         "argparse",
         "ast",
+        "copy",
         "datetime",
+        "difflib",
+        "hashlib",
         "io",
+        "json",
+        "math",
         "os",
+        "pathlib",
         "posixpath",
         "re",
         "shutil",
         "socket",
         "stat",
+        "statistics",
         "subprocess",
         "sys",
+        "tarfile",
         "tempfile",
         "typing",
         "unicodedata",
         "unittest",
     ]
 )
+
+# Allowed only under experiments/<name>/harness/runner/: they vary run to run.
+RUNNER_ONLY = frozenset(["random", "time", "uuid"])
+RUNNER_ROOT = re.compile(r"^experiments/[^/]+/harness/runner/.+\.py$")
 
 BANNED_MODULES = frozenset(
     [
@@ -55,20 +69,26 @@ SCAN_DIRS = ("tools", "tests", "experiments")
 TRIPWIRE_DIRS = ("tools", "experiments")
 
 
-def python_files(top):
-    base = os.path.join(REAL_ROOT, top)
+def allowed_for(rel):
+    if RUNNER_ROOT.match(rel):
+        return STDLIB_ALLOWED | RUNNER_ONLY
+    return STDLIB_ALLOWED
+
+
+def python_files(top, root=REAL_ROOT):
+    base = os.path.join(root, top)
     found = []
     for dirpath, dirnames, filenames in os.walk(base):
         dirnames[:] = sorted(d for d in dirnames if d != "__pycache__")
         for name in sorted(filenames):
             if name.endswith(".py"):
                 full = os.path.join(dirpath, name)
-                found.append(os.path.relpath(full, REAL_ROOT).replace(os.sep, "/"))
+                found.append(os.path.relpath(full, root).replace(os.sep, "/"))
     return found
 
 
-def parse(rel):
-    with open(os.path.join(REAL_ROOT, *rel.split("/")), encoding="utf-8") as handle:
+def parse(rel, root=REAL_ROOT):
+    with open(os.path.join(root, *rel.split("/")), encoding="utf-8") as handle:
         return ast.parse(handle.read(), filename=rel)
 
 
@@ -92,6 +112,20 @@ def local_modules():
         elif os.path.isfile(os.path.join(full, "__init__.py")):
             names.add(entry)
     return names
+
+
+def import_violations(root=REAL_ROOT):
+    local = local_modules()
+    found = []
+    for top in SCAN_DIRS:
+        if not os.path.isdir(os.path.join(root, top)):
+            continue
+        for rel in python_files(top, root):
+            allowed = allowed_for(rel)
+            for name in imported_modules(parse(rel, root)):
+                if name not in allowed and name not in local:
+                    found.append("%s imports %s" % (rel, name))
+    return found
 
 
 def tripwire_hits(tree):
@@ -136,14 +170,7 @@ class StdlibOnlyTests(unittest.TestCase):
         self.assertTrue(python_files("tests"))
 
     def test_imports_are_stdlib_or_local(self):
-        local = local_modules()
-        for top in SCAN_DIRS:
-            for rel in python_files(top):
-                for name in imported_modules(parse(rel)):
-                    self.assertTrue(
-                        name in STDLIB_ALLOWED or name in local,
-                        "%s imports %s" % (rel, name),
-                    )
+        self.assertEqual(import_violations(), [])
 
     def test_pytest_is_not_allowed(self):
         self.assertNotIn("pytest", STDLIB_ALLOWED)
@@ -152,6 +179,65 @@ class StdlibOnlyTests(unittest.TestCase):
         tree = ast.parse("import requests\nfrom yaml import safe_load\n")
         strangers = [n for n in imported_modules(tree) if n not in STDLIB_ALLOWED]
         self.assertEqual(strangers, ["requests", "yaml"])
+
+
+class RunnerRootTests(unittest.TestCase):
+    def violations(self, path, text):
+        with tempfile.TemporaryDirectory() as tmp:
+            full = os.path.join(tmp, *path.split("/"))
+            os.makedirs(os.path.dirname(full))
+            with open(full, "w", encoding="utf-8") as handle:
+                handle.write(text)
+            return import_violations(tmp)
+
+    def test_runner_only_modules_pass_under_the_runner_root(self):
+        text = "import random\nimport time\nimport uuid\n"
+        self.assertEqual(
+            self.violations("experiments/EXP-0001/harness/runner/r.py", text), []
+        )
+
+    def test_runner_only_modules_fail_elsewhere(self):
+        text = "import random\nimport time\nimport uuid\n"
+        for path in (
+            "experiments/EXP-0001/harness/analysis.py",
+            "experiments/EXP-0001/harness/runner.py",
+            "experiments/a/b/harness/runner/r.py",
+            "tools/x.py",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(len(self.violations(path, text)), 3)
+
+    def test_new_allowlist_names_pass_in_tools(self):
+        self.assertEqual(self.violations("tools/x.py", "import copy\nimport json\n"), [])
+
+    def test_a_stranger_fails_under_the_runner_root(self):
+        found = self.violations(
+            "experiments/EXP-0001/harness/runner/r.py", "import requests\n"
+        )
+        self.assertEqual(len(found), 1)
+
+    def test_runner_root_is_anchored_at_the_repository_root(self):
+        found = self.violations(
+            "tools/experiments/EXP-0001/harness/runner/r.py", "import random\n"
+        )
+        self.assertEqual(len(found), 1)
+
+    def test_runner_root_needs_the_runner_directory(self):
+        found = self.violations(
+            "experiments/EXP-0001/harness/runner_old/r.py", "import random\n"
+        )
+        self.assertEqual(len(found), 1)
+
+    def test_all_eight_new_names_are_allowed(self):
+        names = ["copy", "difflib", "hashlib", "json", "math", "pathlib", "statistics", "tarfile"]
+        text = "".join("import %s\n" % n for n in names)
+        self.assertEqual(self.violations("tools/x.py", text), [])
+        for name in names:
+            with self.subTest(name=name):
+                self.assertIn(name, STDLIB_ALLOWED)
+
+    def test_runner_only_is_disjoint_from_the_allowlist(self):
+        self.assertTrue(RUNNER_ONLY.isdisjoint(STDLIB_ALLOWED))
 
 
 class TripwireTests(unittest.TestCase):
