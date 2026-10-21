@@ -8,6 +8,11 @@ This is the ledger. Every file in the repository has exactly one row below sayin
 | .gitignore | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | LICENSE | sourced | SRC-0001 | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | docs/admissions.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
+| docs/decisions/2026-10-21-home-lookups-are-scoped-by-path.md | original | - | Claude Code (claude-opus-5-5), 2026-10-21 |
+| docs/decisions/2026-10-21-live-runs-stay-inside-boundaries.md | original | - | Claude Code (claude-opus-5-5), 2026-10-21 |
+| docs/decisions/2026-10-21-standard-library-allowlist.md | original | - | Claude Code (claude-opus-5-5), 2026-10-21 |
+| docs/decisions/2026-10-21-the-clean-room-line.md | original | - | Claude Code (claude-opus-5-5), 2026-10-21 |
+| docs/decisions/2026-10-21-write-ups-and-data-are-cc-by-4.md | original | - | Claude Code (claude-opus-5-5), 2026-10-21 |
 | docs/vocabulary.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | requirements-dev.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | sources/SRC-0001/source.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
