@@ -115,12 +115,12 @@ class Base(unittest.TestCase):
             self.assertNotIn(term, shown)
         self.assertEqual(os.path.getsize(self.summary), 0)
 
-    def scan(self, list_text=LIST, via="path", root=None, env=None):
+    def scan(self, list_text=LIST, via="path", root=None, env=None, args=()):
         """Run the script as the CI job does; return (exit code, stdout lines)."""
         child = {
             k: v
             for k, v in os.environ.items()
-            if not k.startswith("BARRED_") and k != "GITHUB_STEP_SUMMARY"
+            if not k.startswith("BARRED_") and k not in ("GITHUB_STEP_SUMMARY", "GITHUB_ACTIONS")
         }
         child["GITHUB_STEP_SUMMARY"] = self.summary
         if via == "path":
@@ -132,7 +132,7 @@ class Base(unittest.TestCase):
             child["BARRED_STRINGS"] = list_text
         child.update(env or {})
         proc = subprocess.run(
-            [sys.executable, SCRIPT, "--root", root or self.root],
+            [sys.executable, SCRIPT, "--root", root or self.root] + list(args),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -910,6 +910,357 @@ class PinTests(Base):
                 make_repo(root, {"a.txt": body})
                 code, lines = self.scan(text, root=root)
                 self.assertEqual(code, 0, lines)
+
+
+REASON = "approved " + "fixture-" + "reason-" + "9d4e"
+ZERO_ID = "0" * 40
+SOME_ID = "ab" * 20
+
+
+def hash_text(root, tmp, text):
+    """The blob id git gives text, from a scratch file outside the repository."""
+    path = os.path.join(tmp, "hash-input.bin")
+    with open(path, "wb") as handle:
+        handle.write(text.encode("utf-8"))
+    return git(root, "hash-object", path)
+
+
+def allow_line(oid, entry, reason=REASON):
+    return "\t".join([oid, str(entry), reason])
+
+
+class AllowTests(Base):
+    def write_allow(self, text, name="allow.txt"):
+        path = os.path.join(self.tmp.name, name)
+        with open(path, "wb") as handle:
+            handle.write(text.encode("utf-8"))
+        return path
+
+    def allow_run(self, text, via="path", env=None, args=(), root=None):
+        """Scan with an allow list; check nothing private reached the output."""
+        child = dict(env or {})
+        if via == "path":
+            child["BARRED_ALLOW_PATH"] = self.write_allow(text)
+        else:
+            child["BARRED_ALLOW"] = text
+        code, lines = self.scan(env=child, args=args, root=root)
+        shown = "\n".join(lines)
+        self.assertNotIn(REASON, shown)
+        if "--ids" not in args:
+            for raw in text.split("\n"):
+                oid = raw.split("\t")[0]
+                if len(oid) >= 8:
+                    self.assertNotIn(oid, shown)
+        return code, lines
+
+    def term_repo(self, root=None):
+        root = root or self.root
+        make_repo(root, {"a.txt": TERM + "\n"})
+        return hash_text(root, self.tmp.name, TERM + "\n")
+
+    def test_t1_a_blob_and_entry_are_skipped(self):
+        blob = self.term_repo()
+        code, lines = self.allow_run(allow_line(blob, 2) + "\n")
+        self.assertEqual(code, 0, lines)
+        self.assertEqual(
+            lines, ["barred: ok (3 entries, 1 blobs, 1 commits, 1 allowed, canary matched)"]
+        )
+
+    def test_t2_the_allow_list_may_arrive_as_text(self):
+        blob = self.term_repo()
+        code, lines = self.allow_run(allow_line(blob, 2) + "\n", via="env")
+        self.assertEqual(code, 0, lines)
+        self.assertIn("1 allowed", lines[-1])
+
+    def test_t3_another_blob_is_still_reported(self):
+        make_repo(self.root, {"a.txt": TERM + "\n", "b.txt": TERM + " other\n"})
+        blob = hash_text(self.root, self.tmp.name, TERM + "\n")
+        code, lines = self.allow_run(allow_line(blob, 2))
+        self.assertEqual(code, 1, lines)
+        self.assertEqual(lines, ["barred: b.txt:1: entry #2", "barred: 1 finding(s), 1 allowed"])
+
+    def test_t4_another_entry_in_the_same_blob_is_still_reported(self):
+        make_repo(self.root, {"a.txt": TERM + "\n" + WORD + "\n"})
+        blob = hash_text(self.root, self.tmp.name, TERM + "\n" + WORD + "\n")
+        code, lines = self.allow_run(allow_line(blob, 2))
+        self.assertEqual(code, 1, lines)
+        self.assertEqual(lines, ["barred: a.txt:2: entry #3", "barred: 1 finding(s), 1 allowed"])
+
+    def test_t5_a_line_that_matches_nothing_is_stale(self):
+        make_repo(self.root)
+        code, lines = self.allow_run("# note\n\n" + allow_line(ZERO_ID, 2) + "\n")
+        self.assertEqual(code, 1, lines)
+        self.assertEqual(lines, ["barred: allow line 3: stale", "barred: 1 finding(s)"])
+
+    def test_t6_the_wrong_entry_number_does_not_skip(self):
+        blob = self.term_repo()
+        code, lines = self.allow_run(allow_line(blob, 3))
+        self.assertEqual(code, 1, lines)
+        self.assertEqual(
+            lines,
+            ["barred: a.txt:1: entry #2", "barred: allow line 1: stale", "barred: 2 finding(s)"],
+        )
+
+    def test_t7_malformed_lines_are_dead(self):
+        ok = SOME_ID + "\t2\t" + REASON
+        cases = [
+            ("39 hex", "a" * 39 + "\t2\t" + REASON, "allow line 2: object id is not 40 lowercase hex characters"),
+            ("41 hex", "a" * 41 + "\t2\t" + REASON, "allow line 2: object id is not 40 lowercase hex characters"),
+            ("uppercase", "A" * 40 + "\t2\t" + REASON, "allow line 2: object id is not 40 lowercase hex characters"),
+            ("entry 0", SOME_ID + "\t0\t" + REASON, "allow line 2: entry number is not a decimal from 2 up"),
+            ("entry 01", SOME_ID + "\t01\t" + REASON, "allow line 2: entry number is not a decimal from 2 up"),
+            ("entry 1", SOME_ID + "\t1\t" + REASON, "allow line 2: entry number is not a decimal from 2 up"),
+            ("entry 2a", SOME_ID + "\t2a\t" + REASON, "allow line 2: entry number is not a decimal from 2 up"),
+            ("two fields", SOME_ID + "\t2", "allow line 2: not three TAB-separated fields"),
+            ("four fields", ok + "\textra", "allow line 2: not three TAB-separated fields"),
+            ("empty reason", SOME_ID + "\t2\t", "allow line 2: reason is empty, padded or not printable"),
+            ("leading space", SOME_ID + "\t2\t " + REASON, "allow line 2: reason is empty, padded or not printable"),
+            ("trailing space", SOME_ID + "\t2\t" + REASON + " ", "allow line 2: reason is empty, padded or not printable"),
+            ("control char", SOME_ID + "\t2\tbad\x01reason", "allow line 2: reason is empty, padded or not printable"),
+            ("barred reason", SOME_ID + "\t2\tnote " + TERM, "allow line 2: reason contains a barred string"),
+            ("carriage return", ok + "\r", "allow line 2: carriage return"),
+            ("non-ASCII reason", SOME_ID + "\t2\tcaf\u00e9", "the allow list is not ASCII"),
+            ("non-ASCII comment", "# caf\u00e9", "the allow list is not ASCII"),
+            ("duplicate", ok + "\n\n" + ok, "allow line 4: repeats line 2"),
+        ]
+        make_repo(self.root)
+        for name, body, text in cases:
+            with self.subTest(case=name):
+                code, lines = self.allow_run("# first\n" + body + "\n")
+                self.assertEqual((code, lines), (2, ["barred: DEAD " + text]))
+
+    def test_t7_parse_allow_returns_the_lines(self):
+        entries = barred_scan.parse_list(LIST)
+        other = "cd" * 20
+        data = ("# note\n\n" + allow_line(SOME_ID, 2) + "\n  \n" + allow_line(other, 3, "x") + "\n").encode("ascii")
+        self.assertEqual(
+            barred_scan.parse_allow(data, entries), [(3, SOME_ID, 2), (5, other, 3)]
+        )
+        self.assertEqual(barred_scan.parse_allow(b"", entries), [])
+
+    def test_t8_source_rules(self):
+        make_repo(self.root)
+        valid = self.write_allow(allow_line(ZERO_ID, 2) + "\n")
+        inside = os.path.join(self.root, "allow.txt")
+        with open(inside, "w", encoding="utf-8") as handle:
+            handle.write(allow_line(ZERO_ID, 2) + "\n")
+        link = os.path.join(self.tmp.name, "link.txt")
+        os.symlink(valid, link)
+        link_in = os.path.join(self.tmp.name, "link-in.txt")
+        os.symlink(inside, link_in)
+        folder = os.path.join(self.tmp.name, "folder")
+        os.makedirs(folder)
+        unreadable = self.write_allow(allow_line(ZERO_ID, 2) + "\n", "locked.txt")
+        os.chmod(unreadable, 0)
+        self.addCleanup(os.chmod, unreadable, 0o600)
+        bad_file = "the allow file is missing, a symlink or not a regular file"
+        cases = [
+            ("both", {"BARRED_ALLOW": "x", "BARRED_ALLOW_PATH": valid}, "set BARRED_ALLOW or BARRED_ALLOW_PATH, not both"),
+            ("ci path", {"BARRED_ALLOW_PATH": valid, "GITHUB_ACTIONS": "true"}, "BARRED_ALLOW_PATH is not accepted in CI"),
+            ("missing", {"BARRED_ALLOW_PATH": os.path.join(self.tmp.name, "none.txt")}, bad_file),
+            ("symlink", {"BARRED_ALLOW_PATH": link}, bad_file),
+            ("directory", {"BARRED_ALLOW_PATH": folder}, bad_file),
+            ("inside", {"BARRED_ALLOW_PATH": inside}, "the allow file must live outside the repository"),
+            ("symlink into the repository", {"BARRED_ALLOW_PATH": link_in}, bad_file),
+        ]
+        if os.geteuid() != 0:
+            cases.append(("unreadable", {"BARRED_ALLOW_PATH": unreadable}, "the allow file could not be read"))
+        for name, env, text in cases:
+            with self.subTest(case=name):
+                code, lines = self.scan(env=env)
+                self.assertEqual((code, lines), (2, ["barred: DEAD " + text]))
+
+    def test_t9_the_text_is_accepted_in_ci(self):
+        blob = self.term_repo()
+        code, lines = self.allow_run(
+            allow_line(blob, 2) + "\n", via="env", env={"GITHUB_ACTIONS": "true"}
+        )
+        self.assertEqual(code, 0, lines)
+
+    def test_t10_a_path_finding_is_never_skipped(self):
+        make_repo(self.root, {TERM + ".txt": "clean words\n"})
+        blob = hash_text(self.root, self.tmp.name, "clean words\n")
+        code, lines = self.allow_run(allow_line(blob, 2))
+        self.assertEqual(code, 1, lines)
+        self.assertEqual(
+            lines,
+            ["barred: [hit]: entry #2 (path)", "barred: allow line 1: stale", "barred: 2 finding(s)"],
+        )
+
+    def test_t11_the_branch_finding_is_never_skipped(self):
+        make_repo(self.root)
+        git(self.root, "branch", "-m", "main", TERM)
+        head = git(self.root, "rev-parse", "HEAD")
+        code, lines = self.allow_run(allow_line(head, 2))
+        self.assertEqual(code, 1, lines)
+        self.assertEqual(
+            lines,
+            ["barred: branch: entry #2", "barred: allow line 1: stale", "barred: 2 finding(s)"],
+        )
+
+    def test_t12_a_commit_finding_is_skipped_by_the_full_commit_id(self):
+        for name, message, env in (
+            ("message", "Start " + TERM, None),
+            ("author email", "Start", {"GIT_AUTHOR_EMAIL": TERM + "@example.invalid"}),
+        ):
+            with self.subTest(case=name):
+                root = os.path.join(self.tmp.name, "repo-" + name.replace(" ", "-"))
+                os.makedirs(root)
+                git(root, "init", "-q", "-b", "main")
+                commit(root, message, {"a.txt": "nothing here\n"}, env=env)
+                head = git(root, "rev-parse", "HEAD")
+                code, lines = self.allow_run(allow_line(head, 2), root=root)
+                self.assertEqual(code, 0, lines)
+                self.assertIn("1 allowed", lines[-1])
+
+    def test_t13_a_commit_line_does_not_skip_content(self):
+        self.term_repo()
+        head = git(self.root, "rev-parse", "HEAD")
+        code, lines = self.allow_run(allow_line(head, 2))
+        self.assertEqual(code, 1, lines)
+        self.assertEqual(
+            lines,
+            ["barred: a.txt:1: entry #2", "barred: allow line 1: stale", "barred: 2 finding(s)"],
+        )
+
+    def test_t14_a_historic_blob_is_skipped(self):
+        blob = self.term_repo()
+        os.remove(os.path.join(self.root, "a.txt"))
+        commit(self.root, "Drop it", {"b.txt": "nothing here\n"})
+        code, lines = self.allow_run(allow_line(blob, 2))
+        self.assertEqual(code, 0, lines)
+        self.assertIn("1 allowed", lines[-1])
+
+    def test_t15_an_uncommitted_file_is_skipped(self):
+        make_repo(self.root)
+        write(self.root, "new.txt", TERM + "\n")
+        blob = git(self.root, "hash-object", "new.txt")
+        code, lines = self.allow_run(allow_line(blob, 2))
+        self.assertEqual(code, 0, lines)
+        self.assertIn("1 allowed", lines[-1])
+
+    def test_t16_ids_marks_only_the_lines_an_allow_line_could_skip(self):
+        make_repo(self.root, {"a.txt": TERM + "\n", TERM + ".txt": "clean words\n"}, "Start " + TERM)
+        git(self.root, "branch", "-m", "main", TERM)
+        blob = hash_text(self.root, self.tmp.name, TERM + "\n")
+        head = git(self.root, "rev-parse", "HEAD")
+        short = git(self.root, "rev-parse", "--short", "HEAD")
+        code, lines = self.scan(args=["--ids"])
+        self.assertEqual(code, 1, lines)
+        self.assertEqual(
+            lines,
+            [
+                "barred: a.txt:1: entry #2 [object %s]" % blob,
+                "barred: [hit]: entry #2 (path)",
+                "barred: commit %s: entry #2 (message) [object %s]" % (short, head),
+                "barred: branch: entry #2",
+                "barred: 4 finding(s)",
+            ],
+        )
+        code, lines = self.scan(args=["--ids"], env={"GITHUB_ACTIONS": "true"})
+        self.assertEqual((code, lines), (2, ["barred: DEAD --ids is not accepted in CI"]))
+
+    def test_t17_empty_variables_change_nothing(self):
+        self.term_repo()
+        plain = self.scan()
+        empty = self.scan(env={"BARRED_ALLOW": "", "BARRED_ALLOW_PATH": ""})
+        self.assertEqual(plain, empty)
+        self.assertEqual(plain[0], 1)
+
+    INSIDE = "barred: DEAD the allow file must live outside the repository"
+
+    def inside_file(self, *parts):
+        """An allow file written inside the repository; returns its path."""
+        path = os.path.join(self.root, *parts)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(allow_line(ZERO_ID, 2) + "\n")
+        return path
+
+    def test_f0_the_repository_named_in_other_case_is_still_inside(self):
+        make_repo(self.root)
+        self.inside_file("allow.txt")
+        shouted = os.path.join(self.tmp.name, "REPO", "allow.txt")
+        if not os.path.exists(shouted):
+            self.skipTest("case-sensitive file system")
+        code, lines = self.scan(env={"BARRED_ALLOW_PATH": shouted})
+        self.assertEqual((code, lines), (2, [self.INSIDE]))
+
+    def test_f1_a_false_github_actions_is_not_ci(self):
+        blob = self.term_repo()
+        code, lines = self.allow_run(allow_line(blob, 2) + "\n", env={"GITHUB_ACTIONS": "false"})
+        self.assertEqual(code, 0, lines)
+        self.assertIn("1 allowed", lines[-1])
+        code, lines = self.allow_run(
+            allow_line(blob, 2) + "\n", env={"GITHUB_ACTIONS": "false"}, args=["--ids"]
+        )
+        self.assertEqual(code, 0, lines)
+        self.assertIn("1 allowed", lines[-1])
+
+    def test_f2_one_object_with_two_entries_is_two_legal_lines(self):
+        make_repo(self.root, {"a.txt": TERM + "\n" + WORD + "\n"})
+        blob = hash_text(self.root, self.tmp.name, TERM + "\n" + WORD + "\n")
+        code, lines = self.allow_run(allow_line(blob, 2) + "\n" + allow_line(blob, 3) + "\n")
+        self.assertEqual(code, 0, lines)
+        self.assertIn("2 allowed", lines[-1])
+
+    def test_f3_a_header_finding_is_skipped(self):
+        make_repo(self.root)
+        cid = raw_commit(self.root, b"x-note " + TERM.encode("ascii"))
+        code, lines = self.allow_run(allow_line(cid, 2) + "\n")
+        self.assertEqual(code, 0, lines)
+        self.assertIn("1 allowed", lines[-1])
+
+    def test_f4_a_space_then_a_hash_is_not_a_comment(self):
+        make_repo(self.root)
+        code, lines = self.allow_run(" # x\n")
+        self.assertEqual(
+            (code, lines), (2, ["barred: DEAD allow line 1: not three TAB-separated fields"])
+        )
+
+    def test_f5_a_line_with_a_leading_space_is_not_skipped(self):
+        make_repo(self.root)
+        code, lines = self.allow_run(" " + allow_line(ZERO_ID, 2) + "\n")
+        self.assertEqual(
+            (code, lines),
+            (2, ["barred: DEAD allow line 1: object id is not 40 lowercase hex characters"]),
+        )
+
+    def test_f6_a_commit_list_that_changed_is_dead(self):
+        make_repo(self.root)
+        commit(self.root, "Second", {"b.txt": "nothing here\n"})
+        path = os.path.join(self.tmp.name, "list.txt")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(LIST)
+        real = repofiles.commit_ids
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, {"BARRED_STRINGS_PATH": path}):
+            os.environ.pop("BARRED_STRINGS", None)
+            with mock.patch.object(repofiles, "commit_ids", lambda root: real(root)[:-1]):
+                with mock.patch.object(sys, "stdout", buf):
+                    code = barred_scan.main(["--root", self.root])
+        self.assertEqual(code, 2)
+        self.assertEqual(
+            buf.getvalue().split("\n")[:-1],
+            ["barred: DEAD the commit list changed while it was read"],
+        )
+
+    def test_f7_a_sibling_folder_sharing_the_name_prefix_is_outside(self):
+        blob = self.term_repo()
+        sibling = os.path.join(self.tmp.name, "repo-other")
+        os.makedirs(sibling)
+        path = os.path.join(sibling, "allow.txt")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(allow_line(blob, 2) + "\n")
+        code, lines = self.scan(env={"BARRED_ALLOW_PATH": path})
+        self.assertEqual(code, 0, lines)
+        self.assertIn("1 allowed", lines[-1])
+
+    def test_f8_a_file_two_folders_below_the_repository_is_inside(self):
+        make_repo(self.root)
+        path = self.inside_file("one", "two", "allow.txt")
+        code, lines = self.scan(env={"BARRED_ALLOW_PATH": path})
+        self.assertEqual((code, lines), (2, [self.INSIDE]))
 
 
 class FoldTests(unittest.TestCase):

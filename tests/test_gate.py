@@ -433,6 +433,7 @@ class BarredWorkflowTests(unittest.TestCase):
         scan = steps_of("barred")[3]
         self.assertEqual(scan[0], "      - run: python3 tools/barred_scan.py")
         self.assertIn("          BARRED_STRINGS: ${{ secrets.BARRED_STRINGS }}", scan)
+        self.assertIn("          BARRED_ALLOW: ${{ secrets.BARRED_ALLOW }}", scan)
         runs = [l for l in job_block("barred") if re.match(r"^\s*(- )?run:", l)]
         self.assertEqual(len(runs), 2, runs)
 

@@ -1,6 +1,6 @@
 """The maintainers' barred-string scan.
 
-Usage: python3 tools/barred_scan.py [--root PATH]
+Usage: python3 tools/barred_scan.py [--root PATH] [--ids]
 
 The list of barred strings is private. It arrives as the whole text in the
 environment variable BARRED_STRINGS (the CI secret), or as a file path in
@@ -49,6 +49,44 @@ printed. A path that itself hits an entry is shown with the hitting parts
 removed, or withheld. Every line starts with ``barred: `` and holds no raw
 control character. Nothing is written to any file the runner reads.
 Exit 0 clean, 1 findings, 2 dead. Any exception prints its type name only.
+
+The allow list is private, like the list, and is how a maintainer approves one
+exact use: one entry, in one git object. It arrives as the whole text in the
+environment variable BARRED_ALLOW (the CI secret), or as a file path in
+BARRED_ALLOW_PATH (a maintainer, locally). Both unset or empty means no allow
+lines, and the scan behaves as if this feature did not exist. In CI, meaning the
+environment variable GITHUB_ACTIONS equals ``true``, only BARRED_ALLOW is
+accepted. These are DEAD: both variables set; BARRED_ALLOW_PATH in CI; a path
+that is missing, a symlink or not a regular file; a path that resolves inside
+the repository; a file that cannot be read.
+
+The allow list is ASCII only; any other byte is DEAD. It is read after the
+canary check and before any scanning, split on newlines, and each line, in
+order, is:
+
+- DEAD if it holds a carriage return;
+- skipped if it is blank after stripping, or its first character is a hash;
+- otherwise exactly three TAB-separated fields, or DEAD: an object id of 40
+  lowercase hex characters, an entry number (a decimal from 2 up, no leading
+  zero, never 1, the canary), and a reason of printable ASCII with no space at
+  either end; the reason is scanned against the list and a hit is DEAD, and a
+  line that repeats an earlier (object id, entry number) pair is DEAD.
+
+A line skips a content finding when its object id is the blob's id and its
+entry number is the finding's entry; a blob is one object however many paths
+hold it. A line skips a commit finding (message, author or committer name or
+email, header) when its object id is the full commit id and its entry number
+is the finding's entry. A path finding and a branch finding are never skipped.
+Each skipped finding counts as allowed. When the allowed count is above 0 the
+summary lines add it: ``A allowed``. A line that skipped nothing in this run is
+itself a finding, ``allow line N: stale``, which counts in the total. A DEAD
+text, like every output line, never holds a reason, a list text or an object id
+read from the allow list.
+
+The option ``--ids`` appends `` [object <id>]`` to each content finding (the
+full blob id) and each commit finding (the full commit id): the lines an allow
+line could skip. Path, branch, stale and summary lines get nothing. It is DEAD
+in CI. Without it every output line is as it was before the allow list.
 """
 
 from __future__ import annotations
@@ -56,6 +94,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import stat
 import sys
 import tempfile
 import unicodedata
@@ -73,6 +112,11 @@ CHECK = "barred"
 ENV_LIST = "BARRED_STRINGS"
 ENV_PATH = "BARRED_STRINGS_PATH"
 NO_LIST = "no list (set %s or %s)" % (ENV_LIST, ENV_PATH)
+ENV_ALLOW = "BARRED_ALLOW"
+ENV_ALLOW_PATH = "BARRED_ALLOW_PATH"
+ALLOW_ID = re.compile("[0-9a-f]{40}")
+ALLOW_ENTRY = re.compile("[1-9][0-9]*")
+ALLOW_REASON = re.compile("[\\x21-\\x7e]([\\x20-\\x7e]*[\\x21-\\x7e])?")
 CANARY_SHAPE = re.compile("barred-strings-" + "canary-" + "[a-z0-9]{8,}")
 IDENTITY_FIELDS = ("author", "author email", "committer", "committer email")
 
@@ -143,6 +187,106 @@ def load_list(environ: Mapping[str, str]) -> str:
         except UnicodeDecodeError:
             raise Dead("the list is not valid UTF-8")
     raise Dead(NO_LIST)
+
+
+def in_ci(environ: Mapping[str, str]) -> bool:
+    return environ.get("GITHUB_ACTIONS") == "true"
+
+
+def load_allow(root: str, environ: Mapping[str, str]) -> bytes:
+    """The raw allow list, or b"" when neither variable is set. Raises Dead."""
+    text = environ.get(ENV_ALLOW)
+    path = environ.get(ENV_ALLOW_PATH)
+    if text and path:
+        raise Dead("set %s or %s, not both" % (ENV_ALLOW, ENV_ALLOW_PATH))
+    if path and in_ci(environ):
+        raise Dead("%s is not accepted in CI" % ENV_ALLOW_PATH)
+    if text:
+        try:
+            return text.encode("utf-8")
+        except UnicodeEncodeError:
+            raise Dead("the allow list is not ASCII")
+    if not path:
+        return b""
+    try:
+        mode = os.lstat(path).st_mode
+    except OSError:
+        raise Dead("the allow file is missing, a symlink or not a regular file")
+    if not stat.S_ISREG(mode):
+        raise Dead("the allow file is missing, a symlink or not a regular file")
+    # Identity, not spelling: a case-insensitive file system names one folder
+    # many ways, and only the file system knows they are the same folder.
+    try:
+        root_stat = os.stat(root)
+        folder = os.path.dirname(os.path.realpath(path))
+        while True:
+            if os.path.samestat(root_stat, os.stat(folder)):
+                raise Dead("the allow file must live outside the repository")
+            parent = os.path.dirname(folder)
+            if parent == folder:
+                break
+            folder = parent
+    except OSError:
+        raise Dead("the allow file could not be read")
+    try:
+        with open(path, "rb") as handle:
+            return handle.read()
+    except OSError:
+        raise Dead("the allow file could not be read")
+
+
+def parse_allow(data: bytes, entries: List["Entry"]) -> List[Tuple[int, str, int]]:
+    """The allow lines as (line number, object id, entry number). Raises Dead.
+
+    No text of a line is ever put in a Dead message."""
+    if any(byte > 0x7F for byte in data):
+        raise Dead("the allow list is not ASCII")
+    lines: List[Tuple[int, str, int]] = []
+    seen: Dict[Tuple[str, int], int] = {}
+    for number, line in enumerate(data.decode("ascii").split("\n"), 1):
+        if "\r" in line:
+            raise Dead("allow line %d: carriage return" % number)
+        if not line.strip() or line.startswith("#"):
+            continue
+        fields = line.split("\t")
+        if len(fields) != 3:
+            raise Dead("allow line %d: not three TAB-separated fields" % number)
+        oid, entry, reason = fields
+        if not ALLOW_ID.fullmatch(oid):
+            raise Dead("allow line %d: object id is not 40 lowercase hex characters" % number)
+        if not ALLOW_ENTRY.fullmatch(entry) or entry == "1":
+            raise Dead("allow line %d: entry number is not a decimal from 2 up" % number)
+        if not ALLOW_REASON.fullmatch(reason):
+            raise Dead("allow line %d: reason is empty, padded or not printable" % number)
+        if scan_text(reason, entries):
+            raise Dead("allow line %d: reason contains a barred string" % number)
+        pair = (oid, int(entry))
+        if pair in seen:
+            raise Dead("allow line %d: repeats line %d" % (number, seen[pair]))
+        seen[pair] = number
+        lines.append((number, oid, int(entry)))
+    return lines
+
+
+class Allow:
+    """The parsed allow lines, and which of them skipped a finding."""
+
+    def __init__(self, lines: List[Tuple[int, str, int]]) -> None:
+        self.lines = lines
+        self.by_pair = {(oid, entry): number for number, oid, entry in lines}
+        self.used: set = set()
+        self.count = 0
+
+    def skips(self, oid: Optional[str], entry: int) -> bool:
+        number = self.by_pair.get((oid, entry))
+        if number is None:
+            return False
+        self.used.add(number)
+        self.count += 1
+        return True
+
+    def stale(self) -> List[int]:
+        return [number for number, _oid, _entry in self.lines if number not in self.used]
 
 
 def first_hit(folded: str, entry: Entry) -> int:
@@ -220,14 +364,24 @@ def display_path(path: str, entries: List[Entry]) -> str:
     return shown
 
 
-def content_findings(path: str, data: bytes, entries: List[Entry]) -> List[str]:
+def content_findings(
+    path: str,
+    data: bytes,
+    entries: List[Entry],
+    blob: Optional[str] = None,
+    allow: Optional[Allow] = None,
+    ids: bool = False,
+) -> List[str]:
     text = data.decode("utf-8", errors="replace")
     hits = scan_text(text, entries)
+    if allow is not None:
+        hits = [(number, offset) for number, offset in hits if not allow.skips(blob, number)]
     if not hits:
         return []
     shown = display_path(path, entries)
+    suffix = " [object %s]" % blob if ids and blob else ""
     return [
-        "%s: %s:%d: entry #%d" % (CHECK, shown, line_of(text, offset), number)
+        "%s: %s:%d: entry #%d%s" % (CHECK, shown, line_of(text, offset), number, suffix)
         for number, offset in hits
     ]
 
@@ -259,7 +413,10 @@ def current_files(root: str, paths: List[str]) -> List[Tuple[str, bytes]]:
 
 
 def run(
-    root: str, environ: Mapping[str, str], loaded: Optional[List[Entry]] = None
+    root: str,
+    environ: Mapping[str, str],
+    loaded: Optional[List[Entry]] = None,
+    ids: bool = False,
 ) -> Tuple[int, List[str]]:
     """Scan root. Return (exit code, output lines). Raises Dead when untrustworthy.
 
@@ -267,22 +424,27 @@ def run(
     exist, so a caller handling an exception can match text against them."""
     if IMPORT_ERROR is not None:
         raise IMPORT_ERROR
+    if ids and in_ci(environ):
+        raise Dead("--ids is not accepted in CI")
     entries = parse_list(load_list(environ))
     if not entries:
         raise Dead(NO_LIST)
     if loaded is not None:
         loaded.extend(entries)
     check_canary(entries)
+    allow = Allow(parse_allow(load_allow(root, environ), entries))
 
     branch = repofiles.current_branch(root)
     if branch is None:
         raise Dead("detached HEAD (no branch name to scan)")
     messages = repofiles.commit_messages(root)
     shas = repofiles.commit_short_ids(root)
+    full_ids = repofiles.commit_ids(root)
     identities = repofiles.commit_identities(root)
     headers = repofiles.commit_headers(root)
     if (
         len(messages) != len(shas)
+        or len(full_ids) != len(shas)
         or len(identities) != len(shas)
         or len(headers) != len(shas)
     ):
@@ -292,8 +454,8 @@ def run(
     blobs, historic_paths = repofiles.historic_blobs(root)
     seen = set(blob for blob, _path in blobs)
     contents = repofiles.blob_contents(root, [blob for blob, _path in blobs])
-    for (_blob, path), data in zip(blobs, contents):
-        findings.extend(content_findings(path, data, entries))
+    for (blob, path), data in zip(blobs, contents):
+        findings.extend(content_findings(path, data, entries, blob, allow, ids))
 
     files = repofiles.file_set(root)
     for path, data in current_files(root, files):
@@ -301,7 +463,7 @@ def run(
         if blob in seen:
             continue
         seen.add(blob)
-        findings.extend(content_findings(path, data, entries))
+        findings.extend(content_findings(path, data, entries, blob, allow, ids))
 
     all_paths: Dict[str, None] = {}
     for path in historic_paths + files:
@@ -313,29 +475,37 @@ def run(
             for number, _offset in hits:
                 findings.append("%s: %s: entry #%d (path)" % (CHECK, shown, number))
 
-    for sha, message in zip(shas, messages):
+    def commit_finding(cid: str, sha: str, number: int, what: str) -> None:
+        if allow.skips(cid, number):
+            return
+        suffix = " [object %s]" % cid if ids else ""
+        findings.append("%s: commit %s: entry #%d (%s)%s" % (CHECK, sha, number, what, suffix))
+
+    for cid, sha, message in zip(full_ids, shas, messages):
         for number, _offset in scan_text(message, entries):
-            findings.append("%s: commit %s: entry #%d (message)" % (CHECK, sha, number))
-    for identity in identities:
+            commit_finding(cid, sha, number, "message")
+    for cid, identity in zip(full_ids, identities):
         for field, value in zip(IDENTITY_FIELDS, identity[1:]):
             for number, _offset in scan_text(value, entries):
-                findings.append(
-                    "%s: commit %s: entry #%d (%s)" % (CHECK, identity[0], number, field)
-                )
+                commit_finding(cid, identity[0], number, field)
 
-    for sha, header in zip(shas, headers):
+    for cid, sha, header in zip(full_ids, shas, headers):
         for number, _offset in scan_text(header, entries):
-            findings.append("%s: commit %s: entry #%d (header)" % (CHECK, sha, number))
+            commit_finding(cid, sha, number, "header")
 
     for number, _offset in scan_text(branch, entries):
         findings.append("%s: branch: entry #%d" % (CHECK, number))
 
+    for number in allow.stale():
+        findings.append("%s: allow line %d: stale" % (CHECK, number))
+
+    allowed = ", %d allowed" % allow.count if allow.count else ""
     if findings:
-        findings.append("%s: %d finding(s)" % (CHECK, len(findings)))
+        findings.append("%s: %d finding(s)%s" % (CHECK, len(findings), allowed))
         return 1, findings
     findings.append(
-        "%s: ok (%d entries, %d blobs, %d commits, canary matched)"
-        % (CHECK, len(entries), len(seen), len(shas))
+        "%s: ok (%d entries, %d blobs, %d commits%s, canary matched)"
+        % (CHECK, len(entries), len(seen), len(shas), allowed)
     )
     return 0, findings
 
@@ -355,10 +525,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     default_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     parser = argparse.ArgumentParser(description="Scan the repository for barred strings.")
     parser.add_argument("--root", default=default_root, help="repository root")
+    parser.add_argument("--ids", action="store_true", help="show the object id of each approvable finding")
     args = parser.parse_args(argv)
     loaded: List[Entry] = []
     try:
-        code, lines = run(os.path.abspath(args.root), os.environ, loaded)
+        code, lines = run(os.path.abspath(args.root), os.environ, loaded, args.ids)
     except Dead as exc:
         print("%s: DEAD %s" % (CHECK, escape(str(exc))))
         return 2

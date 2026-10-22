@@ -273,6 +273,14 @@ def commit_headers(root: str) -> List[str]:
     return [_header_of(root, cid, raw) for cid, raw in zip(ids, raws)]
 
 
+def commit_ids(root: str) -> List[str]:
+    """Full ids of the same commits, in the same order."""
+    _require_full_history(root)
+    if not _has_commits(root):
+        return []
+    return _commit_ids(root)
+
+
 def commit_short_ids(root: str) -> List[str]:
     """Abbreviated ids of the same commits, in the same order."""
     _require_full_history(root)

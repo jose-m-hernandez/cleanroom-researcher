@@ -53,6 +53,16 @@ A maintainer reads your pull request for these six things.
 
 The gate runs on every pull request. A further scan that only maintainers can run checks every commit after merge; if it fails, a maintainer will contact you.
 
+## Approving an intentional use
+
+The maintainers can approve one intentional use of a barred string, so the scan no longer reports it. An approval names one entry in one git object, and nothing else. Approvals are kept private with the list, never in this repository.
+
+1. Run `python3 tools/barred_scan.py --ids` locally with the list set. A finding that can be approved ends with `[object <id>]`. A finding in a path or in the branch name cannot be approved: rename it.
+2. Add one line to the private allow list: the object id, a TAB, the entry number, a TAB, and a reason in plain words that does not contain the barred string.
+3. Run the scan again. It must pass. A line that no longer matches a finding fails the scan as stale: delete it.
+
+An approval covers exact bytes. An edit to an approved file makes a new object, which needs its own line. A commit approval is lost if the commit is rewritten, for example by a rebase, an amend or a squash merge.
+
 ## Questions
 
 Open an issue.
