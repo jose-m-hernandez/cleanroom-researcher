@@ -13,7 +13,7 @@ Read the target's licence before you copy any of its text anywhere. The rule is 
 - If the licence is on that list, target text may be committed, but only under `experiments/EXP-NNNN/target/`.
 - If it is not on that list, no target text goes in `target/`, and any quote stays under 25 words.
 
-If you cannot tell which licence applies, stop and ask by opening an issue on this repository (step 11).
+If you cannot tell which licence applies, stop and ask by opening an issue on this repository (step 11) (see `CONTRIBUTING.md`).
 
 ## 3. Fetch and pin the target outside the clone
 
@@ -36,7 +36,7 @@ cd "$scratch"
 1. Download it into the scratch directory with your usual tool.
 2. Hash the bytes you downloaded: `shasum -a 256 <the file>`. The result is `--sha256`.
 
-**Hosted services** have no bytes to pin. They are not covered by this runbook yet. Do not add one with a made-up hash; ask by opening an issue on this repository.
+**Hosted services** have no bytes to pin. They are not covered by this runbook yet. Do not add one with a made-up hash; ask by opening an issue on this repository (see `CONTRIBUTING.md`).
 
 For a target, the source type is normally `code-repo` or `release-artifact`. The other types in the `Source types` table are for sources a synthesis cites.
 
@@ -143,7 +143,7 @@ A new row in `docs/vocabulary.md`, such as a new source type, is data the checks
 
 ## 11. Stop and ask when
 
-Ask by opening an issue on this repository. Stop and ask when:
+Ask by opening an issue on this repository (see `CONTRIBUTING.md`). Stop and ask when:
 
 - the licence is unclear;
 - a run would need a new account or new terms;

@@ -1,6 +1,7 @@
 import hashlib
 import io
 import os
+import re
 import shutil
 import tempfile
 import unittest
@@ -398,6 +399,184 @@ class DeadTests(NewTargetCase):
         self.assertEqual(code, 2)
         self.assertIn("new_target: DEAD RuntimeError: boom", out + err)
         self.assertEqual(tree_hashes(self.root), before)
+
+
+UNDER_TEST_PREFIX = "**Under test:** "
+
+
+def under_test_for(title, pin, source_id):
+    return "%s%s, %s ([%s](../../sources/%s/source.md))." % (UNDER_TEST_PREFIX, title, pin, source_id, source_id)
+
+
+def section_titles(text):
+    return [ln[3:] for ln in text.split("\n") if ln.startswith("## ")]
+
+
+def template_problems(text):
+    """What differs between a template text and the tool's layout; empty when they agree."""
+    problems = []
+    if section_titles(text) != [title for title, _placeholder in new_target.SECTIONS]:
+        problems.append("the section headings differ from new_target.SECTIONS")
+    _title, pairs, header_problems = header.parse(text)
+    if header_problems or tuple(key for key, _value in pairs) != header.EXPERIMENT_KEYS:
+        problems.append("the header keys differ from header.EXPERIMENT_KEYS")
+    lines = text.split("\n")
+    if "## Abstract" in lines and "## Question" in lines:
+        start, end = lines.index("## Abstract"), lines.index("## Question")
+        between = lines[start + 1:end]
+        guidance = [ln for ln in between if ln.strip()]
+        ok = (
+            len(guidance) == 2
+            and not guidance[0].startswith(UNDER_TEST_PREFIX)
+            and guidance[1].startswith(UNDER_TEST_PREFIX)
+            and between.index(guidance[1]) > between.index(guidance[0]) + 1
+            and between[between.index(guidance[1]) - 1] == ""
+        )
+        if not ok:
+            problems.append("the Under test line is not its own paragraph between the abstract and Question")
+    else:
+        problems.append("the template has no Abstract or Question heading")
+    return problems
+
+
+class UnderTestLineTests(NewTargetCase):
+    def written(self, **over):
+        code, _out, err = self.run_tool(**over)
+        self.assertEqual((code, err), (0, ""))
+        return self.read("experiments/EXP-0001/README.md")
+
+    def assertLineInPlace(self, readme, expected):
+        lines = readme.split("\n")
+        self.assertEqual(lines.count(expected), 1)
+        at = lines.index(expected)
+        self.assertGreater(at, lines.index("## Abstract"))
+        self.assertLess(at, lines.index("## Question"))
+        self.assertEqual(lines[at - 1], "")
+        self.assertTrue(lines[at - 2].startswith("TODO:"))
+        self.assertEqual(lines[at + 1], "")
+        self.assertEqual(lines[at + 2], "## Question")
+        self.assertEqual(check_experiments.abstract_of(readme), lines[at - 2])
+
+    def test_code_repo_line(self):
+        readme = self.written()
+        expected = under_test_for("An outside tool", "pinned at commit " + GOOD_COMMIT, SECOND_SOURCE)
+        self.assertLineInPlace(readme, expected)
+        link = "experiments/EXP-0001/../../sources/%s/source.md" % SECOND_SOURCE
+        self.assertTrue(os.path.isfile(os.path.join(self.root, *link.split("/"))))
+
+    def test_other_source_line(self):
+        readme = self.written(type="web-page", commit=None, licence="-")
+        expected = under_test_for("An outside tool", "pinned by SHA-256 " + GOOD_SHA, SECOND_SOURCE)
+        self.assertLineInPlace(readme, expected)
+        self.assertNotIn("pinned at commit", readme)
+        link = "experiments/EXP-0001/../../sources/%s/source.md" % SECOND_SOURCE
+        self.assertTrue(os.path.isfile(os.path.join(self.root, *link.split("/"))))
+
+    def test_the_line_with_its_link_dropped_is_not_the_line(self):
+        readme = self.written()
+        self.assertIn("](../../sources/%s/source.md))." % SECOND_SOURCE, readme)
+
+    def test_the_blank_line_decides_what_the_abstract_is(self):
+        readme = self.written()
+        lines = readme.split("\n")
+        at = next(i for i, ln in enumerate(lines) if ln.startswith(UNDER_TEST_PREFIX))
+        placeholder, line = lines[at - 2], lines[at]
+        self.assertEqual(check_experiments.abstract_of(readme), placeholder)
+        merged = "\n".join(lines[:at - 1] + lines[at:])
+        self.assertEqual(check_experiments.abstract_of(merged), placeholder + "\n" + line)
+
+    def test_exploratory_still_passes_and_the_check_reads_the_real_abstract(self):
+        readme = self.written(protocol="exploratory", title="An exploratory outside tool")
+        self.assertIn(UNDER_TEST_PREFIX, readme)
+        self.assertIn("exploratory", check_experiments.abstract_of(readme))
+        self.assertChecksClean()
+        # The line says the word, the abstract does not: E6c must still fail.
+        path = os.path.join(self.root, "experiments", "EXP-0001", "README.md")
+        plain = readme.replace(new_target.EXPLORATORY_ABSTRACT, "TODO: write one paragraph.")
+        self.assertNotEqual(plain, readme)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(plain)
+        self.assertNotIn("exploratory", check_experiments.abstract_of(plain))
+        code, lines = check_experiments.run(self.root)
+        self.assertEqual(code, 1, lines)
+        self.assertTrue(any("E6" in ln and "exploratory" in ln for ln in lines), lines)
+
+
+class TemplateDriftTests(unittest.TestCase):
+    def setUp(self):
+        self.text = real_text("docs/experiment-template.md")
+
+    def test_the_template_matches_the_tool(self):
+        self.assertEqual(template_problems(self.text), [])
+
+    def test_the_headings_equal_the_sections(self):
+        self.assertEqual(section_titles(self.text), [title for title, _p in new_target.SECTIONS])
+
+    def test_the_header_keys_equal_the_experiment_keys(self):
+        title, pairs, problems = header.parse(self.text)
+        self.assertEqual(problems, [])
+        self.assertEqual(tuple(key for key, _v in pairs), header.EXPERIMENT_KEYS)
+
+    def test_the_abstract_is_the_guidance_not_the_under_test_line(self):
+        abstract = check_experiments.abstract_of(self.text)
+        self.assertTrue(abstract)
+        self.assertNotIn(UNDER_TEST_PREFIX, abstract)
+
+    def test_swapping_two_sections_is_caught(self):
+        lines = self.text.split("\n")
+        one, two = lines.index("## Methods"), lines.index("## Results")
+        lines[one], lines[two] = lines[two], lines[one]
+        self.assertTrue(template_problems("\n".join(lines)))
+
+    def test_dropping_a_header_key_is_caught(self):
+        text = self.text.replace("read_log: ", "read_log_x: ", 1)
+        self.assertNotEqual(text, self.text)
+        self.assertTrue(template_problems(text))
+        lines = [ln for ln in self.text.split("\n") if not ln.startswith("launched_by: ")]
+        self.assertTrue(template_problems("\n".join(lines)))
+
+    def test_moving_the_under_test_line_is_caught(self):
+        lines = self.text.split("\n")
+        at = next(i for i, ln in enumerate(lines) if ln.startswith(UNDER_TEST_PREFIX))
+        line = lines.pop(at)
+        lines.insert(lines.index("## Abstract"), line)
+        self.assertTrue(template_problems("\n".join(lines)))
+        merged = self.text.replace("\n\n" + UNDER_TEST_PREFIX, "\n" + UNDER_TEST_PREFIX)
+        self.assertNotEqual(merged, self.text)
+        self.assertTrue(template_problems(merged))
+
+    def test_the_under_test_line_is_exactly_this_with_its_link(self):
+        expected = (
+            "**Under test:** <the target, its pinned version, and a link to its source record, "
+            "such as [SRC-NNNN](../../sources/SRC-NNNN/source.md); "
+            "or \"this repository's own method; no outside tool\">"
+        )
+        self.assertEqual(self.text.split("\n").count(expected), 1)
+
+    def test_the_template_names_the_reproduce_command(self):
+        self.assertIn("`python3 tools/reproduce.py EXP-NNNN`", self.text)
+
+    def test_the_protocol_definitions_equal_the_vocabulary(self):
+        vocabulary = real_text("docs/vocabulary.md").split("\n")
+        start = vocabulary.index("## Experiment protocols")
+        meanings = {}
+        for line in vocabulary[start + 1:]:
+            if line.startswith("## "):
+                break
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if len(cells) == 2 and cells[0].startswith("`"):
+                meanings[cells[0].strip("`")] = cells[1]
+        self.assertEqual(set(meanings), {"preregistered", "exploratory"})
+        in_template = dict(re.findall(r"`(\w+)` means ([^.]*)\.", self.text))
+        for value, meaning in meanings.items():
+            first, *rest = meaning.rstrip(".").split(". ")
+            body = first[0].lower() + first[1:]
+            for sentence in rest:
+                body += ", and " + sentence.replace("It was ", "", 1)
+            self.assertEqual(in_template.get(value), body, value)
+
+    def test_the_template_names_the_method_folder(self):
+        self.assertIn("`experiments/EXP-NNNN/%s/`" % paths.METHOD_DIR, self.text)
 
 
 if __name__ == "__main__":

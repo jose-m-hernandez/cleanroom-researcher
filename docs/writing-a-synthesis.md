@@ -69,4 +69,4 @@ env -i PATH=/usr/bin:/bin HOME="$(mktemp -d)" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_C
 
 The command clears the environment so the gate sees nothing from your home directory or git settings. If `python3` or `git` is not in `/usr/bin` or `/bin`, add its directory to `PATH` in the command.
 
-The last line must be `gate: PASS`. A finding line names the file and says how to fix it. If a check fails and the fix is not obvious from its message, stop and ask by opening an issue on this repository.
+The last line must be `gate: PASS`. A finding line names the file and says how to fix it. If a check fails and the fix is not obvious from its message, stop and ask by opening an issue on this repository (see `CONTRIBUTING.md`).

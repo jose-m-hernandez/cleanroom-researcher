@@ -199,6 +199,14 @@ def source_text(args: argparse.Namespace, source_id: str) -> str:
     return "\n".join(lines) + "\n"
 
 
+def under_test_line(args: argparse.Namespace, source_id: str) -> str:
+    if args.source_type == CODE_REPO:
+        pin = "pinned at commit %s" % args.commit
+    else:
+        pin = "pinned by SHA-256 %s" % args.sha256
+    return "**Under test:** %s, %s ([%s](../../sources/%s/source.md))." % (args.title, pin, source_id, source_id)
+
+
 def readme_text(args: argparse.Namespace, source_id: str, experiment_id: str) -> str:
     values = {
         "id": experiment_id,
@@ -215,6 +223,8 @@ def readme_text(args: argparse.Namespace, source_id: str, experiment_id: str) ->
         elif title == "Materials":
             placeholder = placeholder % (paths.METHOD_DIR + "/")
         lines.extend(["", "## " + title, "", placeholder])
+        if title == "Abstract":
+            lines.extend(["", under_test_line(args, source_id)])
     return "\n".join(lines) + "\n"
 
 

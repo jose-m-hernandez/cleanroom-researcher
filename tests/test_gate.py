@@ -337,6 +337,15 @@ class WorkflowTests(unittest.TestCase):
         runs = [l.strip() for l in self.gate_job_lines() if re.match(r"^\s*(- )?run:", l)]
         self.assertEqual(runs, ["- run: python3 tools/gate.py"])
 
+    def test_reproduce_job_runs_exactly_reproduce(self):
+        block = job_block("reproduce")
+        runs = [l.strip() for l in block if re.match(r"^\s*(- )?run:", l)]
+        self.assertEqual(runs, ["- run: python3 tools/reproduce.py --all"])
+        uses = [l for l in block if re.match(r"^\s*(- )?uses:", l)]
+        self.assertEqual(len(uses), 2, uses)
+        for line in uses:
+            self.assertRegex(line, r"@[0-9a-f]{40}(\s|$)")
+
     def test_every_action_is_pinned_to_a_commit(self):
         uses = [l for l in read_workflow().split("\n") if re.match(r"^\s*(- )?uses:", l)]
         self.assertTrue(uses)
@@ -348,7 +357,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_every_job_declares_a_ten_minute_timeout(self):
         lines = read_workflow().split("\n")
-        for job in ("gate", "dev-tools", "barred"):
+        for job in ("gate", "dev-tools", "barred", "reproduce"):
             start = lines.index("  %s:" % job)
             block = []
             for line in lines[start + 1:]:
