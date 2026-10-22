@@ -12,4 +12,4 @@ A lookup of the user's home directory is how one machine's private state leaks i
 
 A runner that isolates a live run has to set a fresh home directory for the child process, and it has to check that the child cannot see the real one. That is the one legitimate use, and it lives in one kind of place. A path rule covers every future experiment without anyone adding a list entry, and an exemption list would only grow.
 
-Amended 2026-10-21: the experiment folder `harness/` is now `code/` (see `docs/vocabulary.md`).
+Amended 2026-10-21: the experiment folder `harness/` is now `code/` (see the `evaluation harness` row in `docs/vocabulary.md`).

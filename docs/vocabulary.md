@@ -9,7 +9,7 @@ The words this repository uses on purpose, each with one meaning.
 | `harness` | Not used alone in this repository. In the field it names both the program that runs a model and the code that runs an evaluation, so we say `agent harness` or `evaluation harness`. |
 | `agent harness` | In Anthropic's words, "the system that enables a model to act as an agent": the agent loop plus its tools, context and guardrails. This repository counts the tools as part of it. |
 | `evaluation harness` | In Anthropic's words, "the infrastructure that runs evals end-to-end". An experiment's evaluation harness lives in its `code/` folder. |
-| `agent loop` | The cycle in which a model reads its context, calls a tool, reads the result and repeats until it stops. |
+| `agent loop` | The cycle in which a model reads its context, calls a tool, reads the result and repeats until the task is done or the loop is stopped. |
 | `extension layer` | What is added on top of the agent loop to shape what the model knows and can reach: instructions, skills and extra tools. It is part of the agent harness. |
 | `runtime` | This repository's term: the part of an agent harness that runs the model in a loop and executes its tool calls. |
 | `target` | The outside tool under test. |

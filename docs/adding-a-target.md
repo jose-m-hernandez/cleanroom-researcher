@@ -58,7 +58,7 @@ python3 tools/new_target.py \
   --provenance "Your name or tool, 2026-01-31"
 ```
 
-The values above are dummies. Use your own, and use the real address of the target: the tool refuses `example.com` and the other reserved hosts, and it refuses any address that is not `https`. For a source that is not a code repository, use `--type release-artifact` and leave out `--commit`, which the tool then refuses. The optional arguments are `--notes` (default `-`), `--protocol` (default `preregistered`) and `--root`.
+The values above are dummies. Use your own, and use the real address of the target: the tool refuses `example.com` and the other reserved hosts, and it refuses any address that is not `https`. For a source that is not a code repository, such as a release file, set `--type` to its type (`release-artifact` for a release file) and leave out `--commit`: the tool refuses `--commit` for any type but `code-repo`. The optional arguments are `--notes` (default `-`), `--protocol` (default `preregistered`) and `--root`.
 
 The tool writes a source record, an experiment record with `TODO:` placeholders for each section, an empty read log, and three rows in `docs/admissions.md`. `docs/admissions.md` lists every file this repository accepts, with why it may be here and where it came from. The gate fails on a file that is not listed. It prints one `new_target: wrote <path>` line for each path. It validates everything before it writes, it never overwrites an existing file, and it never fetches anything. If it refuses, it says what is wrong and how to fix it, and it has changed nothing.
 
@@ -139,7 +139,7 @@ Any other last line (`gate: FAIL` or `gate: DEAD`) means a stage found a problem
 
 ## 10. New vocabulary is data
 
-A new row in `docs/vocabulary.md`, such as a new source type, is data, not a new rule.
+A new row in `docs/vocabulary.md`, such as a new source type, is data the checks read, not a new rule: add the row and the checks accept the value.
 
 ## 11. Stop and ask when
 

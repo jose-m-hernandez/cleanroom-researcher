@@ -12,4 +12,4 @@ Anyone repeating an experiment should need Python and nothing else, so there are
 
 Files in `recorded/` are data under study, such as the source of a small invented project a target was asked to work on. Their imports describe the subject, not our dependencies, so the allowlist does not apply to them.
 
-Amended 2026-10-21: the experiment folder `harness/` is now `code/` (see `docs/vocabulary.md`).
+Amended 2026-10-21: the experiment folder `harness/` is now `code/` (see the `evaluation harness` row in `docs/vocabulary.md`).

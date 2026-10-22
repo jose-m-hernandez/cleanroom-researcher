@@ -10,4 +10,4 @@ People who repeat or build on an experiment need to know what they may reuse and
 
 The licence of a target's own material is set by its authors, not by us, so this repository never relicenses it.
 
-Amended 2026-10-21: the experiment folder `harness/` is now `code/` (see `docs/vocabulary.md`).
+Amended 2026-10-21: the experiment folder `harness/` is now `code/` (see the `evaluation harness` row in `docs/vocabulary.md`).
