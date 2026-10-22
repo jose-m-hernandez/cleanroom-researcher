@@ -1,6 +1,6 @@
 # Contributing
 
-You can help in three ways. Each one is small. Read the one that fits, then the checklist.
+You can help in three ways. Read the one that fits, then the checklist.
 
 ## Ways to contribute
 
@@ -10,7 +10,7 @@ You can help in three ways. Each one is small. Read the one that fits, then the 
 
 ## Before you open a pull request
 
-Run the whole gate in a clean environment, from the root of your clone:
+Run the whole gate, which is every check in `docs/checks.md` and the tests, in a clean environment, from the root of your clone:
 
 ```
 env -i PATH=/usr/bin:/bin HOME="$(mktemp -d)" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=user.useConfigOnly GIT_CONFIG_VALUE_0=true python3 tools/gate.py

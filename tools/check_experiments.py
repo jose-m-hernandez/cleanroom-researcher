@@ -24,8 +24,8 @@ Rules:
 
 That every cited source exists is A5's job, and reserved id shapes are V1's.
 
-Rule numbers follow the repository's check list: E4 is reserved for the
-recorded-file hash check, and E5 is the _raw rule, implemented as A10 in
+Rule numbers follow the repository's check list: E4 is reserved for a
+check not yet built, and E5 is the _raw rule, implemented as A10 in
 check_admission.py.
 
 A repository with no experiments/ folder is clean. A positive control runs

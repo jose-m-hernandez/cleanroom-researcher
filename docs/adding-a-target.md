@@ -13,7 +13,7 @@ Read the target's licence before you copy any of its text anywhere. The rule is 
 - If the licence is on that list, target text may be committed, but only under `experiments/EXP-NNNN/target/`.
 - If it is not on that list, no target text goes in `target/`, and any quote stays under 25 words.
 
-If you cannot tell which licence applies, stop and ask by opening an issue on this repository (step 11) (see `CONTRIBUTING.md`).
+If you cannot tell which licence applies, stop and ask by opening an issue on this repository (see step 11).
 
 ## 3. Fetch and pin the target outside the clone
 

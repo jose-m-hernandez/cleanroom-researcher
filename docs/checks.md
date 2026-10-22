@@ -7,7 +7,7 @@ This page says what each check code means. The words this repository uses on pur
 | A0 | Every file the repository lists is a regular file. A link, a socket or anything else that cannot be read as a file is refused. | `tools/check_admission.py` |
 | A1 | Every file has exactly one row in `docs/admissions.md`. A file with no row, or with two, fails, and so does a ledger that is missing or is not one well-formed table. | `tools/check_admission.py` |
 | A2 | Every path in the ledger is a normal path inside the repository, and the file it names exists. | `tools/check_admission.py` |
-| A3 | Every row has one of the three known classes, and its provenance holds an ISO date. | `tools/check_admission.py` |
+| A3 | Every row has one of the three known classes (`original`, `sourced`, `fixture`), and its provenance holds an ISO date. | `tools/check_admission.py` |
 | A4 | A row's basis fits its class. A `sourced` row names source records that exist. A `fixture` row names a generator that has an `original` row, and running the generator with the seed gives the committed bytes. An `original` row has the basis `-`. | `tools/check_admission.py` |
 | A5 | A source id written anywhere in the repository has a source record. | `tools/check_admission.py` |
 | A6 | A web address written anywhere is either the address of a source record or a reserved example host. | `tools/check_admission.py` |
@@ -25,10 +25,12 @@ This page says what each check code means. The words this repository uses on pur
 | E1 | An experiment is a folder `experiments/EXP-NNNN/` with a README. Its header has the exact keys, an id equal to the folder, a subject that is `method` or an existing source, a known protocol and a known read-log kind. | `tools/check_experiments.py` |
 | E2 | A pinned source has what its type needs: a code repository has a full 40-character commit and a licence, and a release file has a licence. | `tools/check_experiments.py` |
 | E3 | A file under an experiment's `target/` folder has a subject that is a source whose licence is on the redistributable list. | `tools/check_experiments.py` |
-| E6 | Order and disclosure, in three parts. E6a: recorded data in a preregistered experiment comes after a commit of its README. E6b: with a contemporaneous read log, the method code is committed no later than the first read-log entry for method. E6c: an exploratory experiment says "exploratory" in its abstract, and one with a reconstructed read log says "reconstructed". | `tools/check_experiments.py` |
+| E6 | Order and disclosure, in three parts. E6a: recorded data in a preregistered experiment comes after a commit of its README. E6b: with a contemporaneous read log, the method code is committed no later than the first read-log entry for method. E6c: an exploratory experiment says "exploratory" in its abstract, and one with a reconstructed read log says "reconstructed". E6b compares times that a person wrote down and that can be set by hand, so it is a consistency check on the read log, not proof of order. | `tools/check_experiments.py` |
 | E7 | An experiment with recorded runs declares a positive spend cap and who launched it, and each run folder holds an `isolation.json` proof. | `tools/check_experiments.py` |
 | S1 | A synthesis is `syntheses/SYN-NNNN.md`, holds at least one finding, and each finding names its sources as a comma-separated list of source ids. | `tools/check_experiments.py` |
 | S2 | Each finding has a grade from the `Evidence grades` table. | `tools/check_experiments.py` |
 | S3 | Each finding has a falsifier that is not empty. | `tools/check_experiments.py` |
+
+The reserved word is the one `docs/vocabulary.md` says is not used alone. V2 and V3 refuse the shapes that join it to another word, so this page does not write those shapes out.
 
 E4 is reserved for a check not yet built. E5 is the `_raw` rule, which A10 implements.
