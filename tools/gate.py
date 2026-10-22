@@ -2,7 +2,7 @@
 
 Usage: python3 tools/gate.py [--root PATH] [--checks-only]
 
-Runs every stage (admission, vocabulary, tests), whatever an earlier one
+Runs every stage (admission, vocabulary, experiments, tests), whatever an earlier one
 reported. The last line is exactly
 ``gate: PASS``, ``gate: FAIL`` or ``gate: DEAD`` (``gate: PASS (checks only)``
 with --checks-only). Exit 0 pass, 1 findings, 2 dead or usage error.
@@ -86,6 +86,13 @@ def run_vocabulary(root: str) -> Tuple[int, List[str]]:
     import check_vocabulary
 
     return check_vocabulary.run(root)
+
+
+def run_experiments(root: str) -> Tuple[int, List[str]]:
+    # Imported here so that a broken import is reported by the stage guard.
+    import check_experiments
+
+    return check_experiments.run(root)
 
 
 def guarded(
@@ -275,6 +282,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     for line in lines:
         print(line)
     code, lines = guarded("vocabulary", run_vocabulary, root)
+    codes.append(code)
+    for line in lines:
+        print(line)
+    code, lines = guarded("experiments", run_experiments, root)
     codes.append(code)
     for line in lines:
         print(line)

@@ -76,6 +76,18 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(header.SOURCE_KEYS[-1], "notes")
         self.assertEqual(len(header.SOURCE_KEYS), 10)
 
+    def test_code_repo_keys_add_commit_after_sha256(self):
+        self.assertEqual(
+            header.CODE_REPO_KEYS,
+            header.SOURCE_KEYS[:6] + ("commit",) + header.SOURCE_KEYS[6:],
+        )
+
+    def test_experiment_keys_are_exact(self):
+        self.assertEqual(
+            header.EXPERIMENT_KEYS,
+            ("id", "subject", "protocol", "read_log", "spend_cap_usd", "launched_by"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

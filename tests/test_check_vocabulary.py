@@ -243,7 +243,7 @@ class V5Tests(Base):
                     self.assertHit(check_vocabulary.run(tmp), "V5", "a.py:1:")
 
     def test_r5_runner_root_is_anchored_at_the_repository_root(self):
-        path = "tools/experiments/EXP-0001/harness/runner/r.py"
+        path = "tools/experiments/EXP-0001/code/runner/r.py"
         self.assertHit(self.check({path: "x = " + EXPAND + ")\n"}), "V5", path + ":1:")
 
     def test_ascii_limit_is_stated_for_v5_and_v7(self):
@@ -289,7 +289,7 @@ class V5Tests(Base):
                     self.assertHit(check_vocabulary.run(tmp), "V5", path + ":1:")
 
     def test_r1_runner_root_skips_v5(self):
-        path = "experiments/EXP-0001/harness/runner/r.py"
+        path = "experiments/EXP-0001/code/runner/r.py"
         for text in (
             "p = " + EXPAND + ")\n",
             "p = " + PATH_HOME + ")\n",
@@ -302,8 +302,8 @@ class V5Tests(Base):
 
     def test_r2_outside_the_runner_root_v5_hits(self):
         for path in (
-            "experiments/EXP-0001/harness/x.py",
-            "experiments/EXP-0001/harness/runner.py",
+            "experiments/EXP-0001/code/x.py",
+            "experiments/EXP-0001/code/runner.py",
             "tools/x.py",
         ):
             for text in (
@@ -317,15 +317,15 @@ class V5Tests(Base):
                         self.assertHit(check_vocabulary.run(tmp), "V5", path + ":1:")
 
     def test_r3_runner_root_still_gets_v4(self):
-        path = "experiments/EXP-0001/harness/runner/r.py"
+        path = "experiments/EXP-0001/code/runner/r.py"
         self.assertHit(self.check({path: "p = '" + TILDE + "x'\n"}), "V4", path + ":1:")
 
     def test_r4_near_miss_runner_paths_still_hit(self):
         for path in (
-            "experiments/a/b/harness/runner/r.py",
+            "experiments/a/b/code/runner/r.py",
             "experiments/EXP-0001/runner/r.py",
             "experiments/EXP-0001/other/runner/r.py",
-            "experiments/EXP-0001/harness/x/runner/r.py",
+            "experiments/EXP-0001/code/x/runner/r.py",
         ):
             with self.subTest(path=path):
                 with tempfile.TemporaryDirectory() as tmp:

@@ -267,11 +267,13 @@ class CrashGuardTests(unittest.TestCase):
     def run_main(self, admission, tests):
         out = io.StringIO()
         stub = lambda _root: (0, ["vocabulary: stub"])
+        stub_experiments = lambda _root: (0, ["experiments: stub"])
         with mock.patch.object(gate, "run_admission", admission):
             with mock.patch.object(gate, "run_vocabulary", stub):
-                with mock.patch.object(gate, "run_tests", tests):
-                    with mock.patch.object(sys, "stdout", out):
-                        code = gate.main(["--root", REAL_ROOT])
+                with mock.patch.object(gate, "run_experiments", stub_experiments):
+                    with mock.patch.object(gate, "run_tests", tests):
+                        with mock.patch.object(sys, "stdout", out):
+                            code = gate.main(["--root", REAL_ROOT])
         return code, out.getvalue().strip().split("\n")
 
     def test_crashed_admission_is_dead_and_tests_still_run(self):
@@ -292,7 +294,8 @@ class CrashGuardTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertEqual(lines[0], "admission: stub")
         self.assertEqual(lines[1], "vocabulary: stub")
-        self.assertEqual(lines[2], "tests: DEAD RuntimeError: bang")
+        self.assertEqual(lines[2], "experiments: stub")
+        self.assertEqual(lines[3], "tests: DEAD RuntimeError: bang")
         self.assertEqual(lines[-1], "gate: DEAD")
 
     def test_broken_import_is_dead_not_a_traceback(self):
@@ -441,21 +444,22 @@ class StageOrderTests(unittest.TestCase):
         out = io.StringIO()
         with mock.patch.object(gate, "run_admission", stage("admission")):
             with mock.patch.object(gate, "run_vocabulary", stage("vocabulary")):
-                with mock.patch.object(gate, "run_tests", stage("tests")):
-                    with mock.patch.object(sys, "stdout", out):
-                        code = gate.main(["--root", REAL_ROOT] + list(args))
+                with mock.patch.object(gate, "run_experiments", stage("experiments")):
+                    with mock.patch.object(gate, "run_tests", stage("tests")):
+                        with mock.patch.object(sys, "stdout", out):
+                            code = gate.main(["--root", REAL_ROOT] + list(args))
         return code, order, out.getvalue().strip().split("\n")
 
-    def test_stages_run_admission_vocabulary_tests(self):
+    def test_stages_run_admission_vocabulary_experiments_tests(self):
         code, order, lines = self.run_main()
         self.assertEqual(code, 0)
-        self.assertEqual(order, ["admission", "vocabulary", "tests"])
+        self.assertEqual(order, ["admission", "vocabulary", "experiments", "tests"])
         self.assertEqual(lines[-1], "gate: PASS")
 
-    def test_checks_only_runs_admission_and_vocabulary(self):
+    def test_checks_only_runs_admission_vocabulary_experiments(self):
         code, order, lines = self.run_main("--checks-only")
         self.assertEqual(code, 0)
-        self.assertEqual(order, ["admission", "vocabulary"])
+        self.assertEqual(order, ["admission", "vocabulary", "experiments"])
         self.assertEqual(lines[-1], "gate: PASS (checks only)")
 
     def test_a_crashed_vocabulary_stage_is_dead_and_tests_still_run(self):
@@ -466,21 +470,41 @@ class StageOrderTests(unittest.TestCase):
         out = io.StringIO()
         with mock.patch.object(gate, "run_admission", lambda _r: (0, ["admission: stub"])):
             with mock.patch.object(gate, "run_vocabulary", crash):
-                with mock.patch.object(gate, "run_tests", lambda _r: (order.append("t") or 0, ["tests: stub"])):
-                    with mock.patch.object(sys, "stdout", out):
-                        code = gate.main(["--root", REAL_ROOT])
+                with mock.patch.object(gate, "run_experiments", lambda _r: (0, ["experiments: stub"])):
+                    with mock.patch.object(gate, "run_tests", lambda _r: (order.append("t") or 0, ["tests: stub"])):
+                        with mock.patch.object(sys, "stdout", out):
+                            code = gate.main(["--root", REAL_ROOT])
         lines = out.getvalue().strip().split("\n")
         self.assertEqual(code, 2)
         self.assertEqual(lines[1], "vocabulary: DEAD RuntimeError: boom")
         self.assertEqual(order, ["t"])
         self.assertEqual(lines[-1], "gate: DEAD")
 
-    def test_checks_only_on_the_real_repo_prints_both_checks(self):
+    def test_a_crashed_experiments_stage_is_dead_and_tests_still_run(self):
+        def crash(_root):
+            raise RuntimeError("boom")
+
+        order = []
+        out = io.StringIO()
+        with mock.patch.object(gate, "run_admission", lambda _r: (0, ["admission: stub"])):
+            with mock.patch.object(gate, "run_vocabulary", lambda _r: (0, ["vocabulary: stub"])):
+                with mock.patch.object(gate, "run_experiments", crash):
+                    with mock.patch.object(gate, "run_tests", lambda _r: (order.append("t") or 0, ["tests: stub"])):
+                        with mock.patch.object(sys, "stdout", out):
+                            code = gate.main(["--root", REAL_ROOT])
+        lines = out.getvalue().strip().split("\n")
+        self.assertEqual(code, 2)
+        self.assertEqual(lines[2], "experiments: DEAD RuntimeError: boom")
+        self.assertEqual(order, ["t"])
+        self.assertEqual(lines[-1], "gate: DEAD")
+
+    def test_checks_only_on_the_real_repo_prints_all_three_checks(self):
         code, out = run_gate("--checks-only")
         self.assertEqual(code, 0, out)
         lines = out.strip().split("\n")
         self.assertTrue(lines[0].startswith("admission: ok ("), lines)
         self.assertTrue(lines[1].startswith("vocabulary: ok ("), lines)
+        self.assertTrue(lines[2].startswith("experiments: ok ("), lines)
 
 
 class T1WidenedTests(unittest.TestCase):

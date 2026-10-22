@@ -4,6 +4,8 @@ import re
 import tempfile
 import unittest
 
+from lib import paths
+
 REAL_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Written out on purpose: a new import needs a new line here, in review.
@@ -37,9 +39,8 @@ STDLIB_ALLOWED = frozenset(
     ]
 )
 
-# Allowed only under experiments/<name>/harness/runner/: they vary run to run.
+# Allowed only under experiments/<name>/code/runner/: they vary run to run.
 RUNNER_ONLY = frozenset(["random", "time", "uuid"])
-RUNNER_ROOT = re.compile(r"^experiments/[^/]+/harness/runner/.+\.py$")
 
 BANNED_MODULES = frozenset(
     [
@@ -70,7 +71,7 @@ TRIPWIRE_DIRS = ("tools", "experiments")
 
 
 def allowed_for(rel):
-    if RUNNER_ROOT.match(rel):
+    if paths.RUNNER_ROOT.match(rel) and rel.endswith(".py"):
         return STDLIB_ALLOWED | RUNNER_ONLY
     return STDLIB_ALLOWED
 
@@ -193,15 +194,15 @@ class RunnerRootTests(unittest.TestCase):
     def test_runner_only_modules_pass_under_the_runner_root(self):
         text = "import random\nimport time\nimport uuid\n"
         self.assertEqual(
-            self.violations("experiments/EXP-0001/harness/runner/r.py", text), []
+            self.violations("experiments/EXP-0001/code/runner/r.py", text), []
         )
 
     def test_runner_only_modules_fail_elsewhere(self):
         text = "import random\nimport time\nimport uuid\n"
         for path in (
-            "experiments/EXP-0001/harness/analysis.py",
-            "experiments/EXP-0001/harness/runner.py",
-            "experiments/a/b/harness/runner/r.py",
+            "experiments/EXP-0001/code/analysis.py",
+            "experiments/EXP-0001/code/runner.py",
+            "experiments/a/b/code/runner/r.py",
             "tools/x.py",
         ):
             with self.subTest(path=path):
@@ -212,19 +213,19 @@ class RunnerRootTests(unittest.TestCase):
 
     def test_a_stranger_fails_under_the_runner_root(self):
         found = self.violations(
-            "experiments/EXP-0001/harness/runner/r.py", "import requests\n"
+            "experiments/EXP-0001/code/runner/r.py", "import requests\n"
         )
         self.assertEqual(len(found), 1)
 
     def test_runner_root_is_anchored_at_the_repository_root(self):
         found = self.violations(
-            "tools/experiments/EXP-0001/harness/runner/r.py", "import random\n"
+            "tools/experiments/EXP-0001/code/runner/r.py", "import random\n"
         )
         self.assertEqual(len(found), 1)
 
     def test_runner_root_needs_the_runner_directory(self):
         found = self.violations(
-            "experiments/EXP-0001/harness/runner_old/r.py", "import random\n"
+            "experiments/EXP-0001/code/runner_old/r.py", "import random\n"
         )
         self.assertEqual(len(found), 1)
 

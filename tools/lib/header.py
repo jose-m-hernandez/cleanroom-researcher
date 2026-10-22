@@ -22,6 +22,22 @@ SOURCE_KEYS = (
     "notes",
 )
 
+CODE_REPO_KEYS = (
+    "id",
+    "url",
+    "publisher",
+    "source_type",
+    "fetched",
+    "sha256",
+    "commit",
+    "snapshot",
+    "licence",
+    "licence_basis",
+    "notes",
+)
+
+EXPERIMENT_KEYS = ("id", "subject", "protocol", "read_log", "spend_cap_usd", "launched_by")
+
 _KEY_LINE = re.compile(r"^([a-z][a-z0-9_]*): (.+)$")
 
 

@@ -20,10 +20,12 @@ VOCAB = (
     "# Vocabulary\n\n## Source types\n\n| Value | Meaning |\n| --- | --- |\n"
     "| `standard-spec` | A standard. |\n"
 )
+VOCAB_CODE_REPO = VOCAB + "| `code-repo` | A repository. |\n"
 
 
-def source_md(**over):
+def source_md(key_order=None, **over):
     values = {
+        "commit": "b" * 40,
         "id": "SRC-0001",
         "url": HTTPS + "docs.python.org/3/",
         "publisher": "Python",
@@ -37,7 +39,7 @@ def source_md(**over):
     }
     values.update(over)
     lines = ["# A source", ""]
-    for key in header.SOURCE_KEYS:
+    for key in (header.SOURCE_KEYS if key_order is None else key_order):
         if key in values and values[key] is not None:
             lines.append("%s: %s" % (key, values[key]))
     return "\n".join(lines) + "\n"
@@ -471,6 +473,24 @@ class A8Tests(RepoCase):
         self.build_source(snapshot="maybe")
         self.assertFinding("A8 snapshot must be yes or no")
 
+    def build_code_repo(self, key_order, **over):
+        files = base_files()
+        files["docs/vocabulary.md"] = VOCAB_CODE_REPO
+        files["sources/SRC-0001/source.md"] = source_md(key_order=key_order, **over)
+        self.build(files)
+
+    def test_code_repo_record_with_commit_passes(self):
+        self.build_code_repo(header.CODE_REPO_KEYS, source_type="code-repo")
+        self.assertClean()
+
+    def test_code_repo_record_without_commit_fails(self):
+        self.build_code_repo(header.SOURCE_KEYS, source_type="code-repo")
+        self.assertFinding("A8 keys must be exactly", "commit")
+
+    def test_other_record_with_commit_fails(self):
+        self.build_code_repo(header.CODE_REPO_KEYS, source_type="standard-spec")
+        self.assertFinding("A8 keys must be exactly")
+
 
 class A9Tests(RepoCase):
     def test_big_file_fails(self):
@@ -579,8 +599,50 @@ class A10Tests(RepoCase):
         with mock.patch.object(check_admission.os, "walk", side_effect=walk):
             code, out = self.result()
         self.assertEqual(code, 1, out)
-        self.assertTrue(
-            any("A10 cannot read" in ln and "u" in ln for ln in out.splitlines()), out
+        self.assertIn(
+            "admission: u: A10 cannot read this directory, so a _raw path inside it could be missed; make it readable",
+            out.splitlines(),
+        )
+
+    def test_unreadable_directory_with_a_bytes_filename_is_reported_by_its_path(self):
+        files = base_files()
+        files[".gitignore"] = "u/\n"
+        self.build(files)
+        os.makedirs(os.path.join(self.root, "u"))
+        real_walk = os.walk
+        target = os.fsencode(os.path.join(self.root, "u"))
+
+        def walk(top, *args, **kwargs):
+            onerror = kwargs.get("onerror")
+            self.assertIsNotNone(onerror)
+            onerror(OSError(13, "Permission denied", target))
+            return real_walk(top, *args, **kwargs)
+
+        with mock.patch.object(check_admission.os, "walk", side_effect=walk):
+            code, out = self.result()
+        self.assertEqual(code, 1, out)
+        self.assertIn(
+            "admission: u: A10 cannot read this directory, so a _raw path inside it could be missed; make it readable",
+            out.splitlines(),
+        )
+
+    def test_unreadable_directory_without_a_filename_is_reported_as_dot(self):
+        files = base_files()
+        self.build(files)
+        real_walk = os.walk
+
+        def walk(top, *args, **kwargs):
+            onerror = kwargs.get("onerror")
+            self.assertIsNotNone(onerror)
+            onerror(OSError(13, "Permission denied"))
+            return real_walk(top, *args, **kwargs)
+
+        with mock.patch.object(check_admission.os, "walk", side_effect=walk):
+            code, out = self.result()
+        self.assertEqual(code, 1, out)
+        self.assertIn(
+            "admission: .: A10 cannot read this directory, so a _raw path inside it could be missed; make it readable",
+            out.splitlines(),
         )
 
     def test_file_named_raw_is_found(self):

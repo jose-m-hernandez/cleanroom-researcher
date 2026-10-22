@@ -2,7 +2,7 @@
 
 Date: 2026-10-21
 
-> **The rule.** Check V5 (a home-directory lookup in code) fails everywhere except `experiments/*/harness/runner/`. There, code may read or set a home directory only to build an isolated environment for a run. The scope is a path rule in `tools/check_vocabulary.py`, never an entry in an exemption list.
+> **The rule.** Check V5 (a home-directory lookup in code) fails everywhere except `experiments/*/code/runner/`. There, code may read or set a home directory only to build an isolated environment for a run. The scope is a path rule in `tools/check_vocabulary.py`, never an entry in an exemption list.
 
 Test files under tests/ may hold the home key as a quoted string, in fixtures that exercise V5 or to give a child process a temporary home directory, but never a lookup call.
 
@@ -11,3 +11,5 @@ Test files under tests/ may hold the home key as a quoted string, in fixtures th
 A lookup of the user's home directory is how one machine's private state leaks into a result. Analysis code never needs one.
 
 A runner that isolates a live run has to set a fresh home directory for the child process, and it has to check that the child cannot see the real one. That is the one legitimate use, and it lives in one kind of place. A path rule covers every future experiment without anyone adding a list entry, and an exemption list would only grow.
+
+Amended 2026-10-21: the experiment folder `harness/` is now `code/` (see `docs/vocabulary.md`).

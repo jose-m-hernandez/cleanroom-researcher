@@ -19,3 +19,5 @@ The repository is meant to be repeated by people other than its authors, and rep
 - **the record:** every result says who produced it, under which protocol.
 
 Boundaries 2 to 4 and 6 can be checked from the files, and the gate checks them. Boundaries 1 and 5 are checked in review.
+
+Amended 2026-10-21: the gate checks boundaries 2–4 and 6 per run folder under `recorded/runs/<run>/`; a result outside a run folder is not attributed to a live run.

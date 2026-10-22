@@ -308,8 +308,11 @@ def check_a8(sources: Dict[str, str], types: Optional[Set[str]]) -> List[Finding
         if problems:
             continue
         keys = tuple(k for k, _ in pairs)
-        if keys != header.SOURCE_KEYS:
-            found.append((path, None, "A8 keys must be exactly " + ", ".join(header.SOURCE_KEYS)))
+        expected = header.SOURCE_KEYS
+        if dict(pairs).get("source_type") == "code-repo":
+            expected = header.CODE_REPO_KEYS
+        if keys != expected:
+            found.append((path, None, "A8 keys must be exactly " + ", ".join(expected)))
             continue
         values = dict(pairs)
         if values["id"] != folder or not SRC_ID.match(values["id"]):
@@ -352,7 +355,13 @@ def check_a10(root: str) -> List[Finding]:
             (path, None, "A10 _raw path in history; remove it from history, raw output stays outside the repository")
         )
     def unreadable(err: OSError) -> None:
-        where = os.path.relpath(str(err.filename), root).replace(os.sep, "/")
+        name = err.filename
+        if name is None:
+            where = "."
+        else:
+            if isinstance(name, bytes):
+                name = os.fsdecode(name)
+            where = os.path.relpath(str(name), root).replace(os.sep, "/")
         found.append(
             (where, None, "A10 cannot read this directory, so a _raw path inside it could be missed; make it readable")
         )

@@ -301,6 +301,57 @@ def commit_identities(root: str) -> List[Tuple[str, str, str, str, str]]:
     return rows
 
 
+_FULL_ID = re.compile(r"^[0-9a-f]{40}$")
+
+
+def _rev_list(root: str, args: List[str]) -> List[str]:
+    proc = _run(root, ["rev-list"] + args)
+    if proc.returncode != 0:
+        detail = proc.stderr.decode("utf-8", "replace").strip().split("\n")[0]
+        raise RepoFilesError("git rev-list failed in %s (%s)" % (root, detail))
+    return [i for i in proc.stdout.decode("ascii", "replace").split("\n") if i]
+
+
+def _require_commit_id(commit: str) -> None:
+    if not _FULL_ID.match(commit):
+        raise RepoFilesError("not a full commit id: %r" % commit)
+
+
+def commits_touching(root: str, path: str) -> List[str]:
+    """Full ids of every commit reachable from HEAD that changes anything at or
+    under path. --full-history keeps a commit on a merged side branch from
+    being simplified away."""
+    _require_full_history(root)
+    if not _has_commits(root):
+        return []
+    return _rev_list(root, ["--full-history", "HEAD", "--", path])
+
+
+def touched_before(root: str, commit: str, path: str) -> bool:
+    """True when a proper ancestor of commit changes anything at or under path."""
+    _require_full_history(root)
+    _require_commit_id(commit)
+    if not _has_commits(root):
+        return False
+    if len(_rev_list(root, ["--parents", "-n", "1", commit])[0].split()) < 2:
+        return False  # a root commit has no ancestor
+    return bool(_rev_list(root, ["--full-history", "-n", "1", commit + "^@", "--", path]))
+
+
+def commit_time(root: str, commit: str) -> int:
+    """The committer time of commit, as Unix seconds."""
+    _require_full_history(root)
+    _require_commit_id(commit)
+    if not _has_commits(root):
+        return 0
+    proc = _run(root, ["log", "-1", "--format=%ct", commit, "--"])
+    text = proc.stdout.decode("ascii", "replace").strip()
+    if proc.returncode != 0 or not text.isdigit():
+        detail = proc.stderr.decode("utf-8", "replace").strip().split("\n")[0]
+        raise RepoFilesError("git log failed for %s in %s (%s)" % (commit, root, detail))
+    return int(text)
+
+
 def current_branch(root: str) -> Optional[str]:
     """The short name of the checked-out branch, or None when HEAD is detached."""
     proc = _run(root, ["symbolic-ref", "-q", "--short", "HEAD"])

@@ -2,7 +2,7 @@
 
 Date: 2026-10-21
 
-> **The rule.** A method is written before its author reads the target for method work, and the protocol is preregistered: committed before the first recorded run. Every experiment keeps a read log, and each entry's reason is one of `interface`, `method` or `verification`. Target text may be committed only when the pinned licence is MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, CC0, CC-BY or CC-BY-SA; under any other licence, quotes stay under 25 words. A target may be run, but only in isolation, and never by the gate.
+> **The rule.** A method is written before its author reads the target for method work, and the protocol is preregistered: committed before the first recorded run. An experiment whose protocol was not committed before its first recorded run is labelled exploratory, and its abstract says so. Every experiment keeps a read log, and each entry's reason is one of `interface`, `method` or `verification`. Target text may be committed only when the pinned licence is MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, CC0, CC-BY or CC-BY-SA; under any other licence, quotes stay under 25 words. A target may be run, but only in isolation, and never by the gate.
 
 ## Why
 

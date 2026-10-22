@@ -17,7 +17,7 @@ Rules, case-insensitive unless stated:
   followed by a letter, and the usual home-directory variables.
 - V5 in .py files only: a home-directory lookup call anywhere, or a quoted home
   key outside tests/ (a test may set a temporary HOME for a child process).
-  Python files under experiments/<name>/harness/runner/ are not checked for V5:
+  Python files under experiments/<name>/code/runner/ are not checked for V5:
   runner code builds the isolated environment for a live run.
   V5 matches names as written: an aliased expanduser or Path.home, and a HOME
   key built at runtime, are not tracked.
@@ -45,11 +45,11 @@ import sys
 from typing import Dict, List, Optional, Tuple
 
 try:
-    from lib import repofiles
+    from lib import paths, repofiles
 
     IMPORT_ERROR: Optional[BaseException] = None
 except Exception as _exc:  # reported as DEAD by run(), not as a traceback
-    repofiles = None  # type: ignore[assignment]
+    paths = repofiles = None  # type: ignore[assignment]
     IMPORT_ERROR = _exc
 
 CHECK = "vocabulary"
@@ -79,7 +79,6 @@ V5_CALL_PIECES = [
 ]
 V5_KEY_PIECE = r"([\"'])" + "HO" + r"ME\1"
 TESTS_DIR = "tests"
-RUNNER_ROOT = re.compile(r"^experiments/[^/]+/harness/runner/")
 
 # (rule, compiled pattern, reason). V1 is case-sensitive; the rest are not.
 TEXT_RULES = [
@@ -220,7 +219,7 @@ def run(root: str) -> Tuple[int, List[str]]:
         with open(full, encoding="utf-8", errors="replace") as handle:
             texts[path] = handle.read()
         in_tests = path.split("/")[0] == TESTS_DIR and "/" in path
-        in_runner = RUNNER_ROOT.match(path) is not None
+        in_runner = paths.RUNNER_ROOT.match(path) is not None
         for rule, line, reason in scan_text(
             texts[path], path.endswith(".py"), in_tests, in_runner
         ):
