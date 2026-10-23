@@ -5,7 +5,12 @@ Usage: python3 tools/barred_scan.py [--root PATH] [--ids]
 The list of barred strings is private. It arrives as the whole text in the
 environment variable BARRED_STRINGS (the CI secret), or as a file path in
 BARRED_STRINGS_PATH (a maintainer, locally). If both are set, BARRED_STRINGS
-wins; an empty BARRED_STRINGS counts as not set.
+wins; an empty BARRED_STRINGS counts as not set. A list read from
+BARRED_STRINGS_PATH gets the allow file's guards, in this order, and each is
+DEAD: the path is missing, a symlink or not a regular file; the file has more
+than one link; the path resolves inside the repository (a gitignored list there
+would not be scanned); the file cannot be read. When BARRED_STRINGS is used the
+path is not examined.
 
 The list, line by line, read as UTF-8 with a leading BOM stripped:
 
@@ -57,8 +62,10 @@ BARRED_ALLOW_PATH (a maintainer, locally). Both unset or empty means no allow
 lines, and the scan behaves as if this feature did not exist. In CI, meaning the
 environment variable GITHUB_ACTIONS equals ``true``, only BARRED_ALLOW is
 accepted. These are DEAD: both variables set; BARRED_ALLOW_PATH in CI; a path
-that is missing, a symlink or not a regular file; a path that resolves inside
-the repository; a file that cannot be read.
+that is missing, a symlink or not a regular file; a file with more than one
+link (a hard link, which can give one file a second name outside the
+repository); a path that resolves inside the repository; a file that cannot be
+read.
 
 The allow list is ASCII only; any other byte is DEAD. It is read after the
 canary check and before any scanning, split on newlines, and each line, in
@@ -167,7 +174,23 @@ def parse_list(text: str) -> List[Entry]:
     return entries
 
 
-def load_list(environ: Mapping[str, str]) -> str:
+def inside_repository(root: str, path: str) -> bool:
+    """Whether path lies under root. Raises OSError when a stat fails.
+
+    Identity, not spelling: a case-insensitive file system names one folder
+    many ways, and only the file system knows they are the same folder."""
+    root_stat = os.stat(root)
+    folder = os.path.dirname(os.path.realpath(path))
+    while True:
+        if os.path.samestat(root_stat, os.stat(folder)):
+            return True
+        parent = os.path.dirname(folder)
+        if parent == folder:
+            return False
+        folder = parent
+
+
+def load_list(root: str, environ: Mapping[str, str]) -> str:
     text = environ.get(ENV_LIST)
     if text:
         try:
@@ -177,6 +200,23 @@ def load_list(environ: Mapping[str, str]) -> str:
         return text
     path = environ.get(ENV_PATH)
     if path:
+        try:
+            info = os.lstat(path)
+        except OSError:
+            raise Dead("the list file is missing, a symlink or not a regular file")
+        if not stat.S_ISREG(info.st_mode):
+            raise Dead("the list file is missing, a symlink or not a regular file")
+        if info.st_nlink > 1:
+            raise Dead(
+                "the list file is a hard link (it has more than one name); "
+                "use a file with a single name"
+            )
+        try:
+            inside = inside_repository(root, path)
+        except OSError:
+            raise Dead("the list file could not be read")
+        if inside:
+            raise Dead("the list file must live outside the repository")
         try:
             with open(path, "rb") as handle:
                 data = handle.read()
@@ -209,25 +249,22 @@ def load_allow(root: str, environ: Mapping[str, str]) -> bytes:
     if not path:
         return b""
     try:
-        mode = os.lstat(path).st_mode
+        info = os.lstat(path)
     except OSError:
         raise Dead("the allow file is missing, a symlink or not a regular file")
-    if not stat.S_ISREG(mode):
+    if not stat.S_ISREG(info.st_mode):
         raise Dead("the allow file is missing, a symlink or not a regular file")
-    # Identity, not spelling: a case-insensitive file system names one folder
-    # many ways, and only the file system knows they are the same folder.
+    if info.st_nlink > 1:
+        raise Dead(
+            "the allow file is a hard link (it has more than one name); "
+            "use a file with a single name"
+        )
     try:
-        root_stat = os.stat(root)
-        folder = os.path.dirname(os.path.realpath(path))
-        while True:
-            if os.path.samestat(root_stat, os.stat(folder)):
-                raise Dead("the allow file must live outside the repository")
-            parent = os.path.dirname(folder)
-            if parent == folder:
-                break
-            folder = parent
+        inside = inside_repository(root, path)
     except OSError:
         raise Dead("the allow file could not be read")
+    if inside:
+        raise Dead("the allow file must live outside the repository")
     try:
         with open(path, "rb") as handle:
             return handle.read()
@@ -426,7 +463,7 @@ def run(
         raise IMPORT_ERROR
     if ids and in_ci(environ):
         raise Dead("--ids is not accepted in CI")
-    entries = parse_list(load_list(environ))
+    entries = parse_list(load_list(root, environ))
     if not entries:
         raise Dead(NO_LIST)
     if loaded is not None:

@@ -1263,6 +1263,99 @@ class AllowTests(Base):
         self.assertEqual((code, lines), (2, [self.INSIDE]))
 
 
+    HARD_ALLOW = (
+        "barred: DEAD the allow file is a hard link (it has more than one name); "
+        "use a file with a single name"
+    )
+    HARD_LIST = (
+        "barred: DEAD the list file is a hard link (it has more than one name); "
+        "use a file with a single name"
+    )
+    BAD_LIST = "barred: DEAD the list file is missing, a symlink or not a regular file"
+    LIST_INSIDE = "barred: DEAD the list file must live outside the repository"
+
+    def link_or_skip(self, source, name):
+        target = os.path.join(self.tmp.name, name)
+        try:
+            os.link(source, target)
+        except (AttributeError, NotImplementedError, OSError):
+            self.skipTest("hard links unavailable")
+        return target
+
+    def list_file(self, folder, name="private-list.txt"):
+        os.makedirs(folder, exist_ok=True)
+        path = os.path.join(folder, name)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(LIST)
+        return path
+
+    def test_h1_a_hard_link_to_a_file_in_the_repository_is_refused(self):
+        make_repo(self.root)
+        inside = self.inside_file("allow.txt")
+        outside = self.link_or_skip(inside, "linked-allow.txt")
+        code, lines = self.scan(env={"BARRED_ALLOW_PATH": outside})
+        self.assertEqual((code, lines), (2, [self.HARD_ALLOW]))
+
+    def test_h2_a_single_link_allow_file_outside_is_accepted(self):
+        blob = self.term_repo()
+        code, lines = self.allow_run(allow_line(blob, 2) + "\n")
+        self.assertEqual(code, 0, lines)
+        self.assertIn("1 allowed", lines[-1])
+
+    def test_h3_a_hard_linked_list_file_is_refused(self):
+        make_repo(self.root)
+        first = self.list_file(self.tmp.name, "first-list.txt")
+        second = self.link_or_skip(first, "second-list.txt")
+        for path in (first, second):
+            with self.subTest(path=os.path.basename(path)):
+                code, lines = self.scan(env={"BARRED_STRINGS_PATH": path})
+                self.assertEqual((code, lines), (2, [self.HARD_LIST]))
+
+    def test_h4_a_symlink_list_path_is_refused(self):
+        make_repo(self.root)
+        real = self.list_file(self.tmp.name, "real-list.txt")
+        link = os.path.join(self.tmp.name, "link-list.txt")
+        os.symlink(real, link)
+        code, lines = self.scan(env={"BARRED_STRINGS_PATH": link})
+        self.assertEqual((code, lines), (2, [self.BAD_LIST]))
+
+    def test_h5_a_directory_list_path_is_refused(self):
+        make_repo(self.root)
+        folder = os.path.join(self.tmp.name, "list-folder")
+        os.makedirs(folder)
+        code, lines = self.scan(env={"BARRED_STRINGS_PATH": folder})
+        self.assertEqual((code, lines), (2, [self.BAD_LIST]))
+
+    def test_h6_a_missing_list_path_is_refused(self):
+        make_repo(self.root)
+        code, lines = self.scan(env={"BARRED_STRINGS_PATH": os.path.join(self.tmp.name, "none.txt")})
+        self.assertEqual((code, lines), (2, [self.BAD_LIST]))
+
+    def test_h7_a_gitignored_list_file_inside_the_repository_is_refused(self):
+        make_repo(self.root, {"a.txt": "nothing here\n", ".gitignore": "private-list.txt\nhidden/\n"})
+        near = self.list_file(self.root)
+        deep = self.list_file(os.path.join(self.root, "hidden", "deeper"))
+        for name, path in (("top", near), ("two folders down", deep)):
+            with self.subTest(case=name):
+                code, lines = self.scan(env={"BARRED_STRINGS_PATH": path})
+                self.assertEqual((code, lines), (2, [self.LIST_INSIDE]))
+        shouted = os.path.join(self.tmp.name, "REPO", "private-list.txt")
+        if not os.path.exists(shouted):
+            self.skipTest("case-sensitive file system")
+        code, lines = self.scan(env={"BARRED_STRINGS_PATH": shouted})
+        self.assertEqual((code, lines), (2, [self.LIST_INSIDE]))
+
+    def test_h8_a_list_file_in_a_sibling_sharing_the_name_prefix_is_outside(self):
+        make_repo(self.root)
+        path = self.list_file(os.path.join(self.tmp.name, "repo-other"))
+        code, lines = self.scan(env={"BARRED_STRINGS_PATH": path})
+        self.assertEqual(code, 0, lines)
+
+    # H9, the control (a single-link list outside the repository is accepted):
+    # FormatTests.test_a_clean_tree_is_ok_by_both_routes, whose path route
+    # writes the list into the temporary folder beside the repository.
+
+
 class FoldTests(unittest.TestCase):
     def test_the_fold_order_and_steps(self):
         self.assertEqual(barred_scan.fold("ＡＢ"), "ab")
