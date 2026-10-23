@@ -1,0 +1,236 @@
+{
+  "id": "dev-005-bird-count",
+  "split": "dev",
+  "summary": "A shell tool that totals bird sightings per species from field notes.",
+  "repo": {
+    "files": {
+      "CLAUDE.md": "# Bird count\n\nA small shell tool that totals bird sightings per species from the field\nnotes of a survey team.\n\n## Layout\n\n- `tally.sh` is the entry script. It reads a notes file and prints totals.\n- `check.sh` tallies the spring notes and diffs the output.\n- `notes/2026-spring.txt` and `notes/2026-summer.txt` are the survey notes.\n- `expected-spring.txt` is the output the spring notes should produce.\n- `README.md` describes the notes format for the survey team.\n\n## Commands\n\n- `sh tally.sh notes/2026-spring.txt` prints the totals for spring.\n- `sh check.sh` compares the totals with the expected file.\n- `ls notes/` lists the notes files.\n\n## Conventions\n\n- A notes line is a date, a species name and a count, split by single spaces.\n- Species names are one word; the team uses short field names.\n- The script is POSIX shell plus awk and needs nothing else installed.\n- Keep awk programs short and comment each block with what it computes.\n- Output is one species per line, the count first, then the name.\n- Errors go to standard error and the script exits with status 2.\n\n## Working style\n\n- Mention which notes file you used for each manual run.\n- Check the totals against `expected-spring.txt` after edits.\n- Do not rewrite the notes files.\n",
+      "README.md": "# Bird count\n\nUsage: `sh tally.sh NOTES_FILE`\n\nEach line of a notes file is one sighting: a date, a species and how many birds\nwere seen. The script adds up the counts for every species and prints the list.\n\nThe survey team prints the totals for the monthly meeting at the village hall.\n",
+      "tally.sh": "#!/bin/sh\n# Total the sightings per species in a notes file.\n# Usage: sh tally.sh NOTES_FILE\nfile=\"$1\"\n[ -r \"$file\" ] || { echo \"cannot read notes file\" >&2; exit 2; }\nawk '\n  { total[$2] += $3 }\n  END { for (s in total) printf \"%d %s\\n\", total[s], s }\n' \"$file\" | sort -k2\n",
+      "check.sh": "#!/bin/sh\n# Tally the spring notes and compare with the expected totals.\nsh tally.sh notes/2026-spring.txt | diff - expected-spring.txt && echo \"spring ok\"\n",
+      "notes/2026-spring.txt": "2026-04-02 heron 2\n2026-04-02 wren 5\n2026-04-09 Heron 1\n2026-04-09 sparrow 7\n2026-04-16 wren 3\n",
+      "notes/2026-summer.txt": "# counts are pairs (a male and a female)\n2026-07-03 swift 4\n2026-07-03 wren 2\n2026-07-10 swift 6\n",
+      "expected-spring.txt": "2 heron\n1 Heron\n7 sparrow\n8 wren\n"
+    }
+  },
+  "allowed_bash": [
+    "ls *",
+    "cat *",
+    "grep *",
+    "head *",
+    "wc *",
+    "git *",
+    "echo *"
+  ],
+  "turns": [
+    "Read tally.sh and README.md and explain in a few lines how a notes line is split. After that, list notes/. I call this working branch SPARROWDUNE in my own notes.",
+    "Make species matching ignore case. Store every species name in lower case, because the observers write Heron, heron and HERON for the same bird.",
+    "Write the totals to out/totals.txt, and have tally.sh create the out folder when it is missing. Keep the output one species per line.",
+    "Use head on notes/2026-summer.txt and echo the first line back to me as written.",
+    "Skip any line that starts with a hash. Those are observer comments, not sightings, so they must never be added to a total.",
+    "Some lines give the word many instead of a number. Skip those lines and print a warning with how many were skipped.",
+    "Label a species rare when it has fewer than three sightings in total. Show the label after the count.",
+    "Raise the bar for rare: it now means fewer than five sightings, not three, since the spring counts are bigger this year. Update check.sh to match. No action needed on the weather, it rained on the survey day.",
+    "What follows, taken in turn: the monthly breakdown, then a top-five list, then a map column. Write the plan into your notes only. Also no action needed on latitude sorting, I tried it and reverted it."
+  ],
+  "history_check": {
+    "question": "Which shorthand name did I use for this working branch?",
+    "token": "SPARROWDUNE"
+  },
+  "items": [
+    {
+      "id": "b1",
+      "statement": "Species names are stored in lower case and matched ignoring case, because observers write the same bird in several ways.",
+      "needed": true,
+      "suits": [
+        "Key Decisions"
+      ],
+      "oracle_line": "- Match species ignoring case and store names in lower case (observers vary the spelling).",
+      "oracle_section": "Decisions",
+      "source": "user",
+      "anchor": "Store every species name in lower case, because the observers write Heron, heron and HERON for the same bird"
+    },
+    {
+      "id": "b2",
+      "statement": "Totals are written to out/totals.txt, and tally.sh creates the out folder when it is missing.",
+      "needed": true,
+      "suits": [
+        "New Files/Structure"
+      ],
+      "oracle_line": "- Totals go to `out/totals.txt`; `tally.sh` makes the `out/` folder itself when no such folder is present.",
+      "oracle_section": "Structure",
+      "source": "user",
+      "anchor": "Write the totals to out/totals.txt, and have tally.sh create the out folder when it is missing"
+    },
+    {
+      "id": "b3",
+      "statement": "Lines starting with a hash are observer comments and never count toward a total.",
+      "needed": true,
+      "suits": [
+        "Patterns/Insights"
+      ],
+      "oracle_line": "- Lines starting with `#` are observer comments; never add them to a total.",
+      "oracle_section": "Patterns",
+      "source": "user",
+      "anchor": "Those are observer comments, not sightings, so they must never be added to a total"
+    },
+    {
+      "id": "b4",
+      "statement": "A species is labelled rare below five sightings; the old limit was three.",
+      "needed": true,
+      "suits": [
+        "Phase/Status Changes"
+      ],
+      "oracle_line": "- Label a species rare below five sightings (the limit was three).",
+      "oracle_section": "Status",
+      "source": "user",
+      "anchor": "it now means fewer than five sightings, not three, since the spring counts are bigger this year"
+    },
+    {
+      "id": "b5",
+      "statement": "The jobs lined up are the monthly breakdown, then a top-five list, then a map column, taken in turn.",
+      "needed": true,
+      "suits": [
+        "Next Steps"
+      ],
+      "oracle_line": "- Jobs lined up, taken in turn: monthly breakdown, top-five list, map column.",
+      "oracle_section": "Next steps",
+      "source": "user",
+      "anchor": "the monthly breakdown, then a top-five list, then a map column"
+    },
+    {
+      "id": "b6",
+      "statement": "Lines that give the word many instead of a number are skipped, and a warning reports how many were skipped.",
+      "needed": true,
+      "suits": [
+        "Blockers/Warnings"
+      ],
+      "oracle_line": "- Skip lines that say `many` instead of a number and print a warning with the skipped count.",
+      "oracle_section": "Warnings",
+      "source": "user",
+      "anchor": "Skip those lines and print a warning with how many were skipped"
+    },
+    {
+      "id": "z1",
+      "statement": "The summer notes file counts birds in pairs, according to its header line.",
+      "needed": true,
+      "suits": [
+        "New Files/Structure"
+      ],
+      "oracle_line": "- `notes/2026-summer.txt` counts birds in pairs (header: `# counts are pairs`).",
+      "oracle_section": "Structure",
+      "source": "tool",
+      "evidence": [
+        "# counts are pairs"
+      ]
+    },
+    {
+      "id": "u1",
+      "statement": "It rained on the survey day.",
+      "needed": false,
+      "suits": []
+    },
+    {
+      "id": "u2",
+      "statement": "Sorting the totals by latitude was tried and reverted.",
+      "needed": false,
+      "suits": []
+    }
+  ],
+  "probes": [
+    {
+      "id": "p1",
+      "code_answers": false,
+      "item": "b1",
+      "type": "single-fact",
+      "question": "How are species names stored in the totals?",
+      "answer": "lower case",
+      "reject": []
+    },
+    {
+      "id": "p2",
+      "code_answers": false,
+      "item": "b2",
+      "type": "single-fact",
+      "question": "Where does the tool write its totals?",
+      "answer": "out/totals.txt",
+      "reject": []
+    },
+    {
+      "id": "p3",
+      "code_answers": false,
+      "item": "b3",
+      "type": "single-fact",
+      "question": "How are lines that start with a hash treated?",
+      "answer": "never added to a total",
+      "reject": []
+    },
+    {
+      "id": "p4",
+      "code_answers": false,
+      "item": "b4",
+      "type": "knowledge-update",
+      "question": "Below what number of sightings is a species labelled rare?",
+      "answer": "five",
+      "reject": [
+        "three"
+      ]
+    },
+    {
+      "id": "p5",
+      "code_answers": true,
+      "item": "z1",
+      "type": "single-fact",
+      "question": "What does the header of the summer notes say about the counts?",
+      "answer": "# counts are pairs",
+      "reject": []
+    },
+    {
+      "id": "p6",
+      "code_answers": false,
+      "item": "b5",
+      "type": "single-fact",
+      "question": "Which of the lined-up jobs is taken first?",
+      "answer": "monthly breakdown",
+      "reject": []
+    },
+    {
+      "id": "p7",
+      "code_answers": false,
+      "item": "b5",
+      "type": "temporal",
+      "question": "Which job sits in the middle of the plan?",
+      "answer": "top-five list",
+      "reject": []
+    },
+    {
+      "id": "p8",
+      "code_answers": false,
+      "item": "b6",
+      "type": "single-fact",
+      "question": "What does the tool do with lines that give a word instead of a number?",
+      "answer": "print a warning",
+      "reject": []
+    },
+    {
+      "id": "p9",
+      "code_answers": false,
+      "item": null,
+      "near": "b1",
+      "type": "abstention",
+      "question": "Are species names kept in lower case in the notes files themselves?",
+      "answer": "UNKNOWN",
+      "reject": []
+    },
+    {
+      "id": "p10",
+      "code_answers": false,
+      "item": null,
+      "near": "b2",
+      "type": "abstention",
+      "question": "Which folder holds the totals from earlier years?",
+      "answer": "UNKNOWN",
+      "reject": []
+    }
+  ]
+}

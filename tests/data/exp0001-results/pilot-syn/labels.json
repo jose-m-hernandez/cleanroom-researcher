@@ -1,0 +1,446 @@
+{
+ "items": {
+  "0fe8f0a0c5a9ae95": {
+   "cost_usd": 0.01,
+   "input_tokens_total": 10,
+   "output_tokens": 2,
+   "value": [
+    {
+     "item_id": "",
+     "kind": "unplanted",
+     "line": 1,
+     "placed_ok": false,
+     "quote": ""
+    },
+    {
+     "item_id": "",
+     "kind": "unplanted",
+     "line": 2,
+     "placed_ok": false,
+     "quote": ""
+    },
+    {
+     "item_id": "",
+     "kind": "unplanted",
+     "line": 3,
+     "placed_ok": false,
+     "quote": ""
+    },
+    {
+     "item_id": "",
+     "kind": "unplanted",
+     "line": 4,
+     "placed_ok": false,
+     "quote": ""
+    },
+    {
+     "item_id": "",
+     "kind": "unplanted",
+     "line": 5,
+     "placed_ok": false,
+     "quote": ""
+    },
+    {
+     "item_id": "",
+     "kind": "unplanted",
+     "line": 6,
+     "placed_ok": false,
+     "quote": ""
+    },
+    {
+     "item_id": "",
+     "kind": "unplanted",
+     "line": 7,
+     "placed_ok": false,
+     "quote": ""
+    }
+   ],
+   "wall_s": 1.0
+  },
+  "3decbd0a5f65424c": {
+   "cost_usd": 0.01,
+   "input_tokens_total": 10,
+   "output_tokens": 2,
+   "value": [
+    {
+     "item_id": "j1",
+     "kind": "needed",
+     "line": 1,
+     "placed_ok": true,
+     "quote": ""
+    },
+    {
+     "item_id": "j2",
+     "kind": "needed",
+     "line": 2,
+     "placed_ok": true,
+     "quote": ""
+    },
+    {
+     "item_id": "j3",
+     "kind": "needed",
+     "line": 3,
+     "placed_ok": true,
+     "quote": ""
+    },
+    {
+     "item_id": "",
+     "kind": "unplanted",
+     "line": 4,
+     "placed_ok": false,
+     "quote": ""
+    }
+   ],
+   "wall_s": 1.0
+  },
+  "4fbf344f05c0fcb5": {
+   "cost_usd": 0.01,
+   "input_tokens_total": 10,
+   "output_tokens": 2,
+   "value": [
+    {
+     "item_id": "i1",
+     "kind": "needed",
+     "line": 1,
+     "placed_ok": true,
+     "quote": ""
+    },
+    {
+     "item_id": "i2",
+     "kind": "needed",
+     "line": 2,
+     "placed_ok": true,
+     "quote": ""
+    },
+    {
+     "item_id": "i3",
+     "kind": "needed",
+     "line": 3,
+     "placed_ok": true,
+     "quote": ""
+    },
+    {
+     "item_id": "",
+     "kind": "unplanted",
+     "line": 4,
+     "placed_ok": false,
+     "quote": ""
+    }
+   ],
+   "wall_s": 1.0
+  },
+  "961dcd4dc09d84ee": {
+   "cost_usd": 0.01,
+   "input_tokens_total": 10,
+   "output_tokens": 2,
+   "value": [
+    {
+     "item_id": "j1",
+     "kind": "needed",
+     "line": 1,
+     "placed_ok": true,
+     "quote": ""
+    },
+    {
+     "item_id": "j6",
+     "kind": "needed",
+     "line": 2,
+     "placed_ok": true,
+     "quote": ""
+    },
+    {
+     "item_id": "j2",
+     "kind": "needed",
+     "line": 3,
+     "placed_ok": true,
+     "quote": ""
+    },
+    {
+     "item_id": "j3",
+     "kind": "needed",
+     "line": 4,
+     "placed_ok": true,
+     "quote": ""
+    },
+    {
+     "item_id": "j4",
+     "kind": "needed",
+     "line": 5,
+     "placed_ok": true,
+     "quote": ""
+    },
+    {
+     "item_id": "j5",
+     "kind": "needed",
+     "line": 6,
+     "placed_ok": true,
+     "quote": ""
+    },
+    {
+     "item_id": "t1",
+     "kind": "needed",
+     "line": 7,
+     "placed_ok": true,
+     "quote": ""
+    }
+   ],
+   "wall_s": 1.0
+  },
+  "bc4e15c7edae502a": {
+   "cost_usd": 0.01,
+   "input_tokens_total": 10,
+   "output_tokens": 2,
+   "value": [
+    {
+     "item_id": "i1",
+     "kind": "needed",
+     "line": 1,
+     "placed_ok": true,
+     "quote": ""
+    },
+    {
+     "item_id": "i2",
+     "kind": "needed",
+     "line": 2,
+     "placed_ok": true,
+     "quote": ""
+    },
+    {
+     "item_id": "i3",
+     "kind": "needed",
+     "line": 3,
+     "placed_ok": true,
+     "quote": ""
+    },
+    {
+     "item_id": "i6",
+     "kind": "needed",
+     "line": 4,
+     "placed_ok": true,
+     "quote": ""
+    },
+    {
+     "item_id": "i4",
+     "kind": "needed",
+     "line": 5,
+     "placed_ok": true,
+     "quote": ""
+    },
+    {
+     "item_id": "i5",
+     "kind": "needed",
+     "line": 6,
+     "placed_ok": true,
+     "quote": ""
+    },
+    {
+     "item_id": "k1",
+     "kind": "needed",
+     "line": 7,
+     "placed_ok": true,
+     "quote": ""
+    }
+   ],
+   "wall_s": 1.0
+  },
+  "ddfbce28f6319b25": {
+   "cost_usd": 0.01,
+   "input_tokens_total": 10,
+   "output_tokens": 2,
+   "value": [
+    {
+     "item_id": "",
+     "kind": "unplanted",
+     "line": 1,
+     "placed_ok": false,
+     "quote": ""
+    },
+    {
+     "item_id": "",
+     "kind": "unplanted",
+     "line": 2,
+     "placed_ok": false,
+     "quote": ""
+    },
+    {
+     "item_id": "",
+     "kind": "unplanted",
+     "line": 3,
+     "placed_ok": false,
+     "quote": ""
+    },
+    {
+     "item_id": "",
+     "kind": "unplanted",
+     "line": 4,
+     "placed_ok": false,
+     "quote": ""
+    },
+    {
+     "item_id": "",
+     "kind": "unplanted",
+     "line": 5,
+     "placed_ok": false,
+     "quote": ""
+    },
+    {
+     "item_id": "",
+     "kind": "unplanted",
+     "line": 6,
+     "placed_ok": false,
+     "quote": ""
+    },
+    {
+     "item_id": "",
+     "kind": "unplanted",
+     "line": 7,
+     "placed_ok": false,
+     "quote": ""
+    }
+   ],
+   "wall_s": 1.0
+  }
+ },
+ "probe": {
+  "154ba3156bdd2990": {
+   "cost_usd": 0.01,
+   "input_tokens_total": null,
+   "output_tokens": 2,
+   "value": "incorrect",
+   "wall_s": 1.0
+  },
+  "20892dd873e563b7": {
+   "cost_usd": 0.01,
+   "input_tokens_total": null,
+   "output_tokens": 2,
+   "value": "incorrect",
+   "wall_s": 1.0
+  },
+  "30a8c72df5fe1dad": {
+   "cost_usd": 0.01,
+   "input_tokens_total": null,
+   "output_tokens": 2,
+   "value": "correct",
+   "wall_s": 1.0
+  },
+  "385e86a8d3825e2b": {
+   "cost_usd": 0.01,
+   "input_tokens_total": null,
+   "output_tokens": 2,
+   "value": "correct",
+   "wall_s": 1.0
+  },
+  "3bc0ac67dcd266f6": {
+   "cost_usd": 0.01,
+   "input_tokens_total": null,
+   "output_tokens": 2,
+   "value": "correct",
+   "wall_s": 1.0
+  },
+  "45fdef54331c619d": {
+   "cost_usd": 0.01,
+   "input_tokens_total": null,
+   "output_tokens": 2,
+   "value": "correct",
+   "wall_s": 1.0
+  },
+  "57941f3f4190f0f2": {
+   "cost_usd": 0.01,
+   "input_tokens_total": null,
+   "output_tokens": 2,
+   "value": "correct",
+   "wall_s": 1.0
+  },
+  "5c3cbe4e132ae2d5": {
+   "cost_usd": 0.01,
+   "input_tokens_total": null,
+   "output_tokens": 2,
+   "value": "correct",
+   "wall_s": 1.0
+  },
+  "6cc0544da2958f58": {
+   "cost_usd": 0.01,
+   "input_tokens_total": null,
+   "output_tokens": 2,
+   "value": "correct",
+   "wall_s": 1.0
+  },
+  "74ebb1a0d79de3b0": {
+   "cost_usd": 0.01,
+   "input_tokens_total": null,
+   "output_tokens": 2,
+   "value": "incorrect",
+   "wall_s": 1.0
+  },
+  "8c1f621a6439aef9": {
+   "cost_usd": 0.01,
+   "input_tokens_total": null,
+   "output_tokens": 2,
+   "value": "correct",
+   "wall_s": 1.0
+  },
+  "96c304ed9c8d020a": {
+   "cost_usd": 0.01,
+   "input_tokens_total": null,
+   "output_tokens": 2,
+   "value": "correct",
+   "wall_s": 1.0
+  },
+  "ab13193c5ee3ee1b": {
+   "cost_usd": 0.01,
+   "input_tokens_total": null,
+   "output_tokens": 2,
+   "value": "correct",
+   "wall_s": 1.0
+  },
+  "b0ae4cce9dcaf84c": {
+   "cost_usd": 0.01,
+   "input_tokens_total": null,
+   "output_tokens": 2,
+   "value": "correct",
+   "wall_s": 1.0
+  },
+  "bed5b5c38e35866d": {
+   "cost_usd": 0.01,
+   "input_tokens_total": null,
+   "output_tokens": 2,
+   "value": "correct",
+   "wall_s": 1.0
+  },
+  "d980e5098395017c": {
+   "cost_usd": 0.01,
+   "input_tokens_total": null,
+   "output_tokens": 2,
+   "value": "correct",
+   "wall_s": 1.0
+  },
+  "e3f92247647dd6a8": {
+   "cost_usd": 0.01,
+   "input_tokens_total": null,
+   "output_tokens": 2,
+   "value": "correct",
+   "wall_s": 1.0
+  },
+  "ebed8afc5390bb12": {
+   "cost_usd": 0.01,
+   "input_tokens_total": null,
+   "output_tokens": 2,
+   "value": "correct",
+   "wall_s": 1.0
+  },
+  "ef6c2da8ab6d5e88": {
+   "cost_usd": 0.01,
+   "input_tokens_total": null,
+   "output_tokens": 2,
+   "value": "correct",
+   "wall_s": 1.0
+  },
+  "f5235a8dd801cc2d": {
+   "cost_usd": 0.01,
+   "input_tokens_total": null,
+   "output_tokens": 2,
+   "value": "incorrect",
+   "wall_s": 1.0
+  }
+ }
+}

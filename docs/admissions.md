@@ -26,6 +26,77 @@ This is the ledger. Every file in the repository has exactly one row below sayin
 | docs/vocabulary.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | requirements-dev.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | sources/SRC-0001/source.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
+| tests/data/exp0001-fixtures/dev/dev-001-tide-table/gen.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-001-tide-table/repo/CLAUDE.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-001-tide-table/repo/README.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-001-tide-table/repo/check.sh | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-001-tide-table/repo/data/expected-sample.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-001-tide-table/repo/data/harbour-sample.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-001-tide-table/repo/data/readings-march.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-001-tide-table/repo/gen-1.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-001-tide-table/repo/gen-2.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-001-tide-table/repo/gen-3.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-001-tide-table/repo/gen-4.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-001-tide-table/repo/gen-5.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-001-tide-table/repo/gen-6.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-001-tide-table/repo/gen-7.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-001-tide-table/repo/gen-8.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-001-tide-table/repo/tides.sh | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-001-tide-table/spec.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-001-tide-table/transcript.jsonl | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-002-recipe-scaler/gen.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-002-recipe-scaler/repo/CLAUDE.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-002-recipe-scaler/repo/README.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-002-recipe-scaler/repo/check.sh | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-002-recipe-scaler/repo/gen-1.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-002-recipe-scaler/repo/gen-2.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-002-recipe-scaler/repo/gen-3.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-002-recipe-scaler/repo/gen-4.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-002-recipe-scaler/repo/gen-5.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-002-recipe-scaler/repo/gen-6.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-002-recipe-scaler/repo/gen-7.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-002-recipe-scaler/repo/gen-8.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-002-recipe-scaler/repo/recipes/dal.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-002-recipe-scaler/repo/recipes/expected-pancakes-x2.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-002-recipe-scaler/repo/recipes/pancakes.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-002-recipe-scaler/repo/scale.sh | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-002-recipe-scaler/spec.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-002-recipe-scaler/transcript.jsonl | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-003-greenhouse-log/spec.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-004-chess-clock/spec.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-005-bird-count/spec.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-fixtures/dev/dev-006-tram-timetable/spec.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/arms/baseline/dev-001-tide-table/s1.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/arms/baseline/dev-001-tide-table/s2.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/arms/baseline/dev-002-recipe-scaler/s1.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/arms/baseline/dev-002-recipe-scaler/s2.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/arms/floor/dev-001-tide-table/s1.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/arms/floor/dev-001-tide-table/s2.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/arms/floor/dev-002-recipe-scaler/s1.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/arms/floor/dev-002-recipe-scaler/s2.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/arms/oracle/dev-001-tide-table/s1.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/arms/oracle/dev-001-tide-table/s2.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/arms/oracle/dev-002-recipe-scaler/s1.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/arms/oracle/dev-002-recipe-scaler/s2.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/labels.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/preserve/baseline/dev-001-tide-table/s1.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/preserve/baseline/dev-001-tide-table/s2.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/preserve/baseline/dev-002-recipe-scaler/s1.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/preserve/baseline/dev-002-recipe-scaler/s2.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/probes/baseline/dev-001-tide-table/s1.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/probes/baseline/dev-001-tide-table/s2.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/probes/baseline/dev-002-recipe-scaler/s1.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/probes/baseline/dev-002-recipe-scaler/s2.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/probes/floor/dev-001-tide-table/s1.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/probes/floor/dev-001-tide-table/s2.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/probes/floor/dev-002-recipe-scaler/s1.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/probes/floor/dev-002-recipe-scaler/s2.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/probes/oracle/dev-001-tide-table/s1.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/probes/oracle/dev-001-tide-table/s2.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/probes/oracle/dev-002-recipe-scaler/s1.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/probes/oracle/dev-002-recipe-scaler/s2.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/run.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; synthetic test data |
+| tests/data/exp0001-results/pilot-syn/scores.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23; synthetic test data |
 | tests/data/exp0001-synthetic/REPORT.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; port of the evaluation harness at 08ef45f |
 | tests/data/exp0001-synthetic/run.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; port of the evaluation harness at 08ef45f |
 | tests/data/exp0001-synthetic/scores.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; port of the evaluation harness at 08ef45f |

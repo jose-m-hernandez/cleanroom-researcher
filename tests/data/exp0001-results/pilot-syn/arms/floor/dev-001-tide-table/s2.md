@@ -1,0 +1,34 @@
+# Tide table
+
+A small shell tool that reads a harbour's tide readings from a text file and
+prints the high and low water times for each day.
+
+## Layout
+
+- `tides.sh` is the entry script. It reads one readings file and prints a table.
+- `check.sh` runs the script on the sample file and diffs the output.
+- `data/harbour-sample.txt` is a short readings file for quick checks.
+- `data/expected-sample.txt` is the output the sample should produce.
+- `data/readings-march.txt` is a longer month of readings from the quay sensor.
+- `README.md` holds usage notes for the harbour office.
+
+## Commands
+
+- `sh tides.sh data/harbour-sample.txt` prints the table for the sample.
+- `sh check.sh` compares the script's output with the expected file.
+- `grep -c . data/readings-march.txt` counts the lines in the March file.
+
+## Conventions
+
+- One reading per line: date, time and height in metres, split by single spaces.
+- Dates are written year-month-day and times use a 24 hour clock.
+- The script is POSIX shell plus awk and needs nothing else installed.
+- Keep shell functions short and comment anything that depends on the file layout.
+- Output is plain text, one block per day, high water listed before low water.
+- Error messages go to standard error and the script exits with status 2.
+
+## Working style
+
+- Keep each change small enough to read in one sitting.
+- Run `sh check.sh` and quote its last line when you finish.
+- Ask first if a change needs a new directory.

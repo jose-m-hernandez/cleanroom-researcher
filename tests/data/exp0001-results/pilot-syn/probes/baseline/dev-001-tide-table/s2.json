@@ -1,0 +1,23 @@
+{
+ "answers": {
+  "p1": "harbour local time",
+  "p10": "Probably 9999.",
+  "p2": "station.sh",
+  "p3": "one decimal",
+  "p4": "UNKNOWN",
+  "p5": "UNKNOWN",
+  "p6": "UNKNOWN",
+  "p7": "UNKNOWN",
+  "p8": "UNKNOWN",
+  "p9": "Probably 9999."
+ },
+ "cost_usd": 0.01,
+ "duration_ms": 5,
+ "input_tokens_total": 1873,
+ "labels": [],
+ "ok": true,
+ "output_tokens": 7,
+ "problems": [],
+ "rate_limit_events": 0,
+ "wall_s": 0.1
+}

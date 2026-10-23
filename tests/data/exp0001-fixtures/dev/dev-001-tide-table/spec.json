@@ -1,0 +1,235 @@
+{
+  "id": "dev-001-tide-table",
+  "split": "dev",
+  "summary": "A shell tool that reads a harbour's tide readings and prints high and low water times.",
+  "repo": {
+    "files": {
+      "CLAUDE.md": "# Tide table\n\nA small shell tool that reads a harbour's tide readings from a text file and\nprints the high and low water times for each day.\n\n## Layout\n\n- `tides.sh` is the entry script. It reads one readings file and prints a table.\n- `check.sh` runs the script on the sample file and diffs the output.\n- `data/harbour-sample.txt` is a short readings file for quick checks.\n- `data/expected-sample.txt` is the output the sample should produce.\n- `data/readings-march.txt` is a longer month of readings from the quay sensor.\n- `README.md` holds usage notes for the harbour office.\n\n## Commands\n\n- `sh tides.sh data/harbour-sample.txt` prints the table for the sample.\n- `sh check.sh` compares the script's output with the expected file.\n- `grep -c . data/readings-march.txt` counts the lines in the March file.\n\n## Conventions\n\n- One reading per line: date, time and height in metres, split by single spaces.\n- Dates are written year-month-day and times use a 24 hour clock.\n- The script is POSIX shell plus awk and needs nothing else installed.\n- Keep shell functions short and comment anything that depends on the file layout.\n- Output is plain text, one block per day, high water listed before low water.\n- Error messages go to standard error and the script exits with status 2.\n\n## Working style\n\n- Keep each change small enough to read in one sitting.\n- Run `sh check.sh` and quote its last line when you finish.\n- Ask first if a change needs a new directory.\n",
+      "README.md": "# Tide table\n\nUsage: `sh tides.sh READINGS_FILE`\n\nThe readings file has one line per reading: a date, a time and a height in\nmetres. The script groups the lines by day and prints the highest and lowest\nreading of each day together with the time it happened.\n\nSample files live in `data/`. Staff at the harbour office print the output and\npin it to the notice board by the slipway.\n",
+      "tides.sh": "#!/bin/sh\n# Print high and low water for each day in a readings file.\n# Usage: sh tides.sh READINGS_FILE\nfile=\"$1\"\n[ -r \"$file\" ] || { echo \"cannot read readings file\" >&2; exit 2; }\nawk '\n  {\n    day = $1\n    if (!(day in hi) || $3 > hi[day]) { hi[day] = $3; hit[day] = $2 }\n    if (!(day in lo) || $3 < lo[day]) { lo[day] = $3; lot[day] = $2 }\n    if (!(day in seen)) { seen[day] = 1; order[++n] = day }\n  }\n  END {\n    for (i = 1; i <= n; i++) {\n      d = order[i]\n      printf \"%s\\n  high %s (%s m)\\n  low  %s (%s m)\\n\", d, hit[d], hi[d], lot[d], lo[d]\n    }\n  }\n' \"$file\"\n",
+      "check.sh": "#!/bin/sh\n# Compare the script's output on the sample with the expected file.\nsh tides.sh data/harbour-sample.txt | diff - data/expected-sample.txt && echo \"sample ok\"\n",
+      "data/harbour-sample.txt": "2026-03-14 05:12 0.4\n2026-03-14 11:30 4.8\n2026-03-14 17:41 0.6\n2026-03-14 23:55 5.0\n2026-03-15 06:02 0.3\n2026-03-15 12:20 4.9\n",
+      "data/expected-sample.txt": "2026-03-14\n  high 23:55 (5.0 m)\n  low  05:12 (0.4 m)\n2026-03-15\n  high 12:20 (4.9 m)\n  low  06:02 (0.3 m)\n",
+      "data/readings-march.txt": "2026-03-08 04:48 0.5\n2026-03-08 10:59 4.6\n2026-03-08 17:10 0.7\n2026-03-09 05:31 0.4\n2026-03-09 11:50 ??\n2026-03-09 17:58 0.5\n2026-03-10 06:14 0.6\n2026-03-10 12:33 4.7\n2026-03-10 18:40 0.8\n"
+    }
+  },
+  "allowed_bash": [
+    "ls *",
+    "cat *",
+    "grep *",
+    "head *",
+    "wc *",
+    "git *",
+    "echo *"
+  ],
+  "turns": [
+    "Read tides.sh and README.md and tell me in a few lines how the script groups readings by day. After that, list what is under data/. In my own notes I call this working branch LANTERNSKIFF.",
+    "Add a --station option to tides.sh so a readings line can start with a four-letter station code before the date. Print every time as the harbour's local time and never convert to UTC, since the printed boards on the quay are all in local time.",
+    "Use grep to find every line in data/readings-march.txt that has two question marks, and quote the first match back to me word for word. No action needed on the harbour office meeting, it moved to Thursday afternoon.",
+    "Put the new station handling in a separate file called station.sh and source it from tides.sh. Nothing else should move.",
+    "Make the output show heights rounded to one decimal. check.sh diffs text exactly, so a second decimal makes the comparison fail. A while back I tried a sort pipeline for the grouping and put it back, no action needed there.",
+    "I have changed my mind about the order of days: list them newest first instead, since staff mostly look up this week. Earlier I had asked for oldest first, so flip the order in the awk block and in check.sh.",
+    "Here is the plan for the rest of the week, in sequence: skip the dropout markers in the maths, then add a station test to check.sh, then write a usage section in the README. Only write that plan into your notes, nothing to build yet.",
+    "Add a line to the README about the quay sensor. Its clock runs five minutes fast, so subtract five minutes before comparing readings with the printed boards."
+  ],
+  "history_check": {
+    "question": "Which shorthand name did I use for this working branch?",
+    "token": "LANTERNSKIFF"
+  },
+  "items": [
+    {
+      "id": "i1",
+      "statement": "All printed times are harbour local time and are never converted to UTC, because the quay boards use local time.",
+      "needed": true,
+      "suits": [
+        "Key Decisions"
+      ],
+      "oracle_line": "- Print every time as harbour local time; never convert to UTC (the quay boards use local time).",
+      "oracle_section": "Decisions",
+      "source": "user",
+      "anchor": "never convert to UTC, since the printed boards on the quay are all in local time"
+    },
+    {
+      "id": "i2",
+      "statement": "Station handling lives in station.sh, which tides.sh sources.",
+      "needed": true,
+      "suits": [
+        "New Files/Structure"
+      ],
+      "oracle_line": "- Station handling lives in `station.sh`, sourced by `tides.sh`.",
+      "oracle_section": "Structure",
+      "source": "user",
+      "anchor": "Put the new station handling in a separate file called station.sh and source it from tides.sh"
+    },
+    {
+      "id": "i3",
+      "statement": "Heights are printed with one decimal place because check.sh diffs the text exactly.",
+      "needed": true,
+      "suits": [
+        "Patterns/Insights"
+      ],
+      "oracle_line": "- Print heights with one decimal; check.sh diffs the text exactly, so a second decimal fails it.",
+      "oracle_section": "Patterns",
+      "source": "user",
+      "anchor": "check.sh diffs text exactly, so a second decimal makes the comparison fail"
+    },
+    {
+      "id": "i4",
+      "statement": "Days are listed newest first; they used to be listed oldest first.",
+      "needed": true,
+      "suits": [
+        "Phase/Status Changes"
+      ],
+      "oracle_line": "- The table lists days newest first (it was oldest first before).",
+      "oracle_section": "Status",
+      "source": "user",
+      "anchor": "list them newest first instead, since staff mostly look up this week"
+    },
+    {
+      "id": "i5",
+      "statement": "The week's plan is to skip the dropout markers, then add a station test to check.sh, then write the README usage section.",
+      "needed": true,
+      "suits": [
+        "Next Steps"
+      ],
+      "oracle_line": "- Week plan, in sequence: skip dropout markers, add a station test to `check.sh`, write the README usage section.",
+      "oracle_section": "Next steps",
+      "source": "user",
+      "anchor": "skip the dropout markers in the maths, then add a station test to check.sh, then write a usage section in the README"
+    },
+    {
+      "id": "i6",
+      "statement": "The quay sensor's clock runs five minutes fast, so five minutes are subtracted before comparing with the printed boards.",
+      "needed": true,
+      "suits": [
+        "Patterns/Insights"
+      ],
+      "oracle_line": "- The quay sensor clock runs five minutes fast; subtract five minutes before comparing with the printed boards.",
+      "oracle_section": "Patterns",
+      "source": "user",
+      "anchor": "Its clock runs five minutes fast, so subtract five minutes before comparing readings with the printed boards"
+    },
+    {
+      "id": "k1",
+      "statement": "The March readings file holds a sensor dropout marked with two question marks at 11:50 on 9 March.",
+      "needed": true,
+      "suits": [
+        "Blockers/Warnings"
+      ],
+      "oracle_line": "- The March readings file has a dropout line (`??`) at 2026-03-09 11:50; do not treat it as a height.",
+      "oracle_section": "Warnings",
+      "source": "tool",
+      "evidence": [
+        "2026-03-09 11:50 ??"
+      ]
+    },
+    {
+      "id": "n1",
+      "statement": "A sort-pipeline rewrite of the day grouping was tried and put back.",
+      "needed": false,
+      "suits": []
+    },
+    {
+      "id": "n2",
+      "statement": "The harbour office meeting moved to Thursday afternoon.",
+      "needed": false,
+      "suits": []
+    }
+  ],
+  "probes": [
+    {
+      "id": "p1",
+      "code_answers": false,
+      "item": "i1",
+      "type": "single-fact",
+      "question": "Which time standard do the printed times use for the harbour?",
+      "answer": "harbour local time",
+      "reject": []
+    },
+    {
+      "id": "p2",
+      "code_answers": false,
+      "item": "i2",
+      "type": "single-fact",
+      "question": "Where does the station handling code live?",
+      "answer": "station.sh",
+      "reject": []
+    },
+    {
+      "id": "p3",
+      "code_answers": false,
+      "item": "i3",
+      "type": "single-fact",
+      "question": "How many decimal places do the printed heights have?",
+      "answer": "one decimal",
+      "reject": []
+    },
+    {
+      "id": "p4",
+      "code_answers": false,
+      "item": "i4",
+      "type": "knowledge-update",
+      "question": "In which order does the table list the days?",
+      "answer": "newest first",
+      "reject": [
+        "oldest first"
+      ]
+    },
+    {
+      "id": "p5",
+      "code_answers": true,
+      "item": "k1",
+      "type": "single-fact",
+      "question": "Which reading in the March file is marked as a dropout?",
+      "answer": "2026-03-09 11:50",
+      "reject": []
+    },
+    {
+      "id": "p6",
+      "code_answers": false,
+      "item": "i5",
+      "type": "single-fact",
+      "question": "Which job is next on the remaining work list?",
+      "answer": "skip the dropout markers",
+      "reject": []
+    },
+    {
+      "id": "p7",
+      "code_answers": false,
+      "item": "i5",
+      "type": "temporal",
+      "question": "What comes right after the station test in the plan?",
+      "answer": "README usage section",
+      "reject": []
+    },
+    {
+      "id": "p8",
+      "code_answers": false,
+      "item": "i6",
+      "type": "single-fact",
+      "question": "By how much does the quay sensor's clock run fast?",
+      "answer": "five minutes",
+      "reject": []
+    },
+    {
+      "id": "p9",
+      "code_answers": false,
+      "item": null,
+      "near": "i1",
+      "type": "abstention",
+      "question": "Which time zone offset do the quay boards show in summer?",
+      "answer": "UNKNOWN",
+      "reject": []
+    },
+    {
+      "id": "p10",
+      "code_answers": false,
+      "item": null,
+      "near": "i6",
+      "type": "abstention",
+      "question": "Which date was the quay sensor's clock last reset?",
+      "answer": "UNKNOWN",
+      "reject": []
+    }
+  ]
+}

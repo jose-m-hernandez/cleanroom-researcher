@@ -1,0 +1,21 @@
+{
+ "arms": [
+  "floor",
+  "baseline",
+  "oracle"
+ ],
+ "claude_code_version": "2.1.302",
+ "date": "20260101",
+ "fixtures": [
+  "dev-001-tide-table",
+  "dev-002-recipe-scaler"
+ ],
+ "judge_model": "claude-opus-5-5",
+ "model": "claude-sonnet-5-5",
+ "plugin_ref": "cfd1e77e07d2b3698591688e7e151d83d3ef51c3",
+ "rng_seed": 20261017,
+ "run_id": "pilot-syn",
+ "seeds": 2,
+ "split": "dev",
+ "version": 1
+}

@@ -1,0 +1,215 @@
+{
+  "id": "dev-006-tram-timetable",
+  "split": "dev",
+  "summary": "A shell tool that answers next-departure questions from a timetable file.",
+  "excluded": {
+    "date": "2026-10-20",
+    "reason": "Generation was not attempted: the scripted session needs a clock command the allowlist refuses."
+  },
+  "repo": {
+    "files": {
+      "CLAUDE.md": "# Tram timetable\n\nA small shell tool that answers \"next departure\" questions from a timetable\nfile for one tram line.\n\n## Layout\n\n- `next.sh` is the entry script. It takes a stop and a time and prints the next departure.\n- `check.sh` asks three questions and diffs the answers.\n- `timetable/line-4.txt` holds the weekday departures for line 4.\n- `timetable/expected-answers.txt` holds the answers the three questions should give.\n- `README.md` explains the timetable format for the depot staff.\n\n## Commands\n\n- `sh next.sh timetable/line-4.txt 08:15` prints the next departure after 08:15.\n- `sh check.sh` compares the answers with the expected file.\n- `ls timetable/` lists the timetable files.\n\n## Conventions\n\n- A timetable line is a departure time followed by a stop name.\n- Times use a 24 hour clock written hour:minute.\n- The script is POSIX shell plus awk and needs nothing else installed.\n- Keep awk programs short and comment each block with what it computes.\n- Output is a single line: the time, then the stop.\n- Errors go to standard error and the script exits with status 2.\n\n## Working style\n\n- Report the command you ran with every answer.\n- Keep answers to one line of output where possible.\n- Do not edit the timetable files unless asked.\n",
+      "README.md": "# Tram timetable\n\nUsage: `sh next.sh TIMETABLE_FILE TIME`\n\nThe timetable file lists one departure per line. The script prints the first\ndeparture that is later than the time you give.\n\nThe depot staff use it from the desk phone terminal.\n",
+      "next.sh": "#!/bin/sh\n# Print the next departure after a given time.\n# Usage: sh next.sh TIMETABLE_FILE TIME\nfile=\"$1\"\nafter=\"$2\"\n[ -r \"$file\" ] || { echo \"cannot read timetable file\" >&2; exit 2; }\nawk -v after=\"$after\" '$1 > after { print; exit }' \"$file\"\n",
+      "check.sh": "#!/bin/sh\n# Ask three questions and compare the answers.\nfor t in 05:00 08:15 23:50; do sh next.sh timetable/line-4.txt \"$t\"; done | diff - timetable/expected-answers.txt && echo \"answers ok\"\n",
+      "timetable/line-4.txt": "05:42 Depot\n06:12 Depot\n08:20 Market\n08:50 Market\n23:58 Depot\nlast 23:58\n",
+      "timetable/expected-answers.txt": "05:42 Depot\n08:20 Market\n23:58 Depot\n"
+    }
+  },
+  "allowed_bash": [
+    "ls *",
+    "cat *",
+    "grep *",
+    "head *",
+    "wc *",
+    "git *",
+    "echo *"
+  ],
+  "turns": [
+    "Read next.sh and README.md and tell me in a few lines how the next departure is found. My shorthand for this working branch is TURNSTILEBELL.",
+    "Make next.sh accept a --count option that prints the next several departures instead of one. Keep the default at three departures, since the depot screens show three rows.",
+    "Use grep to find the word last in timetable/line-4.txt and give me the first matching line verbatim.",
+    "Put the weekend times in a separate file called line-4-we.txt next to the weekday one. Times are compared as plain text, so a service after midnight has to be written with an hour of 24 or more.",
+    "Raise the default count to five rows, not three, since the new depot screens are taller. Update the README to match. No action needed on the depot party, it moved to the spring.",
+    "Upcoming jobs, taken in this sequence: a holiday timetable, then a stop filter, then a printed card layout. Write the plan into your notes only. Also no action needed on the colour scheme, I changed my mind about it."
+  ],
+  "history_check": {
+    "question": "Which shorthand name did I use for this working branch?",
+    "token": "TURNSTILEBELL"
+  },
+  "items": [
+    {
+      "id": "r1",
+      "statement": "The --count option defaults to three because the depot screens show three rows.",
+      "needed": true,
+      "suits": [
+        "Key Decisions"
+      ],
+      "oracle_line": "- --count defaults to three because the depot screens show three rows.",
+      "oracle_section": "Decisions",
+      "source": "user",
+      "anchor": "Keep the default at three departures, since the depot screens show three rows"
+    },
+    {
+      "id": "r2",
+      "statement": "Weekend times live in line-4-we.txt next to the weekday file.",
+      "needed": true,
+      "suits": [
+        "New Files/Structure"
+      ],
+      "oracle_line": "- Weekend times live in `timetable/line-4-we.txt`.",
+      "oracle_section": "Structure",
+      "source": "user",
+      "anchor": "Put the weekend times in a separate file called line-4-we.txt next to the weekday one"
+    },
+    {
+      "id": "r3",
+      "statement": "Times are compared as plain text, so services after midnight are written with an hour of 24 or more.",
+      "needed": true,
+      "suits": [
+        "Patterns/Insights"
+      ],
+      "oracle_line": "- Times compare as plain text; write services after midnight with an hour of 24 or more.",
+      "oracle_section": "Patterns",
+      "source": "user",
+      "anchor": "Times are compared as plain text, so a service after midnight has to be written with an hour of 24 or more"
+    },
+    {
+      "id": "r4",
+      "statement": "The default count is five rows; it used to be three.",
+      "needed": true,
+      "suits": [
+        "Phase/Status Changes"
+      ],
+      "oracle_line": "- The default --count is five rows (it was three).",
+      "oracle_section": "Status",
+      "source": "user",
+      "anchor": "Raise the default count to five rows, not three, since the new depot screens are taller"
+    },
+    {
+      "id": "r5",
+      "statement": "Three jobs are queued, in this sequence: a holiday timetable, then a stop filter, then a printed card layout.",
+      "needed": true,
+      "suits": [
+        "Next Steps"
+      ],
+      "oracle_line": "- Queued jobs, in sequence: holiday timetable, stop filter, printed card layout.",
+      "oracle_section": "Next steps",
+      "source": "user",
+      "anchor": "a holiday timetable, then a stop filter, then a printed card layout"
+    },
+    {
+      "id": "s1",
+      "statement": "The weekday timetable ends with a line giving the last departure as 23:58.",
+      "needed": true,
+      "suits": [
+        "Blockers/Warnings"
+      ],
+      "oracle_line": "- `timetable/line-4.txt` ends with `last 23:58`; do not treat it as a stop.",
+      "oracle_section": "Warnings",
+      "source": "tool",
+      "evidence": [
+        "last 23:58"
+      ]
+    },
+    {
+      "id": "h1",
+      "statement": "The depot party moved to the spring.",
+      "needed": false,
+      "suits": []
+    },
+    {
+      "id": "h2",
+      "statement": "The colour scheme was reconsidered and left as it was.",
+      "needed": false,
+      "suits": []
+    }
+  ],
+  "probes": [
+    {
+      "id": "p1",
+      "code_answers": false,
+      "item": "r1",
+      "type": "single-fact",
+      "question": "How many rows do the depot screens show?",
+      "answer": "three rows",
+      "reject": []
+    },
+    {
+      "id": "p2",
+      "code_answers": false,
+      "item": "r2",
+      "type": "single-fact",
+      "question": "Where do the weekend times live?",
+      "answer": "line-4-we.txt",
+      "reject": []
+    },
+    {
+      "id": "p3",
+      "code_answers": false,
+      "item": "r3",
+      "type": "single-fact",
+      "question": "How must a service after midnight be written?",
+      "answer": "hour of 24 or more",
+      "reject": []
+    },
+    {
+      "id": "p4",
+      "code_answers": false,
+      "item": "r4",
+      "type": "knowledge-update",
+      "question": "How many rows does the tool print by default now?",
+      "answer": "five rows",
+      "reject": [
+        "three rows"
+      ]
+    },
+    {
+      "id": "p5",
+      "code_answers": false,
+      "item": "s1",
+      "type": "single-fact",
+      "question": "What does the last line of the weekday timetable say?",
+      "answer": "last 23:58",
+      "reject": []
+    },
+    {
+      "id": "p6",
+      "code_answers": false,
+      "item": "r5",
+      "type": "single-fact",
+      "question": "Which of the queued jobs is the one to start with?",
+      "answer": "holiday timetable",
+      "reject": []
+    },
+    {
+      "id": "p7",
+      "code_answers": false,
+      "item": "r5",
+      "type": "temporal",
+      "question": "Which job sits in the middle of the plan?",
+      "answer": "stop filter",
+      "reject": []
+    },
+    {
+      "id": "p8",
+      "code_answers": false,
+      "item": null,
+      "near": "r5",
+      "type": "abstention",
+      "question": "Which stop does the printed card layout list first?",
+      "answer": "UNKNOWN",
+      "reject": []
+    },
+    {
+      "id": "p9",
+      "code_answers": false,
+      "item": null,
+      "near": "r1",
+      "type": "abstention",
+      "question": "Do the depot screens show the line number as well?",
+      "answer": "UNKNOWN",
+      "reject": []
+    }
+  ]
+}

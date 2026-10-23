@@ -1,0 +1,259 @@
+{
+  "id": "dev-004-chess-clock",
+  "split": "dev",
+  "summary": "A two-player game clock with increments, run in a terminal.",
+  "repo": {
+    "files": {
+      "CLAUDE.md": "# Chess clock\n\nA small two-player game clock with increments, written as a shell script\nthat runs in a terminal.\n\n## Layout\n\n- `clock.sh` is the entry script and holds the main loop.\n- `presets.txt` lists the named time controls the clock can start with.\n- `clock.cfg` holds limits for the clock, one setting per line.\n- `check.sh` plays a few scripted moves and compares the final times.\n- `README.md` lists the keys and options for the club members.\n\n## Commands\n\n- `sh clock.sh --white 5 --black 5` starts a game with five minutes a side.\n- `sh check.sh` runs the scripted comparison.\n- `cat presets.txt` shows the available presets.\n\n## Conventions\n\n- The clock redraws once per tenth of a second and never more often.\n- Options are long flags such as --white and --black; there are no short flags.\n- Keep the main loop in one function and the display in another.\n- The script is POSIX shell and needs nothing else installed.\n- Comment anything that depends on terminal behaviour.\n- Errors go to standard error and the script exits with status 2.\n\n## Working style\n\n- Describe each edit in a sentence once it is done.\n- Run `sh check.sh` whenever the timing logic changes.\n- Ask before touching `presets.txt` or `clock.cfg`.\n",
+      "README.md": "# Chess clock\n\nUsage: `sh clock.sh [--white MIN] [--black MIN] [--preset NAME]`\n\nTwo players share one terminal. The space bar ends the current player's move\nand starts the other player's time. The club uses it at the Tuesday evening\nsessions, on the old laptop by the board.\n",
+      "clock.sh": "#!/bin/sh\n# A two-player game clock. Space ends a move, q quits.\nwhite=300\nblack=300\nturn=white\nwhile true; do\n  printf '\\r%s %s' \"$white\" \"$black\"\n  sleep 0.1\n  if [ \"$turn\" = white ]; then white=$((white - 1)); else black=$((black - 1)); fi\n  [ \"$white\" -le 0 ] || [ \"$black\" -le 0 ] && break\ndone\necho \"time\"\n",
+      "presets.txt": "bullet, 1, 0\nblitz, 3, 2\nrapid, 10, 5\n",
+      "clock.cfg": "tick-ms = 100\nmax-minutes = 99\nmin-minutes = 1\n",
+      "check.sh": "#!/bin/sh\n# Play three scripted moves and compare the final times.\nprintf ' \\n \\n q\\n' | sh clock.sh --white 1 --black 1 | tail -1 | diff - expected-final.txt && echo \"clock ok\"\n",
+      "expected-final.txt": "00:59.4 00:59.6\n"
+    }
+  },
+  "allowed_bash": [
+    "ls *",
+    "cat *",
+    "grep *",
+    "head *",
+    "wc *",
+    "git *",
+    "echo *"
+  ],
+  "turns": [
+    "Read clock.sh and README.md and describe the main loop in a few lines. My own name for this working branch is KNIGHTMOSS, which I use in my notes.",
+    "List the presets in presets.txt and say which one is marked as the default.",
+    "Add a --white and a --black option to set each side's starting minutes. Reject values below one minute with a short message.",
+    "Store the remaining time of each side as whole tenths of a second, never as a float. Floats drifted by whole seconds over a long game in the club's old clock, which is why this matters here.",
+    "Show the time as mm:ss.t when under one minute and mm:ss otherwise. Put the formatting in a function called fmt_time.",
+    "Add an --increment option giving the seconds added to a side after each move.",
+    "The increment must be added after a move completes, never before it starts, because the club's tournament rules say so. Wire that into the move handler.",
+    "Write a check in check.sh that plays three scripted moves and compares the final times.",
+    "Run ls on the repo root and show me the listing.",
+    "Rename the function fmt_time to format_time everywhere. It reads better.",
+    "Add a preset lookup so --preset NAME reads the matching line. Presets live in presets.txt, one per line, written as name, minutes, increment seconds.",
+    "Add the presets blitz, rapid and bullet with sensible minutes and increments. Mark blitz at three minutes plus two seconds as the default.",
+    "Use grep to find max in clock.cfg and show me the matching line unchanged.",
+    "Print a one-line banner at the start with the preset name.",
+    "No action needed: I tried a curses display last weekend and dropped it, the terminal flickered too much.",
+    "Add a --quiet flag that skips the banner.",
+    "Make the move key the space bar and the quit key q, and document them in the README.",
+    "Add a move counter that goes up after each completed move and show it beside the time.",
+    "The counter should reset when a new game starts. Add that to the new-game handler.",
+    "Run wc -l on clock.sh and tell me the line count.",
+    "Add a flag-fall message that says which side ran out of time.",
+    "Add pause and resume to the clock. A resume must not add any increment, otherwise a player could gain time by pausing.",
+    "Add a p key for pause and make the display say PAUSED while stopped.",
+    "Swap the default preset: it should be five minutes plus three seconds, not three plus two, since the club now plays longer blitz. Update presets.txt and the README.",
+    "Run git status and tell me what is changed.",
+    "Tidy the option parsing so each option has one line of help text.",
+    "Add a --help that prints those lines.",
+    "No action needed: the club secretary meets on Monday, so the README may change soon.",
+    "Add a bell character on flag fall, but only when --bell is passed.",
+    "Next up, strictly in sequence: the saved-game export, then the move history list, then a two-player network mode. Only write the plan into your notes.",
+    "Add a short section to the README about the pause rules.",
+    "Run ls on the repo root once more and confirm no stray files are left."
+  ],
+  "history_check": {
+    "question": "Which shorthand name did I use for this working branch?",
+    "token": "KNIGHTMOSS"
+  },
+  "items": [
+    {
+      "id": "c1",
+      "statement": "The increment is added after a move completes, never before it starts, per the club's tournament rules.",
+      "needed": true,
+      "suits": [
+        "Key Decisions"
+      ],
+      "oracle_line": "- Add the increment after a move completes, never before it starts (club tournament rules).",
+      "oracle_section": "Decisions",
+      "source": "user",
+      "anchor": "The increment must be added after a move completes, never before it starts, because the club's tournament rules say so"
+    },
+    {
+      "id": "c2",
+      "statement": "Presets live in presets.txt, one per line, written as name, minutes, increment seconds.",
+      "needed": true,
+      "suits": [
+        "New Files/Structure"
+      ],
+      "oracle_line": "- Presets live in `presets.txt`, one per line: name, minutes, increment seconds.",
+      "oracle_section": "Structure",
+      "source": "user",
+      "anchor": "Presets live in presets.txt, one per line, written as name, minutes, increment seconds"
+    },
+    {
+      "id": "c3",
+      "statement": "Remaining time is stored as whole tenths of a second, not floats, because floats drifted over long games.",
+      "needed": true,
+      "suits": [
+        "Patterns/Insights"
+      ],
+      "oracle_line": "- Store remaining time as whole tenths of a second; floats drifted over long games.",
+      "oracle_section": "Patterns",
+      "source": "user",
+      "anchor": "Floats drifted by whole seconds over a long game in the club's old clock"
+    },
+    {
+      "id": "c4",
+      "statement": "The default preset is five minutes plus three seconds; it used to be three minutes plus two seconds.",
+      "needed": true,
+      "suits": [
+        "Phase/Status Changes"
+      ],
+      "oracle_line": "- The default preset is five minutes plus three seconds (it was three plus two).",
+      "oracle_section": "Status",
+      "source": "user",
+      "anchor": "it should be five minutes plus three seconds, not three plus two, since the club now plays longer blitz"
+    },
+    {
+      "id": "c5",
+      "statement": "The planned features, built strictly in sequence, are the saved-game export, the move history list and a two-player network mode.",
+      "needed": true,
+      "suits": [
+        "Next Steps"
+      ],
+      "oracle_line": "- Planned features, built in sequence: saved-game export, move history list, two-player network mode.",
+      "oracle_section": "Next steps",
+      "source": "user",
+      "anchor": "the saved-game export, then the move history list, then a two-player network mode"
+    },
+    {
+      "id": "c6",
+      "statement": "Resuming from a pause adds no increment, otherwise a player could gain time by pausing.",
+      "needed": true,
+      "suits": [
+        "Blockers/Warnings"
+      ],
+      "oracle_line": "- A resume from pause adds no increment, otherwise players could gain time by pausing.",
+      "oracle_section": "Warnings",
+      "source": "user",
+      "anchor": "A resume must not add any increment, otherwise a player could gain time by pausing"
+    },
+    {
+      "id": "w1",
+      "statement": "The clock config caps a side's time at 99 minutes.",
+      "needed": true,
+      "suits": [
+        "New Files/Structure"
+      ],
+      "oracle_line": "- `clock.cfg` caps a side's time at 99 minutes (`max-minutes = 99`).",
+      "oracle_section": "Structure",
+      "source": "tool",
+      "evidence": [
+        "max-minutes = 99"
+      ]
+    },
+    {
+      "id": "v1",
+      "statement": "A curses display was tried last weekend and dropped because the terminal flickered.",
+      "needed": false,
+      "suits": []
+    },
+    {
+      "id": "v2",
+      "statement": "The club secretary meets on Monday.",
+      "needed": false,
+      "suits": []
+    }
+  ],
+  "probes": [
+    {
+      "id": "p1",
+      "code_answers": false,
+      "item": "c1",
+      "type": "single-fact",
+      "question": "When is the increment added to a side's clock?",
+      "answer": "after a move completes",
+      "reject": []
+    },
+    {
+      "id": "p2",
+      "code_answers": false,
+      "item": "c2",
+      "type": "single-fact",
+      "question": "How is each preset line written in the presets file?",
+      "answer": "name, minutes, increment seconds",
+      "reject": []
+    },
+    {
+      "id": "p3",
+      "code_answers": false,
+      "item": "c3",
+      "type": "single-fact",
+      "question": "In what unit is a side's remaining time stored?",
+      "answer": "tenths of a second",
+      "reject": []
+    },
+    {
+      "id": "p4",
+      "code_answers": false,
+      "item": "c4",
+      "type": "knowledge-update",
+      "question": "Which preset does the clock start with by default?",
+      "answer": "five minutes plus three seconds",
+      "reject": [
+        "three minutes plus two seconds"
+      ]
+    },
+    {
+      "id": "p5",
+      "code_answers": true,
+      "item": "w1",
+      "type": "single-fact",
+      "question": "What is the largest number of minutes the config allows?",
+      "answer": "max-minutes = 99",
+      "reject": []
+    },
+    {
+      "id": "p6",
+      "code_answers": false,
+      "item": "c5",
+      "type": "single-fact",
+      "question": "Which planned feature is built before all the others?",
+      "answer": "saved-game export",
+      "reject": []
+    },
+    {
+      "id": "p7",
+      "code_answers": false,
+      "item": "c5",
+      "type": "temporal",
+      "question": "What sits between the first and the last item of the plan?",
+      "answer": "move history list",
+      "reject": []
+    },
+    {
+      "id": "p8",
+      "code_answers": false,
+      "item": "c6",
+      "type": "single-fact",
+      "question": "What happens to the extra seconds when a paused clock resumes?",
+      "answer": "no increment",
+      "reject": []
+    },
+    {
+      "id": "p9",
+      "code_answers": false,
+      "item": null,
+      "near": "c1",
+      "type": "abstention",
+      "question": "Is the increment capped at a maximum number of seconds?",
+      "answer": "UNKNOWN",
+      "reject": []
+    },
+    {
+      "id": "p10",
+      "code_answers": false,
+      "item": null,
+      "near": "c3",
+      "type": "abstention",
+      "question": "How many tenths does the display round to under a minute?",
+      "answer": "UNKNOWN",
+      "reject": []
+    }
+  ]
+}

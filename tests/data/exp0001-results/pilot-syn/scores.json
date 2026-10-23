@@ -1,0 +1,455 @@
+{
+ "arms": [
+  "floor",
+  "baseline",
+  "oracle"
+ ],
+ "calls": {
+  "judge": {
+   "judge": {
+    "cost_usd": 0.1,
+    "input_tokens": 100.0,
+    "n": 10,
+    "output_tokens": 20.0,
+    "wall_s": 10.0
+   }
+  },
+  "preserve": {
+   "baseline": {
+    "cost_usd": 0.8,
+    "input_tokens": 7210.0,
+    "n": 4,
+    "output_tokens": 28.0,
+    "wall_s": 0.8
+   }
+  },
+  "probe": {
+   "baseline": {
+    "cost_usd": 0.04,
+    "input_tokens": 7210.0,
+    "n": 4,
+    "output_tokens": 28.0,
+    "wall_s": 0.4
+   },
+   "floor": {
+    "cost_usd": 0.04,
+    "input_tokens": 6000.0,
+    "n": 4,
+    "output_tokens": 28.0,
+    "wall_s": 0.4
+   },
+   "oracle": {
+    "cost_usd": 0.04,
+    "input_tokens": 8742.0,
+    "n": 4,
+    "output_tokens": 28.0,
+    "wall_s": 0.5
+   }
+  }
+ },
+ "dropped": {
+  "dev-001-tide-table": {},
+  "dev-002-recipe-scaler": {}
+ },
+ "dropped_floor": 0,
+ "dropped_oracle": 0,
+ "dropped_total": 0,
+ "fixtures": [
+  "dev-001-tide-table",
+  "dev-002-recipe-scaler"
+ ],
+ "gallery": {
+  "missed_items": [
+   {
+    "fixture": "dev-001-tide-table",
+    "item": "i4",
+    "statement": "Days are listed newest first; they used to be listed oldest first."
+   },
+   {
+    "fixture": "dev-001-tide-table",
+    "item": "i5",
+    "statement": "The week's plan is to skip the dropout markers, then add a station test to check.sh, then write the README usage section."
+   },
+   {
+    "fixture": "dev-001-tide-table",
+    "item": "i6",
+    "statement": "The quay sensor's clock runs five minutes fast, so five minutes are subtracted before comparing with the printed boards."
+   },
+   {
+    "fixture": "dev-001-tide-table",
+    "item": "k1",
+    "statement": "The March readings file holds a sensor dropout marked with two question marks at 11:50 on 9 March."
+   },
+   {
+    "fixture": "dev-002-recipe-scaler",
+    "item": "j4",
+    "statement": "The default serving count is six; it used to be four."
+   },
+   {
+    "fixture": "dev-002-recipe-scaler",
+    "item": "j5",
+    "statement": "Three features are queued, one after another: the metric-to-cup conversion table, then half servings, then a CSV export."
+   },
+   {
+    "fixture": "dev-002-recipe-scaler",
+    "item": "j6",
+    "statement": "Pan size is not scaled with servings, because every recipe assumes one 24 cm pan."
+   },
+   {
+    "fixture": "dev-002-recipe-scaler",
+    "item": "t1",
+    "statement": "Recipe files declare their base servings in a first-line comment, and the dal recipe declares three."
+   }
+  ],
+  "probes": [
+   {
+    "answer": "UNKNOWN",
+    "fixture": "dev-001-tide-table",
+    "gold": "newest first",
+    "label": "abstained",
+    "probe": "p4",
+    "question": "In which order does the table list the days?",
+    "seed": 1
+   },
+   {
+    "answer": "UNKNOWN",
+    "fixture": "dev-001-tide-table",
+    "gold": "2026-03-09 11:50",
+    "label": "abstained",
+    "probe": "p5",
+    "question": "Which reading in the March file is marked as a dropout?",
+    "seed": 1
+   },
+   {
+    "answer": "UNKNOWN",
+    "fixture": "dev-001-tide-table",
+    "gold": "skip the dropout markers",
+    "label": "abstained",
+    "probe": "p6",
+    "question": "Which job is next on the remaining work list?",
+    "seed": 1
+   },
+   {
+    "answer": "UNKNOWN",
+    "fixture": "dev-001-tide-table",
+    "gold": "README usage section",
+    "label": "abstained",
+    "probe": "p7",
+    "question": "What follows the station test among the open jobs?",
+    "seed": 1
+   },
+   {
+    "answer": "UNKNOWN",
+    "fixture": "dev-001-tide-table",
+    "gold": "five minutes",
+    "label": "abstained",
+    "probe": "p8",
+    "question": "By how much does the quay sensor's clock run fast?",
+    "seed": 1
+   },
+   {
+    "answer": "UNKNOWN",
+    "fixture": "dev-002-recipe-scaler",
+    "gold": "six",
+    "label": "abstained",
+    "probe": "p4",
+    "question": "How many servings does the scaler assume by default?",
+    "seed": 1
+   },
+   {
+    "answer": "UNKNOWN",
+    "fixture": "dev-002-recipe-scaler",
+    "gold": "# base-servings: 3",
+    "label": "abstained",
+    "probe": "p5",
+    "question": "What does the first line of the dal recipe declare?",
+    "seed": 1
+   },
+   {
+    "answer": "UNKNOWN",
+    "fixture": "dev-002-recipe-scaler",
+    "gold": "conversion table",
+    "label": "abstained",
+    "probe": "p6",
+    "question": "Which parts of the plan have nobody started on?",
+    "seed": 1
+   },
+   {
+    "answer": "UNKNOWN",
+    "fixture": "dev-002-recipe-scaler",
+    "gold": "half servings",
+    "label": "abstained",
+    "probe": "p7",
+    "question": "Which step is placed between the first and the last on the plan?",
+    "seed": 1
+   },
+   {
+    "answer": "UNKNOWN",
+    "fixture": "dev-002-recipe-scaler",
+    "gold": "not scaled",
+    "label": "abstained",
+    "probe": "p8",
+    "question": "What happens to the pan size when the servings change?",
+    "seed": 1
+   }
+  ]
+ },
+ "invalid": {
+  "judge_labels_invalid": 0,
+  "probe_answers_missing": 0
+ },
+ "judge": {
+  "cached_hits": 38,
+  "calls_made": 10
+ },
+ "non_abstention_total": 16,
+ "per_fixture": {
+  "baseline": {
+   "dev-001-tide-table": {
+    "d_lines": 6.0,
+    "d_tokens": 305.0,
+    "false_answer": 1.0,
+    "placement": 1.0,
+    "precision": 0.75,
+    "primary": 0.375,
+    "primary_all": 0.375,
+    "recall": 0.4285714286
+   },
+   "dev-002-recipe-scaler": {
+    "d_lines": 6.0,
+    "d_tokens": 300.0,
+    "false_answer": 1.0,
+    "placement": 1.0,
+    "precision": 0.75,
+    "primary": 0.375,
+    "primary_all": 0.375,
+    "recall": 0.4285714286
+   }
+  },
+  "floor": {
+   "dev-001-tide-table": {
+    "d_lines": 0.0,
+    "d_tokens": 0.0,
+    "false_answer": 0.0,
+    "placement": null,
+    "precision": null,
+    "primary": 0.0,
+    "primary_all": 0.0,
+    "recall": 0.0
+   },
+   "dev-002-recipe-scaler": {
+    "d_lines": 0.0,
+    "d_tokens": 0.0,
+    "false_answer": 0.0,
+    "placement": null,
+    "precision": null,
+    "primary": 0.0,
+    "primary_all": 0.0,
+    "recall": 0.0
+   }
+  },
+  "oracle": {
+   "dev-001-tide-table": {
+    "d_lines": 19.0,
+    "d_tokens": 733.0,
+    "false_answer": 0.0,
+    "placement": 1.0,
+    "precision": 1.0,
+    "primary": 1.0,
+    "primary_all": 1.0,
+    "recall": 1.0
+   },
+   "dev-002-recipe-scaler": {
+    "d_lines": 19.0,
+    "d_tokens": 638.0,
+    "false_answer": 0.0,
+    "placement": 1.0,
+    "precision": 1.0,
+    "primary": 1.0,
+    "primary_all": 1.0,
+    "recall": 1.0
+   }
+  }
+ },
+ "per_seed": {
+  "baseline": {
+   "dev-001-tide-table": {
+    "1": {
+     "d_lines": 6,
+     "d_tokens": 305,
+     "false_answer": 1.0,
+     "placement": 1.0,
+     "precision": 0.75,
+     "primary": 0.375,
+     "primary_all": 0.375,
+     "recall": 0.4285714286
+    },
+    "2": {
+     "d_lines": 6,
+     "d_tokens": 305,
+     "false_answer": 1.0,
+     "placement": 1.0,
+     "precision": 0.75,
+     "primary": 0.375,
+     "primary_all": 0.375,
+     "recall": 0.4285714286
+    }
+   },
+   "dev-002-recipe-scaler": {
+    "1": {
+     "d_lines": 6,
+     "d_tokens": 300,
+     "false_answer": 1.0,
+     "placement": 1.0,
+     "precision": 0.75,
+     "primary": 0.375,
+     "primary_all": 0.375,
+     "recall": 0.4285714286
+    },
+    "2": {
+     "d_lines": 6,
+     "d_tokens": 300,
+     "false_answer": 1.0,
+     "placement": 1.0,
+     "precision": 0.75,
+     "primary": 0.375,
+     "primary_all": 0.375,
+     "recall": 0.4285714286
+    }
+   }
+  },
+  "floor": {
+   "dev-001-tide-table": {
+    "1": {
+     "d_lines": 0,
+     "d_tokens": 0,
+     "false_answer": 0.0,
+     "placement": null,
+     "precision": null,
+     "primary": 0.0,
+     "primary_all": 0.0,
+     "recall": 0.0
+    },
+    "2": {
+     "d_lines": 0,
+     "d_tokens": 0,
+     "false_answer": 0.0,
+     "placement": null,
+     "precision": null,
+     "primary": 0.0,
+     "primary_all": 0.0,
+     "recall": 0.0
+    }
+   },
+   "dev-002-recipe-scaler": {
+    "1": {
+     "d_lines": 0,
+     "d_tokens": 0,
+     "false_answer": 0.0,
+     "placement": null,
+     "precision": null,
+     "primary": 0.0,
+     "primary_all": 0.0,
+     "recall": 0.0
+    },
+    "2": {
+     "d_lines": 0,
+     "d_tokens": 0,
+     "false_answer": 0.0,
+     "placement": null,
+     "precision": null,
+     "primary": 0.0,
+     "primary_all": 0.0,
+     "recall": 0.0
+    }
+   }
+  },
+  "oracle": {
+   "dev-001-tide-table": {
+    "1": {
+     "d_lines": 19,
+     "d_tokens": 733,
+     "false_answer": 0.0,
+     "placement": 1.0,
+     "precision": 1.0,
+     "primary": 1.0,
+     "primary_all": 1.0,
+     "recall": 1.0
+    },
+    "2": {
+     "d_lines": 19,
+     "d_tokens": 733,
+     "false_answer": 0.0,
+     "placement": 1.0,
+     "precision": 1.0,
+     "primary": 1.0,
+     "primary_all": 1.0,
+     "recall": 1.0
+    }
+   },
+   "dev-002-recipe-scaler": {
+    "1": {
+     "d_lines": 19,
+     "d_tokens": 638,
+     "false_answer": 0.0,
+     "placement": 1.0,
+     "precision": 1.0,
+     "primary": 1.0,
+     "primary_all": 1.0,
+     "recall": 1.0
+    },
+    "2": {
+     "d_lines": 19,
+     "d_tokens": 638,
+     "false_answer": 0.0,
+     "placement": 1.0,
+     "precision": 1.0,
+     "primary": 1.0,
+     "primary_all": 1.0,
+     "recall": 1.0
+    }
+   }
+  }
+ },
+ "preserve": {
+  "baseline": {
+   "changed": 4,
+   "runs": 4
+  }
+ },
+ "sanity": {
+  "mismatch_recall": 0.0,
+  "mismatch_recall_max": 0.05,
+  "ok": true,
+  "oracle_recall": 1.0,
+  "oracle_recall_min": 0.95
+ },
+ "scorable": {
+  "dev-001-tide-table": [
+   "p1",
+   "p2",
+   "p3",
+   "p4",
+   "p5",
+   "p6",
+   "p7",
+   "p8"
+  ],
+  "dev-002-recipe-scaler": [
+   "p1",
+   "p2",
+   "p3",
+   "p4",
+   "p5",
+   "p6",
+   "p7",
+   "p8"
+  ]
+ },
+ "scorable_counts": {
+  "dev-001-tide-table": 8,
+  "dev-002-recipe-scaler": 8
+ },
+ "seeds": 2,
+ "version": 1
+}

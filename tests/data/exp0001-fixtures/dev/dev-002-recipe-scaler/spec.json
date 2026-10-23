@@ -1,0 +1,236 @@
+{
+  "id": "dev-002-recipe-scaler",
+  "split": "dev",
+  "summary": "A shell tool that scales a recipe's ingredient amounts to a new number of servings.",
+  "repo": {
+    "files": {
+      "CLAUDE.md": "# Recipe scaler\n\nA small shell tool that scales the ingredient amounts of a recipe to a new\nnumber of servings and prints the result.\n\n## Layout\n\n- `scale.sh` is the entry script: recipe file in, scaled recipe out.\n- `check.sh` scales the pancake recipe and diffs the result.\n- `recipes/pancakes.txt` and `recipes/dal.txt` are the two example recipes.\n- `recipes/expected-pancakes-x2.txt` is the pancake recipe at double servings.\n- `README.md` explains the recipe file format for the kitchen team.\n\n## Commands\n\n- `sh scale.sh recipes/pancakes.txt 8` prints the pancake recipe for eight servings.\n- `sh check.sh` runs the comparison against the expected file.\n- `ls recipes/` lists the recipes that are available.\n\n## Conventions\n\n- A recipe file has a comment line first, then one ingredient per line.\n- An ingredient line is an amount, a unit, and a name, split by single spaces.\n- Units are g, ml, or pcs. Do not add other units without asking.\n- The script is POSIX shell plus awk and needs nothing else installed.\n- Keep awk programs short; comment each block with what it computes.\n- Errors go to standard error and the script exits with status 2.\n\n## Working style\n\n- Explain a change in two sentences before editing.\n- Re-run `sh check.sh` after every edit to the script.\n- Leave the example recipes alone unless asked.\n",
+      "README.md": "# Recipe scaler\n\nUsage: `sh scale.sh RECIPE_FILE [SERVINGS]`\n\nThe recipe file starts with a comment line, then lists one ingredient per line.\nThe script multiplies every amount by the ratio of the new servings to the\nrecipe's own servings. When SERVINGS is missing it uses four.\n\nThe kitchen team prints the result on a card and clips it above the stove.\n",
+      "scale.sh": "#!/bin/sh\n# Scale a recipe to a new number of servings.\n# Usage: sh scale.sh RECIPE_FILE [SERVINGS]\nfile=\"$1\"\nwant=\"${2:-4}\"\n[ -r \"$file\" ] || { echo \"cannot read recipe file\" >&2; exit 2; }\nbase=$(head -1 \"$file\" | sed 's/.*: *//')\nawk -v want=\"$want\" -v base=\"$base\" '\n  NR == 1 { print; next }\n  {\n    amount = $1 * want / base\n    printf \"%d %s\", amount + 0.5, $2\n    for (i = 3; i <= NF; i++) printf \" %s\", $i\n    printf \"\\n\"\n  }\n' \"$file\"\n",
+      "check.sh": "#!/bin/sh\n# Scale the pancake recipe to double servings and compare.\nsh scale.sh recipes/pancakes.txt 8 | diff - recipes/expected-pancakes-x2.txt && echo \"pancakes ok\"\n",
+      "recipes/pancakes.txt": "# base-servings: 4\n240 g flour\n300 ml milk\n2 pcs eggs\n20 g sugar\n2 g salt\n",
+      "recipes/expected-pancakes-x2.txt": "# base-servings: 4\n480 g flour\n600 ml milk\n4 pcs eggs\n40 g sugar\n4 g salt\n",
+      "recipes/dal.txt": "# base-servings: 3\n180 g red lentils\n600 ml water\n1 pcs onion\n2 g turmeric\n3 g salt\n"
+    }
+  },
+  "allowed_bash": [
+    "ls *",
+    "cat *",
+    "grep *",
+    "head *",
+    "wc *",
+    "git *",
+    "echo *"
+  ],
+  "turns": [
+    "Skim scale.sh and README.md and tell me in two or three lines how a recipe file is laid out. After that, list the files in recipes/. My own shorthand for this working branch is PEPPERWHISK, if you need a name for it.",
+    "Teach scale.sh to take a target number of servings as its second argument, defaulting to four when it is missing. Store every amount as a whole number of grams or millilitres and never as a fraction, because rounding fractions of a cup is what made the totals drift last month.",
+    "Eggs and anything else counted in whole pieces should round up when the recipe is scaled, so nobody ends up with half an egg. Show me the diff when you are done.",
+    "Run head on recipes/dal.txt and paste its first line back to me untouched.",
+    "Salt and spices must not scale in a straight line. Scale them at seventy percent of the serving ratio, because a doubled dish tastes far too salty otherwise. Update scale.sh and add a case to check.sh.",
+    "Scrap what I said about the default: it is six servings, not four, since most of the cooks here feed six. Update the README to match. The README should also say that pan size is not scaled with servings, because every recipe here assumes one 24 cm pan.",
+    "Still to build, one after another: the metric-to-cup conversion table, then support for half servings, then a CSV export. Nothing to start yet, I only want the plan written into your notes.",
+    "No action needed: I tried a tiny rational-number helper to avoid rounding and left it out, since it is more machinery than this script needs. The cooking club social also moved to Friday, nothing to do there."
+  ],
+  "history_check": {
+    "question": "Which shorthand name did I use for this working branch?",
+    "token": "PEPPERWHISK"
+  },
+  "items": [
+    {
+      "id": "j1",
+      "statement": "Ingredient amounts are whole grams or millilitres, never fractions, because rounding cup fractions made the totals drift.",
+      "needed": true,
+      "suits": [
+        "Patterns/Insights"
+      ],
+      "oracle_line": "- Store amounts as whole grams or millilitres, never fractions; rounding cup fractions made totals drift.",
+      "oracle_section": "Patterns",
+      "source": "user",
+      "anchor": "Store every amount as a whole number of grams or millilitres and never as a fraction, because rounding fractions of a cup is what made the totals drift last month"
+    },
+    {
+      "id": "j2",
+      "statement": "Counted items such as eggs round up to a whole piece when a recipe is scaled.",
+      "needed": true,
+      "suits": [
+        "Key Decisions"
+      ],
+      "oracle_line": "- Counted items such as eggs round up to a whole piece when scaling.",
+      "oracle_section": "Decisions",
+      "source": "user",
+      "anchor": "Eggs and anything else counted in whole pieces should round up when the recipe is scaled"
+    },
+    {
+      "id": "j3",
+      "statement": "Salt and spices scale at seventy percent of the serving ratio, not in a straight line.",
+      "needed": true,
+      "suits": [
+        "Blockers/Warnings"
+      ],
+      "oracle_line": "- Scale salt and spices at seventy percent of the serving ratio, not linearly.",
+      "oracle_section": "Warnings",
+      "source": "user",
+      "anchor": "Scale them at seventy percent of the serving ratio, because a doubled dish tastes far too salty otherwise"
+    },
+    {
+      "id": "j4",
+      "statement": "The default serving count is six; it used to be four.",
+      "needed": true,
+      "suits": [
+        "Phase/Status Changes"
+      ],
+      "oracle_line": "- The default serving count is six (it was four).",
+      "oracle_section": "Status",
+      "source": "user",
+      "anchor": "it is six servings, not four, since most of the cooks here feed six"
+    },
+    {
+      "id": "j5",
+      "statement": "Three features are queued, one after another: the metric-to-cup conversion table, then half servings, then a CSV export.",
+      "needed": true,
+      "suits": [
+        "Next Steps"
+      ],
+      "oracle_line": "- Build queue, one after another: metric-to-cup conversion table, half servings, CSV export.",
+      "oracle_section": "Next steps",
+      "source": "user",
+      "anchor": "the metric-to-cup conversion table, then support for half servings, then a CSV export"
+    },
+    {
+      "id": "j6",
+      "statement": "Pan size is not scaled with servings, because every recipe assumes one 24 cm pan.",
+      "needed": true,
+      "suits": [
+        "Patterns/Insights"
+      ],
+      "oracle_line": "- Do not scale pan size with servings; every recipe assumes one 24 cm pan.",
+      "oracle_section": "Patterns",
+      "source": "user",
+      "anchor": "pan size is not scaled with servings, because every recipe here assumes one 24 cm pan"
+    },
+    {
+      "id": "t1",
+      "statement": "Recipe files declare their base servings in a first-line comment, and the dal recipe declares three.",
+      "needed": true,
+      "suits": [
+        "New Files/Structure"
+      ],
+      "oracle_line": "- Each recipe file starts with a `# base-servings: N` comment; the dal recipe says 3.",
+      "oracle_section": "Structure",
+      "source": "tool",
+      "evidence": [
+        "# base-servings: 3"
+      ]
+    },
+    {
+      "id": "x1",
+      "statement": "A rational-number helper was tried for the rounding problem and left out as more machinery than the scaler needs.",
+      "needed": false,
+      "suits": []
+    },
+    {
+      "id": "x2",
+      "statement": "The cooking club social moved to Friday.",
+      "needed": false,
+      "suits": []
+    }
+  ],
+  "probes": [
+    {
+      "id": "p1",
+      "code_answers": false,
+      "item": "j1",
+      "type": "single-fact",
+      "question": "What unit are ingredient amounts stored in?",
+      "answer": "grams or millilitres",
+      "reject": []
+    },
+    {
+      "id": "p2",
+      "code_answers": false,
+      "item": "j2",
+      "type": "single-fact",
+      "question": "What happens to counted items like eggs when a recipe is scaled?",
+      "answer": "round up",
+      "reject": []
+    },
+    {
+      "id": "p3",
+      "code_answers": false,
+      "item": "j3",
+      "type": "single-fact",
+      "question": "How do salt and spices scale compared with the serving ratio?",
+      "answer": "seventy percent",
+      "reject": []
+    },
+    {
+      "id": "p4",
+      "code_answers": false,
+      "item": "j4",
+      "type": "knowledge-update",
+      "question": "How many servings does the scaler assume by default?",
+      "answer": "six",
+      "reject": [
+        "four"
+      ]
+    },
+    {
+      "id": "p5",
+      "code_answers": true,
+      "item": "t1",
+      "type": "single-fact",
+      "question": "What does the first line of the dal recipe declare?",
+      "answer": "# base-servings: 3",
+      "reject": []
+    },
+    {
+      "id": "p6",
+      "code_answers": false,
+      "item": "j5",
+      "type": "single-fact",
+      "question": "Which part of the plan is to be built first?",
+      "answer": "conversion table",
+      "reject": [],
+      "excluded": "the plan lists several parts that have not been started, so no single part is the gold answer"
+    },
+    {
+      "id": "p7",
+      "code_answers": false,
+      "item": "j5",
+      "type": "temporal",
+      "question": "Which step is placed between the first and the last on the plan?",
+      "answer": "half servings",
+      "reject": []
+    },
+    {
+      "id": "p8",
+      "code_answers": false,
+      "item": "j6",
+      "type": "single-fact",
+      "question": "What happens to the pan size when the servings change?",
+      "answer": "not scaled",
+      "reject": []
+    },
+    {
+      "id": "p9",
+      "code_answers": false,
+      "item": null,
+      "near": "j1",
+      "type": "abstention",
+      "question": "Which fractions of a cup does the table treat as exact?",
+      "answer": "UNKNOWN",
+      "reject": []
+    },
+    {
+      "id": "p10",
+      "code_answers": false,
+      "item": null,
+      "near": "j3",
+      "type": "abstention",
+      "question": "At what ratio do sugar and honey scale?",
+      "answer": "UNKNOWN",
+      "reject": []
+    }
+  ]
+}

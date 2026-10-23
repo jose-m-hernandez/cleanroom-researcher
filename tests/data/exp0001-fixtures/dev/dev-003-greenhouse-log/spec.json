@@ -1,0 +1,213 @@
+{
+  "id": "dev-003-greenhouse-log",
+  "split": "dev",
+  "summary": "A shell tool that summarises temperature and humidity readings from greenhouse sensors.",
+  "repo": {
+    "files": {
+      "CLAUDE.md": "# Greenhouse log\n\nA small shell tool that summarises temperature and humidity readings from\ngreenhouse sensors, one summary block per growing bed.\n\n## Layout\n\n- `summarise.sh` is the entry script. It reads the csv logs and prints a summary.\n- `check.sh` summarises bed A and diffs the output with the expected file.\n- `logs/bed-a.csv` and `logs/bed-b.csv` hold the sensor readings.\n- `logs/expected-bed-a.txt` is the summary bed A should produce.\n- `README.md` describes the log format for the grower.\n\n## Commands\n\n- `sh summarise.sh logs/bed-a.csv` prints the summary for bed A.\n- `sh check.sh` compares the summary with the expected file.\n- `wc -l logs/*.csv` shows how many readings each bed has.\n\n## Conventions\n\n- A log line is a timestamp, a temperature in Celsius and a humidity percentage, split by commas.\n- Timestamps are written year-month-dayThour:minute.\n- The script is POSIX shell plus awk and needs nothing else installed.\n- Keep awk programs short and comment each block with what it computes.\n- Errors go to standard error and the script exits with status 2.\n- The summary lists minimum, maximum and average for both measurements.\n\n## Working style\n\n- Prefer editing an existing file over adding a new one.\n- Confirm the check passes before moving to the next request.\n- Say so when a request would touch the csv logs.\n",
+      "README.md": "# Greenhouse log\n\nUsage: `sh summarise.sh LOG_FILE`\n\nEach log file is one growing bed. A line holds a timestamp, a temperature in\ndegrees Celsius and a relative humidity percentage. The script prints the\nminimum, maximum and average of both measurements.\n\nThe grower reads the summary on a tablet beside the seedling trays.\n",
+      "summarise.sh": "#!/bin/sh\n# Summarise a greenhouse log: min, max and average temperature and humidity.\n# Usage: sh summarise.sh LOG_FILE\nfile=\"$1\"\n[ -r \"$file\" ] || { echo \"cannot read log file\" >&2; exit 2; }\nawk -F, '\n  NR == 1 { tmin = tmax = $2; hmin = hmax = $3 }\n  {\n    if ($2 < tmin) tmin = $2\n    if ($2 > tmax) tmax = $2\n    if ($3 < hmin) hmin = $3\n    if ($3 > hmax) hmax = $3\n    tsum += $2; hsum += $3; n++\n  }\n  END {\n    printf \"temperature min %.1f max %.1f avg %.1f\\n\", tmin, tmax, tsum / n\n    printf \"humidity    min %.1f max %.1f avg %.1f\\n\", hmin, hmax, hsum / n\n  }\n' \"$file\"\n",
+      "check.sh": "#!/bin/sh\n# Summarise bed A and compare with the expected summary.\nsh summarise.sh logs/bed-a.csv | diff - logs/expected-bed-a.txt && echo \"bed A ok\"\n",
+      "logs/bed-a.csv": "2026-05-02T04:00,11.8,82.0\n2026-05-02T04:15,11.5,83.5\n2026-05-02T04:30,11.2,84.0\n2026-05-02T04:45,11.6,83.0\n",
+      "logs/expected-bed-a.txt": "temperature min 11.2 max 11.8 avg 11.5\nhumidity    min 82.0 max 84.0 avg 83.1\n",
+      "logs/bed-b.csv": "2026-05-02T04:00,12.4,79.0\n2026-05-02T04:10,12.1,80.5\n2026-05-02T04:10,fault sensor-7 stuck at 99.9\n2026-05-02T04:20,12.0,80.0\n"
+    }
+  },
+  "allowed_bash": [
+    "ls *",
+    "cat *",
+    "grep *",
+    "head *",
+    "wc *",
+    "git *",
+    "echo *"
+  ],
+  "turns": [
+    "Read summarise.sh and tell me which columns the log files have. My shorthand for this working branch is CUCUMBERDRIFT, in case I mention it later.",
+    "Add a humidity average to the summary for each bed. Round every average to one decimal, but keep the raw readings untouched in the csv files, since the grower audits the raw numbers.",
+    "Use grep to find the word fault in logs/bed-b.csv and read me the first matching line as it stands in the file.",
+    "Move the parsing code into a new file called parse.sh that summarise.sh sources. Keep each file under sixty lines because the greenhouse tablet shows only that much without scrolling.",
+    "Readings come every ten minutes, but the sensors in bed A report every fifteen, so averages need weighting by interval. Please add that. The frost warning currently fires at four degrees, leave it alone for now.",
+    "New direction for the frost warning: the threshold is two degrees, not four, since the new vents leak cold air. Update the README and the check script. No action needed on the fans, the supplier says they arrive next month.",
+    "The queue from here runs like this: a daily min and max line, then a CSV export of the summary, then the frost alert email. Just write that plan into your notes, no code yet. I tried a median instead of the mean last week and put the mean back, so nothing to do about that."
+  ],
+  "history_check": {
+    "question": "Which shorthand name did I use for this working branch?",
+    "token": "CUCUMBERDRIFT"
+  },
+  "items": [
+    {
+      "id": "g1",
+      "statement": "Averages are rounded to one decimal while the raw csv readings stay untouched, because the grower audits the raw numbers.",
+      "needed": true,
+      "suits": [
+        "Key Decisions"
+      ],
+      "oracle_line": "- Round averages to one decimal; never edit the raw csv readings (the grower audits them).",
+      "oracle_section": "Decisions",
+      "source": "user",
+      "anchor": "keep the raw readings untouched in the csv files, since the grower audits the raw numbers"
+    },
+    {
+      "id": "g2",
+      "statement": "Parsing code lives in parse.sh, which summarise.sh sources, and each file stays under sixty lines.",
+      "needed": true,
+      "suits": [
+        "Patterns/Insights"
+      ],
+      "oracle_line": "- Parsing lives in `parse.sh`, sourced by `summarise.sh`; keep each file under sixty lines.",
+      "oracle_section": "Patterns",
+      "source": "user",
+      "anchor": "Keep each file under sixty lines because the greenhouse tablet shows only that much without scrolling"
+    },
+    {
+      "id": "g3",
+      "statement": "Bed A sensors report every fifteen minutes while the others report every ten, so averages are weighted by interval.",
+      "needed": true,
+      "suits": [
+        "Blockers/Warnings"
+      ],
+      "oracle_line": "- Bed A sensors report every fifteen minutes, the rest every ten; weight averages by interval.",
+      "oracle_section": "Warnings",
+      "source": "user",
+      "anchor": "the sensors in bed A report every fifteen"
+    },
+    {
+      "id": "g4",
+      "statement": "The frost warning threshold is two degrees; it used to be four.",
+      "needed": true,
+      "suits": [
+        "Phase/Status Changes"
+      ],
+      "oracle_line": "- The frost warning fires at two degrees (it was four).",
+      "oracle_section": "Status",
+      "source": "user",
+      "anchor": "the threshold is two degrees, not four, since the new vents leak cold air"
+    },
+    {
+      "id": "g5",
+      "statement": "The next jobs are a daily min and max line, then a CSV export of the summary, then the frost alert email, in that sequence.",
+      "needed": true,
+      "suits": [
+        "Next Steps"
+      ],
+      "oracle_line": "- Next jobs, in that sequence: daily min and max line, CSV export of the summary, frost alert email.",
+      "oracle_section": "Next steps",
+      "source": "user",
+      "anchor": "a daily min and max line, then a CSV export of the summary, then the frost alert email"
+    },
+    {
+      "id": "k1",
+      "statement": "Bed B's log has a fault line saying sensor-7 is stuck at 99.9.",
+      "needed": true,
+      "suits": [
+        "New Files/Structure"
+      ],
+      "oracle_line": "- `logs/bed-b.csv` contains a fault line: sensor-7 stuck at 99.9.",
+      "oracle_section": "Structure",
+      "source": "tool",
+      "evidence": [
+        "sensor-7 stuck at 99.9"
+      ]
+    },
+    {
+      "id": "y1",
+      "statement": "The supplier says the new fans arrive next month.",
+      "needed": false,
+      "suits": []
+    },
+    {
+      "id": "y2",
+      "statement": "A median was tried instead of the mean and the mean was put back.",
+      "needed": false,
+      "suits": []
+    }
+  ],
+  "probes": [
+    {
+      "id": "p1",
+      "code_answers": false,
+      "item": "g1",
+      "type": "single-fact",
+      "question": "To how many decimals are the averages rounded?",
+      "answer": "one decimal",
+      "reject": []
+    },
+    {
+      "id": "p2",
+      "code_answers": false,
+      "item": "g2",
+      "type": "single-fact",
+      "question": "Which file holds the parsing code?",
+      "answer": "parse.sh",
+      "reject": []
+    },
+    {
+      "id": "p3",
+      "code_answers": false,
+      "item": "g3",
+      "type": "single-fact",
+      "question": "How often do the bed A sensors report?",
+      "answer": "every fifteen minutes",
+      "reject": []
+    },
+    {
+      "id": "p4",
+      "code_answers": false,
+      "item": "g4",
+      "type": "knowledge-update",
+      "question": "At what temperature does the frost warning trigger?",
+      "answer": "two degrees",
+      "reject": [
+        "four degrees"
+      ]
+    },
+    {
+      "id": "p5",
+      "code_answers": true,
+      "item": "k1",
+      "type": "single-fact",
+      "question": "Which sensor does the fault line in bed B's log blame?",
+      "answer": "sensor-7",
+      "reject": []
+    },
+    {
+      "id": "p6",
+      "code_answers": false,
+      "item": "g5",
+      "type": "single-fact",
+      "question": "What is the first item of the remaining work?",
+      "answer": "daily min and max",
+      "reject": []
+    },
+    {
+      "id": "p7",
+      "code_answers": false,
+      "item": "g5",
+      "type": "temporal",
+      "question": "What is scheduled right after the daily line?",
+      "answer": "CSV export",
+      "reject": []
+    },
+    {
+      "id": "p8",
+      "code_answers": false,
+      "item": null,
+      "near": "g1",
+      "type": "abstention",
+      "question": "Which rounding mode do the averages use at exactly half?",
+      "answer": "UNKNOWN",
+      "reject": []
+    },
+    {
+      "id": "p9",
+      "code_answers": false,
+      "item": null,
+      "near": "g4",
+      "type": "abstention",
+      "question": "Which temperature triggers the heat warning?",
+      "answer": "UNKNOWN",
+      "reject": []
+    }
+  ]
+}
