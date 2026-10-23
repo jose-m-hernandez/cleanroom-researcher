@@ -473,6 +473,49 @@ class BarredWorkflowTests(unittest.TestCase):
         self.assertNotIn("pull_request_target", read_workflow())
 
 
+class RecordedGuardWorkflowTests(unittest.TestCase):
+    def test_w1_the_job_runs_only_on_a_fork_pull_request(self):
+        self.assertIn("    if: " + FORK, job_block("recorded-guard"))
+
+    def test_w2_the_job_has_a_ten_minute_timeout_and_the_pinned_runner(self):
+        block = job_block("recorded-guard")
+        self.assertIn("    timeout-minutes: 10", block)
+        self.assertIn("    runs-on: ubuntu-24.04", block)
+
+    def test_w3_both_actions_are_the_ones_the_barred_job_uses(self):
+        def uses(name):
+            return [l for l in job_block(name) if re.match(r"^\s*(- )?uses:", l)]
+
+        self.assertEqual(len(uses("recorded-guard")), 2)
+        self.assertEqual(uses("recorded-guard"), uses("barred"))
+
+    def test_w4_the_checkout_has_full_history_and_no_ref(self):
+        checkout = "\n".join(steps_of("recorded-guard")[0])
+        self.assertIn("uses: actions/checkout@", checkout)
+        self.assertIn("fetch-depth: 0", checkout)
+        self.assertIn("persist-credentials: false", checkout)
+        self.assertNotIn("ref:", checkout)
+
+    def test_w5_one_run_step_gets_the_base_commit_and_no_secret(self):
+        block = job_block("recorded-guard")
+        runs = [l for l in block if re.match(r"^\s*(- )?run:", l)]
+        self.assertEqual(runs, ['      - run: python3 tools/recorded_guard.py --base "$BASE_SHA"'])
+        self.assertIn("          BASE_SHA: ${{ github.event.pull_request.base.sha }}", block)
+        self.assertNotIn("secrets.", "\n".join(block))
+
+    def test_w6_the_jobs_in_order(self):
+        names = [m.group(1) for m in re.finditer(r"^  ([a-z][a-z-]*):$", read_workflow().split("\njobs:\n")[1], re.M)]
+        self.assertEqual(names, ["gate", "dev-tools", "barred", "reproduce", "recorded-guard"])
+
+    def test_w7_the_barred_fork_guard_points_at_the_maintainer_steps(self):
+        first = steps_of("barred")[0]
+        text = (
+            "        run: 'echo \"barred: skipped on a fork pull request (no secrets); "
+            "a maintainer runs it before merging (MAINTAINING.md)\"'"
+        )
+        self.assertIn(text, first)
+
+
 class StageOrderTests(unittest.TestCase):
     def run_main(self, *args):
         order = []

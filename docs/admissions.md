@@ -4,11 +4,13 @@ This is the ledger. Every file in the repository has exactly one row below sayin
 
 | path | class | basis | provenance |
 | --- | --- | --- | --- |
+| .github/CODEOWNERS | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22 |
 | .github/workflows/gate.yml | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | .gitignore | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | CONTRIBUTING.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22 |
 | LICENSE | sourced | SRC-0001 | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | LICENSE-CC-BY-4.0 | sourced | SRC-0002 | Claude Code (claude-sonnet-5-5), 2026-10-22 |
+| MAINTAINING.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22 |
 | README.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22 |
 | docs/adding-a-target.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-21 |
 | docs/admissions.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
@@ -34,6 +36,7 @@ This is the ledger. Every file in the repository has exactly one row below sayin
 | tests/test_gate.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | tests/test_header.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | tests/test_new_target.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-21 |
+| tests/test_recorded_guard.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22 |
 | tests/test_reproduce.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22 |
 | tests/test_stdlib_only.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | tools/barred_scan.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
@@ -46,6 +49,7 @@ This is the ledger. Every file in the repository has exactly one row below sayin
 | tools/lib/paths.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-21 |
 | tools/lib/repofiles.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | tools/new_target.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-21 |
+| tools/recorded_guard.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22 |
 | tools/reproduce.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22 |
 | sources/SRC-0003/source.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22 |
 | experiments/EXP-0001/README.md | original | - | Claude Code (claude-opus-5-5), 2026-10-22 |

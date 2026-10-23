@@ -346,6 +346,49 @@ def touched_before(root: str, commit: str, path: str) -> bool:
     return bool(_rev_list(root, ["--full-history", "-n", "1", commit + "^@", "--", path]))
 
 
+def has_commit(root: str, commit: str) -> bool:
+    """True when commit is a commit object in this repository."""
+    _require_commit_id(commit)
+    return _run(root, ["cat-file", "-e", commit + "^{commit}"]).returncode == 0
+
+
+def _diff(root: str, args: List[str]) -> bytes:
+    proc = _run(root, ["diff", "--no-renames"] + args)
+    if proc.returncode != 0:
+        detail = proc.stderr.decode("utf-8", "replace").strip().split("\n")[0]
+        raise RepoFilesError("git diff failed in %s (%s)" % (root, detail))
+    return proc.stdout
+
+
+def changed_paths(root: str, base: str) -> List[str]:
+    """Sorted paths that differ between base and HEAD, a moved file under both names."""
+    _require_commit_id(base)
+    out = _diff(root, ["--name-only", "-z", base, "HEAD"])
+    try:
+        text = out.decode("utf-8")
+    except UnicodeDecodeError:
+        raise RepoFilesError("git listed a path that is not valid UTF-8")
+    return sorted(p for p in text.split("\0") if p)
+
+
+def changed_lines(root: str, base: str, path: str) -> List[str]:
+    """Added and removed lines of path between base and HEAD, each with its + or -."""
+    _require_commit_id(base)
+    out = _diff(root, ["-U0", base, "HEAD", "--", path])
+    try:
+        text = out.decode("utf-8")
+    except UnicodeDecodeError:
+        raise RepoFilesError("git listed a path that is not valid UTF-8")
+    lines = []
+    in_hunk = False  # the +++ and --- header lines come before the first hunk
+    for line in text.split("\n"):
+        if line.startswith("@@"):
+            in_hunk = True
+        elif in_hunk and line.startswith(("+", "-")):
+            lines.append(line)
+    return lines
+
+
 def commit_time(root: str, commit: str) -> int:
     """The committer time of commit, as Unix seconds."""
     _require_full_history(root)

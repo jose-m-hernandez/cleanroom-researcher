@@ -542,6 +542,26 @@ class RecordedClassTests(RepoCase):
     def test_a9_exemption_pair(self):
         self.exemption("x" * 100001, "A9")
 
+    def test_a_basis_that_differs_only_in_its_last_digit_fails(self):
+        files, over = self.recorded()
+        good = sha_basis("result 1\n")
+        last = "0" if good[-1] != "0" else "1"
+        over[rec_path()] = ("recorded", good[:-1] + last)
+        self.build(files, overrides=over)
+        self.assertFinding("A4 recorded file does not match its sha256 basis: " + rec_path())
+
+    def test_an_original_row_gives_a_recorded_path_no_exemption(self):
+        cases = (
+            (self.URL_TEXT, "A6 unregistered URL"),
+            (b"\xff\xfe\x00", "A7 not valid UTF-8"),
+            ("x" * 100001, "A9"),
+        )
+        for data, finding in cases:
+            with self.subTest(finding=finding):
+                self.build(self.files_with(data))
+                self.assertFindingAt(finding, rec_path())
+                self.assertFindingAt("A4 a file under recorded/ must have a recorded row", rec_path())
+
     def test_a_generator_that_is_a_recorded_file_has_no_original_row(self):
         files = self.files_with("print(1)\n", "gen.py")
         files["data/f.txt"] = "seed=7\n"

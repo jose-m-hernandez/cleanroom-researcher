@@ -1,0 +1,4 @@
+# Reviewers requested for changes to these paths. GitHub blocks a merge on them only while the default branch requires code-owner review (see MAINTAINING.md).
+/experiments/*/recorded/ @jose-m-hernandez
+/docs/admissions.md @jose-m-hernandez
+/.github/ @jose-m-hernandez
