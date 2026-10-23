@@ -1439,6 +1439,12 @@ class CliTests(unittest.TestCase):
     def run_cli(self, *args, env=None):
         e = dict(os.environ)
         e.pop("CPR_EVAL_LIVE", None)
+        gated = tempfile.mkdtemp()  # the C6 gate must be open for score to reach its own checks
+        self.addCleanup(shutil.rmtree, gated, True)
+        os.makedirs(os.path.join(gated, "cpr-eval"))
+        with open(os.path.join(gated, "cpr-eval", "gates.json"), "w", encoding="utf-8") as fh:
+            json.dump({"C6": {"outcome": "PASS", "token": "0" * 64, "started_utc": "2026-10-23T00:00:00Z"}}, fh)
+        e["TMPDIR"] = gated
         e.update(env or {})
         return subprocess.run([sys.executable, exp0001_paths.RUN, *args], capture_output=True, text=True,
                               encoding="utf-8", env=e)

@@ -2,7 +2,7 @@
 
 Pure functions over a run record (stream events plus the persisted transcript).
 A run record is a dict with at least: events (list), transcript (path or None),
-sandbox (path), session_id, resumed (bool), kind ("plain", "preserve", "probe"),
+sandbox (path), session_id, resumed (bool), kind ("plain", "preserve", "probe", "canary"),
 plugin (export dir or None). Marker text is held in memory only; results carry
 counts and labels, never text.
 """
@@ -17,7 +17,7 @@ from pathlib import Path
 import claude_run
 from normalize import normalize
 
-VALID_KINDS = ("plain", "preserve", "probe")
+VALID_KINDS = ("plain", "preserve", "probe", "canary")
 ISOLATION_MODES = ("sources", "tempconfig")
 # The per-run proof has two kinds of check (README "Exclusions"). Outcome checks are about how a run ended; every
 # other failure label is an isolation check, about what the run loaded or saw.
@@ -527,6 +527,8 @@ def _check(run: dict, cfg: dict, markers: list) -> dict:
     if run.get("over_cap") is True:
         fails.append("over_cap")
     kind = run.get("kind")
+    # Kind "canary" (P:237) takes every check above, result_error and over_cap included, but not ask_user or
+    # denials: in a canary run a refused tool call is the expected result.
     if kind == "preserve":
         if counts["ask_user"]:
             fails.append("ask_user")

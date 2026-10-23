@@ -11,6 +11,7 @@ import io
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -1097,6 +1098,13 @@ class GenerateTests(GenTestBase):
     def test_cli_refuses_without_the_live_flag(self):
         env = dict(os.environ)
         env.pop("CPR_EVAL_LIVE", None)
+        gated = Path(tempfile.mkdtemp())  # the C6 gate must be open for the command to reach the live check
+        self.addCleanup(shutil.rmtree, gated, True)
+        (gated / "cpr-eval").mkdir()
+        (gated / "cpr-eval" / "gates.json").write_text(json.dumps(
+            {k: {"outcome": "PASS", "token": "0" * 64, "started_utc": "2026-10-23T00:00:00Z"} for k in ("C6", "C7")}),
+            encoding="utf-8")
+        env["TMPDIR"] = str(gated)
         for command in ("gen-fixture", "install-check"):
             proc = subprocess.run([sys.executable, exp0001_paths.RUN, command, "dev-001-tide-table"],
                                   capture_output=True, text=True, encoding="utf-8", env=env)

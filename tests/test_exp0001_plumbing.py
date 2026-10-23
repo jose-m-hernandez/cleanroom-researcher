@@ -12,7 +12,9 @@ from __future__ import annotations
 import copy
 import io
 import json
+import os
 import re
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -733,6 +735,15 @@ class FromInTheCommandLineTests(iso.CloneFolders):
         self.refuses(self.form_value_is_a_symlink(self.clone / "other"))
 
     def test_a_from_under_recorded_or_outside_the_clone_passes_the_rule(self):
+        gated = Path(tempfile.mkdtemp())  # score needs the C6 gate open to get past the gate to its own stop
+        self.addCleanup(shutil.rmtree, gated, True)
+        (gated / "cpr-eval").mkdir()
+        (gated / "cpr-eval" / "gates.json").write_text(
+            json.dumps({"C6": {"outcome": "PASS", "token": "0" * 64, "started_utc": "2026-10-23T00:00:00Z"}}),
+            encoding="utf-8")
+        patch = mock.patch.dict(os.environ, {"TMPDIR": str(gated)})
+        patch.start()
+        self.addCleanup(patch.stop)
         for value in (self.recorded / "run-1", self.outside / "run-1"):
             for command in ("score", "report", "pilot-md"):
                 with self.subTest(command=command, value=value.parent.name):
