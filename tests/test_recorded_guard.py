@@ -4,6 +4,8 @@ import sys
 import tempfile
 import unittest
 
+from lib import repofiles
+
 REAL_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPT = os.path.join(REAL_ROOT, "tools", "recorded_guard.py")
 
@@ -140,6 +142,22 @@ class LedgerRowTests(GuardCase):
         commit(self.root, "Row", {LEDGER: ledger(row("a.txt", "original"), extra)})
         self.assertEqual(self.guard(), (1, [rows_line(2)]))
 
+    def test_g4_a_class_cell_padded_with_a_tab_is_counted(self):
+        self.start({"a.txt": "one\n", LEDGER: self.base_ledger()})
+        padded = "| experiments/EXP-0001/recorded/z.txt |\trecorded\t| sha256=" + "1" * 64 + " | x |\n"
+        commit(self.root, "Row", {LEDGER: self.base_ledger() + padded})
+        self.assertEqual(self.guard(), (1, [rows_line(1)]))
+
+    def test_g4_the_diff_header_lines_are_never_counted(self):
+        # The "---" and "+++" header lines of the diff come before the first hunk.
+        self.start({"a.txt": "one\n", LEDGER: self.base_ledger()})
+        commit(self.root, "Row", {LEDGER: self.base_ledger() + row("b.txt", "original")})
+        self.assertEqual(self.guard(), (0, [clean_line(1)]))
+        self.assertEqual(
+            repofiles.changed_lines(self.root, self.base, LEDGER),
+            ["+" + row("b.txt", "original").rstrip("\n")],
+        )
+
     def test_g4_an_added_original_row_gives_nothing(self):
         self.start({"a.txt": "one\n", LEDGER: self.base_ledger()})
         commit(self.root, "Row", {LEDGER: self.base_ledger() + row("b.txt", "original")})
@@ -209,6 +227,20 @@ class BaseTests(GuardCase):
             self.guard(base=tree),
             (2, [PREFIX + "DEAD the base commit is not in this clone's history"]),
         )
+
+
+class MissingBaseTests(GuardCase):
+    def test_g7_no_base_at_all_is_dead_without_usage_text(self):
+        self.start()
+        proc = subprocess.run(
+            [sys.executable, SCRIPT, "--root", self.root],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+        )
+        self.assertEqual(proc.returncode, 2)
+        self.assertEqual(
+            proc.stdout.decode("utf-8"), PREFIX + "DEAD the base is not a full commit id\n"
+        )
+        self.assertEqual(proc.stderr.decode("utf-8"), "")
 
 
 class OutputTests(GuardCase):

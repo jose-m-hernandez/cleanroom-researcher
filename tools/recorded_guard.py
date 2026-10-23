@@ -56,11 +56,11 @@ TAIL = "a maintainer must re-admit this change (MAINTAINING.md)"
 def is_recorded_row(line: str) -> bool:
     # After the + or -, the line is "| path | class | ..."; cell 0 is empty.
     cells = line[1:].split("|")
-    return len(cells) > 2 and cells[2].strip(" ") == "recorded"
+    return len(cells) > 2 and cells[2].strip() == "recorded"
 
 
 def run(root: str, base: str):
-    if not FULL_ID.match(base):
+    if base is None or not FULL_ID.match(base):
         return 2, ["%s: DEAD the base is not a full commit id" % CHECK]
     try:
         present = repofiles.has_commit(root, base)
@@ -90,7 +90,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         description="Flag a fork pull request that changes recorded data."
     )
-    parser.add_argument("--base", required=True, help="the pull request's base commit")
+    parser.add_argument("--base", default=None, help="the pull request's base commit")
     parser.add_argument("--root", default=default_root, help="repository root")
     args = parser.parse_args(argv)
     try:

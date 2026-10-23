@@ -1,6 +1,6 @@
 # An experiment's claim is confirmatory only when its protocol was committed first and its method was written clean-room
 
-Date: 2026-10-23
+Date: 2026-10-22
 
 > **The rule.** An experiment's claim is `confirmatory` only when its protocol was committed before the first recorded run and its method was written before its author read the target for method work. Otherwise its claim is `exploratory`, and its abstract says so. The header's `protocol` value records only the order of commit and run; the `Experiment claims` table in `docs/vocabulary.md` defines both claim values.
 

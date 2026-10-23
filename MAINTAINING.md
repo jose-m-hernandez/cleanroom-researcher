@@ -21,7 +21,7 @@ Do not merge the fork's own pull request if it changes a file under `experiments
 
 ## The recorded-guard job
 
-The `recorded-guard` job in `.github/workflows/gate.yml` runs on pull requests from forks. It fails when a pull request changes a recorded file or a `recorded` row, and its message says that a maintainer must re-admit the change. It does not flag changes under `.github/`; step 3 above covers those.
+The `recorded-guard` job in `.github/workflows/gate.yml` runs on pull requests from forks. It fails when a pull request changes a recorded file or a `recorded` row, and its message says that a maintainer must re-admit the change. It does not flag changes under `.github/`; step 3 of the section "Re-admitting recorded data and workflow changes" covers those.
 
 The job is a signal, not a control: a pull request can change the workflow file and so remove the job. The controls are the scan and the re-admission steps above. Code-owner review of the paths in `.github/CODEOWNERS` adds a second review only while the default branch requires it; that is a repository setting, so confirm it is on before relying on it.
 
@@ -38,4 +38,3 @@ The maintainers can approve one intentional use of a barred string, so the scan 
 3. Run the scan again. It must pass. A line that no longer matches a finding fails the scan as stale: delete it.
 
 An approval covers exact bytes. An edit to an approved file makes a new object, which needs its own line. A commit approval is lost if the commit is rewritten, for example by a rebase, an amend or a squash merge.
-

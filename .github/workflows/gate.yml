@@ -9,7 +9,7 @@ env:
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
 
 jobs:
-  gate:
+  gate-tests:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
@@ -24,6 +24,16 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: python3 tools/gate.py
+
+  gate:
+    needs: gate-tests
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - run: test "$RESULT" = success
+        env:
+          RESULT: ${{ needs.gate-tests.result }}
 
   dev-tools:
     runs-on: ubuntu-24.04

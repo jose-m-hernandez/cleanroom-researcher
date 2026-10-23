@@ -50,6 +50,8 @@ A maintainer reads your pull request for these six things.
 - **Spend:** the cap was declared before the first call, and the runner stopped at it.
 - **Readability:** a stranger can follow the write-up, and its words are the ones in `docs/vocabulary.md`.
 
+Keep review about the work: comment on the change, not the person who made it.
+
 ## After merge
 
 The gate runs on every pull request. A further scan that only maintainers can run covers a pull request from a fork before it is merged, and every commit after merge. If it fails, a maintainer will reply on your pull request. If your pull request changes recorded data or anything under `.github/`, a maintainer may open a new pull request here with your commits and close yours. Maintainers follow `MAINTAINING.md`.

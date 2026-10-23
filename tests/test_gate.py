@@ -68,6 +68,63 @@ def read_workflow():
         return handle.read()
 
 
+def workflow_files(root):
+    """Sorted paths of every .yml or .yaml file in <root>/.github/workflows/."""
+    folder = os.path.join(root, ".github", "workflows")
+    if not os.path.isdir(folder):
+        return []
+    return sorted(
+        os.path.join(folder, name)
+        for name in os.listdir(folder)
+        if name.endswith((".yml", ".yaml")) and os.path.isfile(os.path.join(folder, name))
+    )
+
+
+def job_blocks(text):
+    """(name, lines) for each job in the jobs section, in file order."""
+    blocks = []
+    in_jobs = False
+    for line in text.split("\n"):
+        if not in_jobs:
+            in_jobs = line == "jobs:"
+            continue
+        if line.strip() and not line.startswith(" "):
+            break
+        header = re.match(r"^  ([A-Za-z0-9_-]+):\s*$", line)
+        if header:
+            blocks.append((header.group(1), []))
+        elif blocks:
+            blocks[-1][1].append(line)
+    return blocks
+
+
+def jobs_and_missing_timeouts(text):
+    """(names, missing): every job name, and the jobs without a job-level 10-minute timeout."""
+    blocks = job_blocks(text)
+    names = [name for name, _ in blocks]
+    missing = [name for name, lines in blocks if "    timeout-minutes: 10" not in lines]
+    return names, missing
+
+
+def check_names(text):
+    """The check names GitHub shows: 'job (v)' per matrix python-version, else the job name."""
+    shown = []
+    for name, lines in job_blocks(text):
+        versions = []
+        if "      matrix:" in lines:
+            after = lines[lines.index("      matrix:") + 1:]
+            for line in after:
+                found = re.match(r"^        python-version:\s*\[(.*)\]\s*$", line)
+                if found:
+                    versions = [v.strip().strip("\"'") for v in found.group(1).split(",")]
+                    break
+        if versions:
+            shown.extend("%s (%s)" % (name, v) for v in versions)
+        else:
+            shown.append(name)
+    return shown
+
+
 class GateRunTests(unittest.TestCase):
     def test_checks_only_on_the_real_repo(self):
         code, out = run_gate("--checks-only")
@@ -361,8 +418,8 @@ class CrashGuardTests(unittest.TestCase):
 class WorkflowTests(unittest.TestCase):
     def gate_job_lines(self):
         lines = read_workflow().split("\n")
-        start = lines.index("  gate:")
-        end = lines.index("  dev-tools:")
+        start = lines.index("  gate-tests:")
+        end = lines.index("  gate:")
         return lines[start:end]
 
     def test_gate_job_runs_exactly_the_gate(self):
@@ -388,15 +445,88 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotIn("pull_request_target", read_workflow())
 
     def test_every_job_declares_a_ten_minute_timeout(self):
-        lines = read_workflow().split("\n")
-        for job in ("gate", "dev-tools", "barred", "reproduce"):
-            start = lines.index("  %s:" % job)
-            block = []
-            for line in lines[start + 1:]:
-                if re.match(r"^  \S", line):
-                    break
-                block.append(line)
-            self.assertIn("    timeout-minutes: 10", block, job)
+        files = workflow_files(REAL_ROOT)
+        self.assertTrue(files)
+        self.assertIn("gate.yml", [os.path.basename(f) for f in files])
+        for path in files:
+            with self.subTest(file=os.path.basename(path)):
+                with open(path, encoding="utf-8") as handle:
+                    names, missing = jobs_and_missing_timeouts(handle.read())
+                self.assertTrue(names)
+                self.assertEqual(missing, [])
+
+
+JOB_A = "jobs:\n  a:\n    runs-on: x\n    timeout-minutes: 10\n"
+
+
+class WorkflowTimeoutParserTests(unittest.TestCase):
+    def test_t1_a_job_without_the_timeout_is_missing(self):
+        text = JOB_A + "  b:\n    runs-on: x\n"
+        self.assertEqual(jobs_and_missing_timeouts(text), (["a", "b"], ["b"]))
+
+    def test_t2_another_value_is_missing(self):
+        text = "jobs:\n  a:\n    timeout-minutes: 15\n"
+        self.assertIn("a", jobs_and_missing_timeouts(text)[1])
+
+    def test_t3_a_step_level_timeout_does_not_count(self):
+        text = "jobs:\n  a:\n    steps:\n      - run: x\n          timeout-minutes: 10\n"
+        self.assertIn("a", jobs_and_missing_timeouts(text)[1])
+
+    def test_t4_a_later_top_level_key_ends_the_jobs_section(self):
+        text = JOB_A + "env:\n  fake:\n    x: y\n"
+        names, _ = jobs_and_missing_timeouts(text)
+        self.assertNotIn("fake", names)
+        self.assertEqual(names, ["a"])
+
+    def test_t5_no_jobs_section_gives_no_names(self):
+        self.assertEqual(jobs_and_missing_timeouts("name: x\non: push\n")[0], [])
+
+    def test_t6_workflow_files_finds_yml_and_yaml_only_sorted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = os.path.join(tmp, ".github", "workflows")
+            os.makedirs(folder)
+            for name in ("ci.yml", "other.yaml", "notes.txt"):
+                with open(os.path.join(folder, name), "w") as handle:
+                    handle.write("x\n")
+            self.assertEqual(
+                workflow_files(tmp),
+                [os.path.join(folder, "ci.yml"), os.path.join(folder, "other.yaml")],
+            )
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(workflow_files(tmp), [])
+
+
+class StableCheckNameTests(unittest.TestCase):
+    def test_c1_the_required_check_names_are_shown_bare(self):
+        shown = check_names(read_workflow())
+        for name in ("gate", "barred", "recorded-guard"):
+            self.assertIn(name, shown)
+
+    def test_c2_a_matrix_job_is_shown_per_version(self):
+        text = (
+            "jobs:\n  gate:\n    strategy:\n      matrix:\n"
+            "        python-version: [\"3.9\", \"3.13\"]\n    steps:\n      - run: x\n"
+        )
+        shown = check_names(text)
+        self.assertNotIn("gate", shown)
+        self.assertIn("gate (3.9)", shown)
+        self.assertIn("gate (3.13)", shown)
+
+    def test_c3_the_summary_job_is_exactly_the_planned_one(self):
+        block = [l for l in job_block("gate") if l.strip()]
+        self.assertEqual(block, [
+            "    needs: gate-tests",
+            "    if: always()",
+            "    runs-on: ubuntu-24.04",
+            "    timeout-minutes: 10",
+            "    steps:",
+            '      - run: test "$RESULT" = success',
+            "        env:",
+            "          RESULT: ${{ needs.gate-tests.result }}",
+        ])
+        text = "\n".join(block)
+        self.assertNotIn("uses:", text)
+        self.assertNotIn("secrets.", text)
 
 
 FORK = "github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository"
@@ -505,7 +635,7 @@ class RecordedGuardWorkflowTests(unittest.TestCase):
 
     def test_w6_the_jobs_in_order(self):
         names = [m.group(1) for m in re.finditer(r"^  ([a-z][a-z-]*):$", read_workflow().split("\njobs:\n")[1], re.M)]
-        self.assertEqual(names, ["gate", "dev-tools", "barred", "reproduce", "recorded-guard"])
+        self.assertEqual(names, ["gate-tests", "gate", "dev-tools", "barred", "reproduce", "recorded-guard"])
 
     def test_w7_the_barred_fork_guard_points_at_the_maintainer_steps(self):
         first = steps_of("barred")[0]
