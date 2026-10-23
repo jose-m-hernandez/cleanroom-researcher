@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "properties": {
+    "labels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string"},
+          "label": {"type": "string", "enum": ["correct", "incorrect", "abstained"]},
+          "quote": {"type": "string"}
+        },
+        "required": ["id", "label", "quote"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["labels"],
+  "additionalProperties": false
+}

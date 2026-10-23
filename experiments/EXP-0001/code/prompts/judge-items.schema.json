@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "properties": {
+    "lines": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "line": {"type": "integer"},
+          "kind": {"type": "string", "enum": ["needed", "not_needed", "unplanted"]},
+          "item_id": {"type": "string"},
+          "placed_ok": {"type": "boolean"},
+          "quote": {"type": "string"}
+        },
+        "required": ["line", "kind", "item_id", "placed_ok", "quote"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["lines"],
+  "additionalProperties": false
+}

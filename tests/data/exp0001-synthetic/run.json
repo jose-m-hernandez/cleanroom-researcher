@@ -1,0 +1,25 @@
+{
+ "arms": [
+  "floor",
+  "baseline",
+  "oracle"
+ ],
+ "claude_code_version": "0.0.0",
+ "date": "20260101",
+ "fixtures": [
+  "dev-901-alpha",
+  "dev-902-bravo",
+  "dev-903-charlie",
+  "dev-904-delta",
+  "dev-905-echo",
+  "dev-906-foxtrot"
+ ],
+ "judge_model": "judge-model",
+ "model": "model-under-test",
+ "plugin_ref": "0123456789abcdef0123456789abcdef01234567",
+ "rng_seed": 12345,
+ "run_id": "synthetic-demo",
+ "seeds": 5,
+ "split": "dev",
+ "version": 1
+}
