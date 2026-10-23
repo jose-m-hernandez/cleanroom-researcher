@@ -56,8 +56,9 @@ class ReportBytesTests(unittest.TestCase):
         self.assertTrue((only / "REPORT.md").is_file())
 
     def test_cli_twice_and_cmp(self):
+        shutil.copytree(TREE, self.tmp / "from")  # a --from inside the clone is refused, so the tree is read from a copy
         for name in ("r1", "r2"):
-            proc = subprocess.run([sys.executable, exp0001_paths.RUN, "report", "--from", str(TREE),
+            proc = subprocess.run([sys.executable, exp0001_paths.RUN, "report", "--from", str(self.tmp / "from"),
                                    "--out", str(self.tmp / name)], capture_output=True, text=True, encoding="utf-8")
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
             self.assertRegex(proc.stdout.strip(), r"^report: wrote REPORT.md \(\d+ lines\)$")

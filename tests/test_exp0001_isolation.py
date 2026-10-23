@@ -677,7 +677,7 @@ class HelperTests(unittest.TestCase):
         self.assertNotIn("CLAUDE_CONFIG_DIR", env)
         temp = claude_run.child_env({"isolation": "tempconfig"}, "r1", dict(environ, ANTHROPIC_API_KEY="k", CLAUDE_CODE_OAUTH_TOKEN="t"))
         self.assertIn("CLAUDE_CONFIG_DIR", temp)
-        self.assertEqual(sum(v in temp for v in claude_run.AUTH_VARS), 1)
+        self.assertEqual(sum(v in temp for v in claude_run.AUTH_VARS), 0)  # no credential is forwarded (N2 stop)
 
     def test_child_env_carries_max_output_tokens_for_probes_only(self):
         environ = {"PATH": "/bin", "HOME": "/h", "TMPDIR": str(self.tmp)}

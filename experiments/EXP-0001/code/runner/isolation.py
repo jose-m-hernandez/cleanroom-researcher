@@ -19,6 +19,11 @@ from normalize import normalize
 
 VALID_KINDS = ("plain", "preserve", "probe")
 ISOLATION_MODES = ("sources", "tempconfig")
+# The per-run proof has two kinds of check (README "Exclusions"). Outcome checks are about how a run ended; every
+# other failure label is an isolation check, about what the run loaded or saw.
+OUTCOME_CHECKS = frozenset({"result_error", "ask_user", "denials", "over_cap"})
+# A change of the agent harness version or the model stops the experiment instead of leading to a re-run (README P:120).
+PIN_CHANGE_CHECKS = frozenset({"version_mismatch", "model_mismatch"})
 MARKER_MIN_CHARS = 25
 MARKERS_PER_FILE = 3
 
@@ -375,8 +380,27 @@ def _text(value) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
+def split_failures(failures) -> tuple:
+    """(isolation labels, outcome labels), each sorted, from a list of failure labels."""
+    labels = sorted(set(failures))
+    return [x for x in labels if x not in OUTCOME_CHECKS], [x for x in labels if x in OUTCOME_CHECKS]
+
+
 def check(run: dict, cfg: dict, markers: list) -> dict:
-    """Apply the per-run proof. Returns {"ok", "failures", "counts"}; labels only. Every check fails closed."""
+    """Apply the per-run proof. Returns {"ok", "failures", "isolation_failures", "outcome_failures", "counts"}.
+
+    Labels only. Every check fails closed. "failures" is the union of the two named groups: isolation checks (what
+    the run loaded or saw) and outcome checks (result_error, ask_user, denials, over_cap).
+    """
+    return _grouped(_check(run, cfg, markers))
+
+
+def _grouped(res: dict) -> dict:
+    iso, outcome = split_failures(res["failures"])
+    return dict(res, isolation_failures=iso, outcome_failures=outcome)
+
+
+def _check(run: dict, cfg: dict, markers: list) -> dict:
     fails = []
     events = run.get("events") or []
     init = init_event(events)
@@ -499,6 +523,9 @@ def check(run: dict, cfg: dict, markers: list) -> dict:
     # Result: present, not an error, subtype success. Kind decides the rest.
     if result is None or result.get("is_error") is not False or result.get("subtype") != "success":
         fails.append("result_error")
+    # over_cap is set by the runner when the per-run budget stopped the run; it is an outcome, not an isolation failure.
+    if run.get("over_cap") is True:
+        fails.append("over_cap")
     kind = run.get("kind")
     if kind == "preserve":
         if counts["ask_user"]:

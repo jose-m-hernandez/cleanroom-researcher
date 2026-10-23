@@ -92,6 +92,19 @@ def build_markdown(run: dict, scores: dict) -> str:
                "(%d resamples, seed %s)." % (round((1 - CI_ALPHA) * 100), BOOT_B, seed))
     out.append("")
 
+    counts = run.get("proof_counts")
+    if isinstance(counts, dict):
+        by_check = counts.get("outcome_only_by_check") or {}
+        out += ["## Per-run proof counts", "",
+                "Isolation re-runs: %d. Cells excluded after a re-run: %d. Runs that failed only outcome checks: %d%s." % (
+                    counts.get("isolation_reruns", 0), counts.get("excluded_after_rerun", 0), sum(by_check.values()),
+                    " (" + ", ".join(f"{k}: {v}" for k, v in sorted(by_check.items())) + ")" if by_check else ""), ""]
+        for entry in run.get("excluded_cells", []):
+            out.append("- Excluded: %s, %s, seed %s, %s run; failed %s." % (
+                entry.get("fixture"), entry.get("arm"), entry.get("seed"), entry.get("kind"), ", ".join(entry.get("checks", []))))
+        if run.get("excluded_cells"):
+            out.append("")
+
     s = scores["sanity"]
     out += ["## Judge sanity controls", "",
             "Oracle recall %s (minimum %s). Mismatch recall %s (maximum %s). %s." % (

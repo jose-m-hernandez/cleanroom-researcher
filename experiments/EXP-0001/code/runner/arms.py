@@ -12,9 +12,11 @@ preserve arm and runs the same `quick` argument, so no arm is asked a question.
 from __future__ import annotations
 
 import difflib
+import datetime
 import hashlib
 import json
 import re
+import uuid
 from pathlib import Path
 
 import claude_run
@@ -105,14 +107,75 @@ def read_json(path):
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def raw_path(out, kind, arm, fixture_id, seed, environ=None) -> Path:
-    """Under $TMPDIR/cpr-eval/raw/<run>/, never inside the results directory. <run> is the results directory's name."""
-    return claude_run.eval_root(environ) / "raw" / Path(out).name / f"{kind}-{arm}-{fixture_id}-s{seed}.json"
+RUN_ID_RE = re.compile(r"^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$")
 
 
-def write_raw(out, kind, arm, fixture_id, seed, record, environ=None) -> None:
-    """The full run record (events included), under $TMPDIR/cpr-eval/raw/<run>/. Never read by score or report."""
-    claude_run.atomic_write(raw_path(out, kind, arm, fixture_id, seed, environ), json.dumps(record, default=str))
+class RawError(Exception):
+    """A raw record or folder would overwrite an existing one, or a run id is missing or malformed."""
+
+
+def new_run_id(now=None) -> str:
+    """A unique run id: <UTC yyyymmddThhmmssZ>-<8 hex characters from uuid4>."""
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    return now.strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
+
+
+def raw_dir(run_id, environ=None) -> Path:
+    """$TMPDIR/cpr-eval/raw/<run id>/, never inside the results directory."""
+    if not isinstance(run_id, str) or not RUN_ID_RE.match(run_id):
+        raise RawError("run id missing or malformed")
+    return claude_run.eval_root(environ) / "raw" / run_id
+
+
+def create_raw_folder(run_id, environ=None) -> Path:
+    """Create the raw folder of a new run. A folder that already exists refuses: it is never reused or overwritten."""
+    path = raw_dir(run_id, environ)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        path.mkdir()
+    except FileExistsError:
+        raise RawError("raw folder already exists")
+    return path
+
+
+def run_id_of(out) -> str:
+    """The run id recorded in <out>/run.json, which keys that run's raw folder."""
+    try:
+        run_id = read_json(Path(out) / "run.json").get("raw_run_id")
+    except (OSError, ValueError, AttributeError):
+        raise RawError("run.json missing or unreadable")
+    if not isinstance(run_id, str) or not RUN_ID_RE.match(run_id):
+        raise RawError("run id missing or malformed")
+    return run_id
+
+
+def raw_path(out, kind, arm, fixture_id, seed, environ=None, attempt=1, run_id=None) -> Path:
+    """<raw folder of the run>/<kind>-<arm>-<fixture>-s<seed>.json (a later attempt adds -a<n>).
+
+    The folder is keyed by the run id recorded in <out>/run.json, never by the name of the results directory: two
+    results directories with the same last name must not share a raw folder. (No live run, and so no raw record, could
+    exist before this keying landed; that is why it is made here and not in the port of the evaluation harness.)
+    """
+    name = f"{kind}-{arm}-{fixture_id}-s{seed}" + ("" if attempt == 1 else f"-a{attempt}") + ".json"
+    return raw_dir(run_id or run_id_of(out), environ) / name
+
+
+def write_raw(out, kind, arm, fixture_id, seed, record, environ=None, attempt=None, run_id=None) -> Path:
+    """The full run record (events included), under $TMPDIR/cpr-eval/raw/<run id>/. Never read by score or report.
+
+    A record is never overwritten: a path that exists refuses. With attempt None the first free attempt is used, so a
+    unit that runs again (a re-run, or a resume after a stop) keeps every earlier record.
+    """
+    run_id = run_id or run_id_of(out)
+    if attempt is None:
+        attempt = 1
+        while raw_path(out, kind, arm, fixture_id, seed, environ, attempt, run_id).exists():
+            attempt += 1
+    path = raw_path(out, kind, arm, fixture_id, seed, environ, attempt, run_id)
+    if path.exists():
+        raise RawError("raw record already exists")
+    claude_run.atomic_write(path, json.dumps(record, default=str))
+    return path
 
 
 def input_total(usage):
@@ -144,8 +207,9 @@ def summary_of(record: dict) -> dict:
 def preserve_run(spec: dict, fdir, arm: str, cfg: dict, environ, runner, plugin, markers: list) -> dict:
     """Install the fixture, run `/cpr:preserve quick` on --resume, and read back CLAUDE.md.
 
-    Returns {"ok", "labels", "text", "changed", "record"}. ok is false when the run fails the isolation proof or
-    CLAUDE.md is gone; the caller stops the batch. The prior record is the kind install_check builds (the
+    Returns {"ok", "labels", "text", "changed", "record", "isolation_failures", "outcome_failures"}. ok is false when
+    the run fails an isolation check or CLAUDE.md is gone. A run that fails only outcome checks is ok: it is scored on
+    the CLAUDE.md it left behind (README "Exclusions"); the caller decides about re-runs and stops. The prior record is the kind install_check builds (the
     installed session has no earlier record in this process), so the run is charged its full reported cost.
     """
     sandbox, sid, _ = fixtures.install_fixture(Path(fdir), cfg, environ, f"pres-{arm}")
@@ -154,14 +218,15 @@ def preserve_run(spec: dict, fdir, arm: str, cfg: dict, environ, runner, plugin,
                     resume=sid, plugin=plugin, prior=prior, environ=environ)
     proof = isolation.check(record, cfg, markers)
     record["proof"] = proof
-    if not proof["ok"]:
-        return {"ok": False, "labels": list(proof["failures"]), "text": None, "changed": False, "record": record}
+    failed = {"isolation_failures": list(proof["isolation_failures"]), "outcome_failures": list(proof["outcome_failures"])}
+    if proof["isolation_failures"]:
+        return dict(failed, ok=False, labels=list(proof["failures"]), text=None, changed=False, record=record)
     path = Path(sandbox) / "CLAUDE.md"
     if not path.is_file():
-        return {"ok": False, "labels": ["claude_md_missing"], "text": None, "changed": False, "record": record}
+        return dict(failed, ok=False, labels=["claude_md_missing"], text=None, changed=False, record=record)
     text = path.read_text(encoding="utf-8")
-    return {"ok": True, "labels": [], "text": text, "changed": text != spec["repo"]["files"]["CLAUDE.md"],
-            "record": record}
+    return dict(failed, ok=True, labels=[], text=text, changed=text != spec["repo"]["files"]["CLAUDE.md"],
+                record=record)
 
 
 def plugin_for(arm: str, cfg: dict, environ, cache: dict, arms_dir=None):

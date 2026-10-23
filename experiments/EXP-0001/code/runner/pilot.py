@@ -40,7 +40,7 @@ DEFAULT_MIN_SCORABLE = 3
 FAILED_UNIT_RE = re.compile(r" (?:preserve|probe) failed: (.*)$")
 
 
-class PinChanged(probes.BatchStop):
+class PinChanged(probes.PinStop):
     """A record's Claude Code version or model differs from the pin."""
 
 
@@ -203,7 +203,7 @@ def save_state(out, state: dict) -> None:
 def describe(exc) -> tuple:
     """(reason text, isolation failure count) for an exception that stops the pilot."""
     text = str(exc)
-    if isinstance(exc, PinChanged):
+    if isinstance(exc, probes.PinStop):
         return f"claude_code_version or model changed mid-batch (S10): {text}", 0
     if isinstance(exc, probes.BatchStop):
         if text == "budget reached":
@@ -234,7 +234,7 @@ def describe(exc) -> tuple:
 
 
 STOPS = (probes.BatchStop, RateLimited, claude_run.SpendCapReached, CostCap, JudgeThrottled, judge.JudgeBudgetError,
-         score.ScoreAbort, arms.ArmError)
+         score.ScoreAbort, arms.ArmError, claude_run.PluginRepoError)
 
 
 def run_pilot(fixtures_root, out, split, wanted, arm_names, seeds, budget_usd, date, cfg, environ, runner=None,
@@ -268,11 +268,11 @@ def run_pilot(fixtures_root, out, split, wanted, arm_names, seeds, budget_usd, d
                 probes.run_batch(fixtures_root, out, split, fids, arm_names, seeds, cfg, environ, tracker.runner,
                                  remaining(), date, arms_dir, stdout)
                 return
-            except PinChanged:
+            except probes.PinStop:
                 raise
             except probes.BatchStop as exc:
                 labels = failed_unit_labels(str(exc))
-                if labels is None or not tracker.last_limit or not set(labels) <= judge.RATE_LIMIT_LABELS:
+                if labels is None or not tracker.last_limit or not set(labels) <= judge.RATE_LIMIT_LABELS & isolation.OUTCOME_CHECKS:
                     raise
                 state["throttles"].append({"where": "batch", "message": tracker.last_limit})
                 save_state(out, state)
@@ -348,8 +348,13 @@ def _fold_judge_counter(state: dict, before: dict, environ) -> None:
 
 def command_pilot(fixtures_root, out, split, wanted, arm_names, seeds, budget_usd, date, environ=None, stdout=None,
                   runner=None, label_probe=None, label_items=None, sleep=None, head=None, arms_dir=None) -> int:
-    """Live: needs CPR_EVAL_LIVE=1, a clean environment and a passing preflight. --budget-usd above the cap refuses."""
+    """Live: needs CPR_EVAL_LIVE=1, a clean environment and a passing preflight. --budget-usd above the cap refuses,
+    and so does an --out the CLI would refuse."""
     stdout = stdout or sys.stdout
+    refusal = claude_run.out_refusal(None if out is None else str(out))
+    if refusal:
+        print(f"pilot: REFUSED {refusal}", file=stdout)
+        return 2
     try:
         cap = claude_run.phase_cap(claude_run.load_config(), "evaluation")
     except (OSError, ValueError, claude_run.ConfigError):
@@ -594,6 +599,12 @@ def build_pilot_md(run: dict, state: dict, scores, calls: dict, arm_calls: dict)
             "Isolation FAIL count: %d." % (report.fmt(state.get("spent_usd"), 2), report.fmt(state.get("budget_usd"), 2),
                                            report.fmt(state.get("cap_usd"), 2), state.get("isolation_failures", 0)),
             ""]
+    # README "Exclusions": an excluded cell is listed, with its reason (check names only, never marker text).
+    for entry in run.get("excluded_cells", []):
+        out.append("- Excluded: %s, %s, seed %s, %s run; failed %s." % (
+            entry.get("fixture"), entry.get("arm"), entry.get("seed"), entry.get("kind"), ", ".join(entry.get("checks", []))))
+    if run.get("excluded_cells"):
+        out.append("")
     out.append("COMPLETE" if status == "COMPLETE" else "INCOMPLETE: " + "; ".join(reasons or ["no reason recorded"]))
     return "\n".join(out) + "\n"
 

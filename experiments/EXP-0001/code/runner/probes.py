@@ -22,6 +22,7 @@ import judge
 
 PROMPTS = Path(__file__).resolve().parents[1] / "prompts"
 UNKNOWN = "UNKNOWN"
+REVIEW_NAME = "isolation-review.json"
 
 
 def probe_order(spec: dict, seed: int, rng_seed) -> list:
@@ -81,8 +82,10 @@ input_tokens = arms.input_total
 def run_probe_session(spec: dict, arm_text: str, cfg: dict, environ, runner, markers: list, seed: int, label: str) -> dict:
     """One probe session. Returns the result file's content plus "record" (the run record, for the raw log).
 
-    ok is false when the run fails the isolation proof; the caller stops the batch. An unparsable reply is
-    still ok (the run was isolated) with answers {} and the problems listed.
+    ok is false when the run fails an isolation check; the caller re-runs the session once, then excludes the cell.
+    A session that fails only outcome checks is ok but not re-run: its answers are left empty (the missing-data
+    rule applies) and the failed checks are listed under "outcome_failures". An unparsable reply is still ok (the
+    run was isolated) with answers {} and the problems listed.
     """
     sandbox = claude_run.make_sandbox("probe", environ)
     (sandbox / "CLAUDE.md").write_text(arm_text, encoding="utf-8")
@@ -93,8 +96,11 @@ def run_probe_session(spec: dict, arm_text: str, cfg: dict, environ, runner, mar
     proof = isolation.check(record, cfg, markers)
     record["proof"] = proof
     summary = arms.summary_of(record)
-    if not proof["ok"]:
+    if proof["isolation_failures"]:
         return dict(summary, ok=False, labels=list(proof["failures"]), answers={}, problems=[], record=record)
+    if proof["outcome_failures"]:
+        return dict(summary, ok=True, labels=[], answers={}, problems=["outcome:" + c for c in proof["outcome_failures"]],
+                    outcome_failures=list(proof["outcome_failures"]), record=record)
     text = (isolation.result_event(record["events"]) or {}).get("result")
     answers, problems = parse_answers(text, [p["id"] for p in spec["probes"]])
     return dict(summary, ok=True, labels=[], answers=answers, problems=problems, record=record)
@@ -106,6 +112,10 @@ def run_probe_session(spec: dict, arm_text: str, cfg: dict, environ, runner, mar
 
 class BatchStop(Exception):
     """The batch cannot go on; the message is a short label. Finished units stay on disk."""
+
+
+class PinStop(BatchStop):
+    """The agent harness version or the model changed: the experiment stops, it is not re-run (README P:120)."""
 
 
 def select_fixtures(fixtures_root, wanted) -> list:
@@ -135,15 +145,36 @@ def select_fixtures(fixtures_root, wanted) -> list:
     return chosen
 
 
-def write_run_json(out, cfg, split, fids, arm_names, seeds, date, judge_model=None) -> dict:
-    """Create <out>/run.json, or extend an existing one. A changed pin refuses (a batch never mixes versions)."""
+PROOF_LISTS = ("isolation_reruns", "excluded_cells", "outcome_only")
+
+
+def proof_counts(meta: dict) -> dict:
+    """The counts the report shows, from the three lists in run.json: isolation re-runs, cells excluded after one,
+    and runs that failed only outcome checks, by check."""
+    by_check = {}
+    for entry in meta.get("outcome_only", []):
+        for check in entry.get("checks", []):
+            by_check[check] = by_check.get(check, 0) + 1
+    return {"isolation_reruns": len(meta.get("isolation_reruns", [])),
+            "excluded_after_rerun": len(meta.get("excluded_cells", [])),
+            "outcome_only_by_check": dict(sorted(by_check.items()))}
+
+
+def write_run_json(out, cfg, split, fids, arm_names, seeds, date, judge_model=None, environ=None) -> dict:
+    """Create <out>/run.json, or extend an existing one. A changed pin refuses (a batch never mixes versions).
+
+    A new run mints its run id and creates its raw folder (an existing folder refuses); a resumed run keeps the id
+    recorded in its own run.json, and so its raw folder.
+    """
     path = Path(out) / "run.json"
     meta = {"version": 1, "run_id": Path(out).name, "split": split, "date": date, "rng_seed": cfg.get("rng_seed", 0),
             "claude_code_version": cfg.get("claude_code_version"), "model": cfg.get("model"),
             "plugin_ref": cfg.get("plugin_ref"), "judge_model": (cfg.get("judge") or {}).get("model"),
             "fixtures": sorted(fids), "arms": list(arm_names), "seeds": int(seeds)}
-    if path.is_file():
-        old = arms.read_json(path)
+    for key in PROOF_LISTS:
+        meta[key] = []
+    old = arms.read_json(path) if path.is_file() else None
+    if old is not None:
         for key in ("rng_seed", "claude_code_version", "model", "plugin_ref", "split"):
             if old.get(key) != meta[key]:
                 raise BatchStop(f"{key} changed since this run started")
@@ -151,8 +182,75 @@ def write_run_json(out, cfg, split, fids, arm_names, seeds, date, judge_model=No
         meta["arms"] = list(old["arms"]) + [a for a in arm_names if a not in old["arms"]]
         meta["seeds"] = max(int(old["seeds"]), int(seeds))
         meta["date"], meta["run_id"] = old["date"], old["run_id"]
+        for key in PROOF_LISTS:
+            meta[key] = list(old.get(key, []))
+    if old is not None and arms.RUN_ID_RE.match(str(old.get("raw_run_id"))):
+        meta["raw_run_id"] = old["raw_run_id"]
+    else:
+        meta["raw_run_id"] = arms.new_run_id()
+        arms.create_raw_folder(meta["raw_run_id"], environ)
+    meta["proof_counts"] = proof_counts(meta)
     arms.write_json(path, meta)
     return meta
+
+
+def log_proof(out, key: str, entry: dict) -> None:
+    """Append entry to one of run.json's proof lists and refresh its counts."""
+    path = Path(out) / "run.json"
+    meta = arms.read_json(path)
+    meta.setdefault(key, []).append(entry)
+    meta["proof_counts"] = proof_counts(meta)
+    arms.write_json(path, meta)
+
+
+def log_denials(out, cell: dict, record: dict) -> None:
+    """Append one entry per permission denial to <out>/isolation-review.json (cell and tool name; no tool input)."""
+    path = Path(out) / REVIEW_NAME
+    entries = arms.read_json(path) if path.is_file() else []
+    result = isolation.result_event(record.get("events") or []) or {}
+    for denial in result.get("permission_denials") or []:
+        name = denial.get("tool_name") if isinstance(denial, dict) else None
+        entries.append({"cell": dict(cell), "denial": name if isinstance(name, str) else "?"})
+    arms.write_json(path, entries)
+
+
+def run_cell(out, cell: dict, once, environ) -> object:
+    """Run one cell (a preserve run, or a probe session) under the proof rules of README "Exclusions".
+
+    once() runs the unit and returns its result dict with "record". Every attempt's record is written to the raw
+    folder first. Then, in this order:
+      a version or model change stops the experiment (PinStop);
+      an unfinished run that carries a rate-limit signal stops the batch as before (the pilot waits and resumes once);
+      an isolation failure is re-run once, and a second one excludes the cell, which is listed and never run again;
+      outcome checks alone never lead to a re-run: they are counted, and a denial goes to the isolation-review log.
+    Returns the result, or None when the cell was excluded.
+    """
+    label = f"{cell['fixture']} seed {cell['seed']} {cell['arm']} {cell['kind']}"
+    for attempt in (1, 2):
+        res = once()
+        record = res["record"]
+        arms.write_raw(out, cell["kind"], cell["arm"], cell["fixture"], cell["seed"], record, environ)
+        proof = record["proof"]
+        pins = sorted(set(proof["failures"]) & isolation.PIN_CHANGE_CHECKS)
+        if pins:
+            raise PinStop(f"{label}: " + ",".join(pins))
+        if proof["failures"] and set(proof["failures"]) <= judge.RATE_LIMIT_LABELS & isolation.OUTCOME_CHECKS \
+                and judge.rate_limit_message(record) is not None:
+            raise BatchStop(f"{label} failed: " + ",".join(proof["failures"]))
+        if proof["isolation_failures"]:
+            entry = dict(cell, checks=list(proof["isolation_failures"]))
+            if attempt == 1:
+                log_proof(out, "isolation_reruns", entry)
+                continue
+            log_proof(out, "excluded_cells", entry)
+            return None
+        if not res["ok"]:
+            raise BatchStop(f"{label} failed: " + ",".join(res["labels"]))
+        if proof["outcome_failures"]:
+            log_proof(out, "outcome_only", dict(cell, checks=list(proof["outcome_failures"])))
+            if "denials" in proof["outcome_failures"]:
+                log_denials(out, {k: cell[k] for k in ("fixture", "seed", "arm")}, record)
+        return res
 
 
 def run_batch(fixtures_root, out, split, fids, arm_names, seeds, cfg, environ, runner=None, budget_usd=None,
@@ -178,7 +276,7 @@ def run_batch(fixtures_root, out, split, fids, arm_names, seeds, cfg, environ, r
                 (Path(fixtures_root) / fid / "transcript.jsonl").is_file() and (Path(fixtures_root) / fid / "repo").is_dir()):
             raise BatchStop(f"fixture not generated: {fid}")
         specs[fid] = spec
-    write_run_json(out, cfg, split, fids, arm_names, seeds, date)
+    write_run_json(out, cfg, split, fids, arm_names, seeds, date, environ=environ)
     markers = isolation.host_markers(environ)
     plugins = {}
     start = claude_run.spend_total(environ, "evaluation")
@@ -187,6 +285,10 @@ def run_batch(fixtures_root, out, split, fids, arm_names, seeds, cfg, environ, r
     def check_budget():
         if budget_usd is not None and claude_run.spend_total(environ, "evaluation") - start >= budget_usd:
             raise BatchStop("budget reached")
+
+    def excluded(kind, arm, fid, seed) -> bool:
+        return any((e["kind"], e["arm"], e["fixture"], e["seed"]) == (kind, arm, fid, seed)
+                   for e in arms.read_json(Path(out) / "run.json").get("excluded_cells", []))
 
     for fid in fids:
         spec, fdir = specs[fid], Path(fixtures_root) / fid
@@ -203,15 +305,20 @@ def run_batch(fixtures_root, out, split, fids, arm_names, seeds, cfg, environ, r
                     texts[arm] = text_path.read_text(encoding="utf-8")
                     skipped += 1
                     continue
+                if excluded("preserve", arm, fid, seed):
+                    skipped += 1
+                    continue
                 check_budget()
                 plugin = arms.plugin_for(arm, cfg, environ, plugins, arms_dir)
-                res = arms.preserve_run(spec, fdir, arm, cfg, environ, runner, plugin, markers)
-                arms.write_raw(out, "preserve", arm, fid, seed, res["record"], environ)
-                if not res["ok"]:
-                    raise BatchStop(f"{fid} seed {seed} {arm} preserve failed: " + ",".join(res["labels"]))
+                cell = {"kind": "preserve", "arm": arm, "fixture": fid, "seed": seed}
+                res = run_cell(out, cell, lambda: arms.preserve_run(spec, fdir, arm, cfg, environ, runner, plugin, markers),
+                               environ)
+                if res is None:
+                    continue  # excluded: no CLAUDE.md for this arm, so no probe session either
                 claude_run.atomic_write(text_path, res["text"])
+                extra = {"outcome_failures": res["outcome_failures"]} if res["outcome_failures"] else {}
                 arms.write_json(arms.preserve_path(out, arm, fid, seed),
-                                dict(arms.summary_of(res["record"]), changed=res["changed"]))
+                                dict(arms.summary_of(res["record"]), changed=res["changed"], **extra))
                 texts[arm] = res["text"]
                 done += 1
             for arm in arm_names:
@@ -219,11 +326,16 @@ def run_batch(fixtures_root, out, split, fids, arm_names, seeds, cfg, environ, r
                 if path.is_file():
                     skipped += 1
                     continue
+                if arm not in texts or excluded("probe", arm, fid, seed):
+                    skipped += 1
+                    continue
                 check_budget()
-                res = run_probe_session(spec, texts[arm], cfg, environ, runner, markers, seed, f"probe-{arm}")
-                arms.write_raw(out, "probe", arm, fid, seed, res.pop("record"), environ)
-                if not res["ok"]:
-                    raise BatchStop(f"{fid} seed {seed} {arm} probe failed: " + ",".join(res["labels"]))
+                cell = {"kind": "probe", "arm": arm, "fixture": fid, "seed": seed}
+                res = run_cell(out, cell, lambda: run_probe_session(spec, texts[arm], cfg, environ, runner, markers,
+                                                                    seed, f"probe-{arm}"), environ)
+                if res is None:
+                    continue
+                res.pop("record")
                 arms.write_json(path, res)
                 done += 1
     cost = claude_run.spend_total(environ, "evaluation") - start
@@ -233,8 +345,12 @@ def run_batch(fixtures_root, out, split, fids, arm_names, seeds, cfg, environ, r
 
 def command_run(fixtures_root, out, split, wanted, arm_names, seeds, budget_usd, date, environ=None, stdout=None,
                 runner=None, arms_dir=None) -> int:
-    """Live: needs CPR_EVAL_LIVE=1, a clean environment and a passing preflight."""
+    """Live: needs CPR_EVAL_LIVE=1, a clean environment and a passing preflight. --out follows the CLI's rule."""
     stdout = stdout or sys.stdout
+    refusal = claude_run.out_refusal(None if out is None else str(out))
+    if refusal:
+        print(f"run: REFUSED {refusal}", file=stdout)
+        return 2
 
     def work(cfg, env, o):
         try:

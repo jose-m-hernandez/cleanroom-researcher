@@ -28,7 +28,11 @@ ROOT = Path(__file__).resolve().parents[4]  # the repository root (this file is 
 CONFIG_PATH = Path(__file__).resolve().parents[1] / "config.json"
 PLUGIN_REPO_ENV = "CPR_EVAL_PLUGIN_REPO"
 ENV_ALLOWLIST = ("PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "LC_ALL", "TERM")
+# Credential variables a run's environment must never carry. Nothing forwards them (child_env builds from
+# ENV_ALLOWLIST alone), and a mode that would need them is refused (TEMPCONFIG_REFUSAL).
 AUTH_VARS = ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY")
+TEMPCONFIG_REFUSAL = ("isolation mode tempconfig carries a credential into the run: it needs the repository owner's "
+                      "ruling with a security review first")
 PROMPT_OK = "Reply with the single word OK."
 RUN_TIMEOUT = 900
 MAX_OUTPUT_ENV = "CLAUDE_CODE_MAX_OUTPUT_TOKENS"
@@ -74,7 +78,9 @@ class ConfigError(Exception):
 
 
 def validate_config(cfg: dict) -> None:
-    if cfg.get("isolation") not in isolation.ISOLATION_MODES:
+    if cfg.get("isolation") == "tempconfig":
+        raise ConfigError(TEMPCONFIG_REFUSAL)
+    if cfg.get("isolation") != "sources":
         raise ConfigError("isolation mode invalid")
     budget = cfg.get("max_budget_usd_per_run")
     if isinstance(budget, bool) or not isinstance(budget, (int, float)) or not math.isfinite(budget) \
@@ -307,21 +313,31 @@ def inside_clone(path, root=None) -> bool:
 RECORDED_DIR = ("experiments", "EXP-0001", "recorded")
 
 
-def out_refusal(value, root=None) -> str:
-    """"" when value is an acceptable --out, else the refusal message.
+def path_refusal(value, flag, root=None) -> str:
+    """"" when value is an acceptable folder to write into, else the refusal message naming flag.
 
     There is no default inside the repository, so a missing value refuses. A value inside the clone is accepted only
     when the same samestat walk finds experiments/EXP-0001/recorded/ among its folders.
     """
     if not value:
-        return "--out is required (there is no default inside the repository)"
+        return f"{flag} is required (there is no default inside the repository)"
     root = Path(ROOT if root is None else root)
     if not inside_clone(value, root):
         return ""
     recorded = _stat_or_none(root.joinpath(*RECORDED_DIR))
     if recorded is not None and walk_finds(value, recorded, on_error=False):
         return ""
-    return "--out is inside the repository clone and not under experiments/EXP-0001/recorded/"
+    return f"{flag} is inside the repository clone and not under experiments/EXP-0001/recorded/"
+
+
+def out_refusal(value, root=None) -> str:
+    """"" when value is an acceptable --out, else the refusal message."""
+    return path_refusal(value, "--out", root)
+
+
+def from_refusal(value, root=None) -> str:
+    """"" when value is an acceptable --from (score, report and pilot-md write into it), else the refusal message."""
+    return path_refusal(value, "--from", root)
 
 
 def plugin_repo(ref: str, environ=None, root=None) -> Path:
@@ -378,10 +394,6 @@ def child_env(cfg: dict, run_id: str, environ=None, probe: bool = False) -> dict
         env[MAX_OUTPUT_ENV] = str(cfg["probe_max_output_tokens"])
     if cfg.get("isolation") == "tempconfig":
         env["CLAUDE_CONFIG_DIR"] = str(eval_root(environ) / "config" / run_id)
-        for var in AUTH_VARS:
-            if environ.get(var):
-                env[var] = environ[var]
-                break
     return env
 
 
@@ -578,8 +590,6 @@ def preflight(cfg: dict, environ=None) -> str:
         return "claude --version failed"
     if not version or version[0] != cfg.get("claude_code_version"):
         return "claude version does not match the pin"
-    if cfg.get("isolation") == "tempconfig" and not any(environ.get(v) for v in AUTH_VARS):
-        return "tempconfig needs an auth variable"
     return ""
 
 

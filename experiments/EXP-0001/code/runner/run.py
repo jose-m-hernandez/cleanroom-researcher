@@ -22,7 +22,7 @@ import score  # noqa: E402
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="run.py")
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("preflight", help="check the sandbox root, the claude version and auth; no model call")
+    sub.add_parser("preflight", help="check the sandbox root, the claude version; no model call")
     sub.add_parser("control", help="live isolation control (five runs); needs CPR_EVAL_LIVE=1")
     sub.add_parser("judge-check", help="live judge controls and sanity cases; needs CPR_EVAL_LIVE=1")
     check = sub.add_parser("validate", help="validate every fixture spec under the fixtures folder; no model call")
@@ -39,7 +39,7 @@ def main(argv=None) -> int:
     batch.add_argument("--split", default="dev", choices=fixtures.SPLITS)
     batch.add_argument("--fixtures", default="all", help="'all', or comma-separated fixture ids or id prefixes")
     batch.add_argument("--fixtures-root", help="directory holding <id>/spec.json (default <code>/fixtures/<split>)")
-    batch.add_argument("--out", help="results directory (required; outside the clone, or under experiments/EXP-0001/recorded/); raw logs go to $TMPDIR/cpr-eval/raw/<run>/")
+    batch.add_argument("--out", help="results directory (required; outside the clone, or under experiments/EXP-0001/recorded/); raw logs go to $TMPDIR/cpr-eval/raw/<run id>/")
     batch.add_argument("--arms", default="floor,baseline,oracle")
     batch.add_argument("--seeds", type=int, default=5)
     batch.add_argument("--budget-usd", type=float, help="stop before a unit when the pilot ledger has grown by this much")
@@ -64,6 +64,18 @@ def main(argv=None) -> int:
     pmd.add_argument("--fixtures-root", help="directory holding <id>/gen.json (default <code>/fixtures/<split of the run>)")
     pmd.add_argument("--out", help="directory to write into (default: the --from directory)")
     args = parser.parse_args(argv)
+    try:
+        isolation_mode = claude_run.load_config().get("isolation")
+    except (OSError, ValueError, AttributeError):
+        isolation_mode = None  # an unreadable config is each command's own stop
+    if isolation_mode == "tempconfig":
+        print(f"{args.command}: REFUSED {claude_run.TEMPCONFIG_REFUSAL}")
+        return 2
+    if args.command in ("score", "report", "pilot-md"):
+        refusal = claude_run.from_refusal(args.source)
+        if refusal:
+            print(f"{args.command}: REFUSED {refusal}")
+            return 2
     if args.command in ("run", "pilot", "report", "pilot-md") and (args.out or args.command in ("run", "pilot")):
         refusal = claude_run.out_refusal(args.out)
         if refusal:

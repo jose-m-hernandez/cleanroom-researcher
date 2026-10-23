@@ -112,6 +112,7 @@ This is the ledger. Every file in the repository has exactly one row below sayin
 | tests/test_exp0001_isolation.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; port of the evaluation harness at 08ef45f |
 | tests/test_exp0001_judge.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; port of the evaluation harness at 08ef45f |
 | tests/test_exp0001_normalize.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; port of the evaluation harness at 08ef45f |
+| tests/test_exp0001_plumbing.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22 |
 | tests/test_exp0001_pilot.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; port of the evaluation harness at 08ef45f |
 | tests/test_exp0001_report.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; port of the evaluation harness at 08ef45f |
 | tests/test_exp0001_score.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; port of the evaluation harness at 08ef45f |

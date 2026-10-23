@@ -303,9 +303,10 @@ class ArmsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             environ = {"TMPDIR": d}
             out = Path(d) / "results" / "run-1"
-            arms.write_raw(out, "probe", "floor", "fx-1", 2, {"events": [1, 2]}, environ)
-            expected = claude_run.eval_root(environ) / "raw" / "run-1" / "probe-floor-fx-1-s2.json"
-            self.assertEqual(arms.raw_path(out, "probe", "floor", "fx-1", 2, environ), expected)
+            run_id = arms.new_run_id()  # raw folders are keyed by the run id recorded in run.json, not by the folder's name
+            arms.write_raw(out, "probe", "floor", "fx-1", 2, {"events": [1, 2]}, environ, run_id=run_id)
+            expected = claude_run.eval_root(environ) / "raw" / run_id / "probe-floor-fx-1-s2.json"
+            self.assertEqual(arms.raw_path(out, "probe", "floor", "fx-1", 2, environ, run_id=run_id), expected)
             self.assertEqual(json.loads(expected.read_text(encoding="utf-8")), {"events": [1, 2]})
             self.assertFalse(out.exists())
             self.assertNotIn("_raw", expected.parts)
@@ -570,14 +571,18 @@ class BatchTests(Env):
         self.assertEqual(len(self.calls()), n + 4)
         self.assertEqual(arms.read_json(self.out / "run.json")["seeds"], 2)
 
-    def test_a_proof_failure_stops_the_batch_with_a_label_and_keeps_finished_units(self):
+    def test_an_isolation_failure_is_re_run_once_then_the_cell_is_excluded_with_its_labels(self):
         self.plan["leak"] = HOST_MARKER
         self.write_plan()
-        with self.assertRaises(probes.BatchStop) as ctx:
-            self.batch(ids=IDS[:1], seeds=1)
-        self.assertIn("markers_found", str(ctx.exception))
-        self.assertNotIn(HOST_MARKER, str(ctx.exception))
-        self.assertEqual(len(self.calls()), 1)  # stopped at the first run: the baseline preserve (static arms need no run)
+        # README "Exclusions": an isolation failure is re-run once, and a second one excludes the cell. It no longer
+        # stops the batch.
+        self.assertEqual(self.batch(ids=IDS[:1], seeds=1), 0)
+        meta = arms.read_json(self.out / "run.json")
+        self.assertEqual(len(meta["excluded_cells"]), 3)  # the baseline preserve, the floor probe and the oracle probe
+        self.assertTrue(all("markers_found" in e["checks"] for e in meta["excluded_cells"]))
+        self.assertNotIn(HOST_MARKER, (self.out / "run.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(self.calls()), 6)  # each of those twice; the baseline has no CLAUDE.md, so no probe session
+        self.assertFalse(arms.preserve_path(self.out, "baseline", IDS[0], 1).exists())
 
     def test_the_budget_stops_before_the_next_unit(self):
         with self.assertRaises(probes.BatchStop) as ctx:

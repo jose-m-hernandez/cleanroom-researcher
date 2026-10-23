@@ -216,22 +216,29 @@ class StopTests(PilotEnv):
         self.assertIn("rate limit persisted after one wait and retry (S4)", self.pilot_md())
         self.assertEqual(self.state()["isolation_failures"], 0)
 
-    def test_any_other_proof_failure_stops_at_once_with_no_retry(self):
+    def test_a_run_that_fails_only_an_outcome_check_does_not_stop_the_pilot_and_is_not_run_again(self):
+        # README "Exclusions": the port separates outcome checks from isolation checks; the harness at 08ef45f stopped here.
         self.script = {1: plain_failure}
-        self.assertEqual(self.pilot(), 1, self.last_output)
-        self.assertEqual((self.sleeps, self.launched), ([], 1))
-        text = self.pilot_md()
-        self.assertIn("isolation FAIL (S1)", text)
-        self.assertIn("result_error", text)
-        self.assertEqual(self.state()["isolation_failures"], 1)
-        self.assertIn("Isolation FAIL count: 1", text)
+        self.assertEqual(self.pilot(), 0, self.last_output)
+        self.assertEqual((self.sleeps, self.launched), ([], 16))
+        self.assertEqual(self.state()["isolation_failures"], 0)
+        self.assertEqual(arms.read_json(self.out / "run.json")["proof_counts"]["outcome_only_by_check"], {"result_error": 1})
+        self.assertIn("Isolation FAIL count: 0", self.pilot_md())
 
-    def test_a_throttle_that_also_fails_the_isolation_proof_is_not_retried(self):
+    def test_a_throttle_that_also_fails_the_isolation_proof_is_not_waited_for(self):
+        # An isolation failure is re-run once at once (README "Exclusions"), then the cell is excluded; no 60 s wait.
         self.plan["leak"] = base.HOST_MARKER
         self.write_plan()
         self.script = {1: rate_limited}
         self.assertEqual(self.pilot(), 1, self.last_output)
-        self.assertEqual((self.sleeps, self.launched), ([], 1))
+        self.assertEqual(self.sleeps, [])
+        # 24 launches: the plan leaks the host marker into every run, so the 4 preserve cells fail isolation and are
+        # excluded, which skips their 4 probe sessions; the other 8 probe cells fail too: 12 cells x 2 launches (the
+        # run and its one re-run) = 24. Nothing is launched after an exclusion.
+        self.assertEqual(self.launched, 24)
+        excluded = arms.read_json(self.out / "run.json")["excluded_cells"]
+        self.assertEqual(len(excluded), 12)
+        self.assertTrue(all("markers_found" in e["checks"] for e in excluded))
         self.assertIn("markers_found", self.pilot_md())
         self.assertNotIn(base.HOST_MARKER, self.pilot_md())
 
