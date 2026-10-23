@@ -451,3 +451,21 @@ This criterion was fixed in this protocol, before any result was seen.
 - 2026-10-22: protocol committed (preregistration).
 - 2026-10-22: `spend_cap_usd` set to 55 and `launched_by` set to the repository owner, both before any live call.
 - 2026-10-22: the read log is reconstructed from commit history. Its times are upper bounds taken from that history, not the times of the reads, and it lists what the history shows was read, not a guarantee that nothing else was read.
+- 2026-10-23: clarifications made before any data. None changes the analysis plan; each states how an existing rule is read, as ruled before the first live call.
+  - Final scoring and missing labels (P:130, P:132, P:291): the final scoring only reuses the sealed floor and oracle labels, and never asks the judge again for a floor or oracle label that went missing before the seal.
+  - "Runs exactly twice" (P:130) applies to each scoring occasion: each pre-seal round, and the final scoring.
+  - "First recorded run" (P:99 and elsewhere) means the first live call of any kind, which is the first isolation control of Methods step 4. A change of agent harness version or model identifier after that call stops the experiment with the outcome "not determined". A version found to differ at the preflight, before any live call, is handled as Methods step 4 says.
+  - A probe-session isolation failure (P:120): the re-run repeats only that probe session, and the cell's preserve output stays as it was.
+  - The authoring agent's spend (P:198, P:205 to P:208) is charged to the generation ledger, under the generation cap of $19.50. The planned path is unchanged.
+  - A lost spend ledger (P:205, P:225): if the temporary spend ledger is lost during the experiment, it is rebuilt from the per-run records with the evaluation harness's own ledger-rebuild command before any run resumes.
+  - A failed resume control (P:247) falls under the gate rule of P:221 and the catch-all end of P:115.
+  - "The one wait and retry" (P:97) is one wait of 60 seconds (the evaluation harness's `rate_limit_wait_s`), then one retry.
+  - The audit frame (P:294, P:399) is baseline answers on non-abstention probes, including probes that turn out not to be scorable; Threat 12's phrase "the answers the primary depends on" is a looser description of the same frame.
+  - Two labels short (P:297, P:299): what happens when two judge labels fall short of their share is fixed by the audit code and its test vector, committed at Methods step 2, before any data.
+  - The $3.00 for canary positive controls (P:197, P:204, P:346): each positive control runs inside its canary run, so this amount is a conservative allowance on top of the bound for the 7 control runs, not a separate set of runs.
+  - Threat 5's list of where the label appears (P:367): the Question section (P:20) also states that the claim is exploratory.
+  - The plugin commit (P:12): the Abstract gives the short id `cfd1e77`; the full id, `cfd1e77e07d2b3698591688e7e151d83d3ef51c3`, is at P:14 and P:172.
+  - The sum of the phase caps (P:210): the $65.00 sum counts the authoring agent's bound of $3.00 as if it were a cap.
+  - The plugin check (P:331) applies to the `cpr` plugin, the only plugin any run loads.
+  - The rule for counting answers that name more than one value (P:160) is fixed at the seal, after this protocol's commit, and is recorded in the sealed record.
+  - The cluster bootstrap for the judge-minus-person difference (P:159) uses b = 10000 resamples and the seed 20261017, the same as the primary interval (P:85).
