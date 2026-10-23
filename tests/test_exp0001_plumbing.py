@@ -652,7 +652,20 @@ class OutInTheLibraryTests(iso.CloneFolders):
         self.refuses(self.clone / "other" / "run-1")
 
     def test_a_case_variant_refuses(self):
-        self.refuses(self.form_case_variant(self.clone / "other"))
+        variant = self.form_case_variant(self.clone / "other")
+        if self.case_sensitive(self.clone / "other"):
+            # Case-sensitive file system: the variant is a missing place outside the clone,
+            # so it gets the verdict of a plainly outside, missing control path.
+            control = self.outside_control()
+            self.assertFalse(variant.exists())
+            for command in ("run", "pilot"):
+                code, text = self.call(command, variant)
+                control_code, control_text = self.call(command, control)
+                self.assertEqual((code, "REFUSED" in text), (control_code, "REFUSED" in control_text))
+                self.assertNotEqual(control_code, 2, control_text)
+                self.assertNotIn("REFUSED", control_text)
+            return
+        self.refuses(variant)
 
     def test_a_symlinked_ancestor_refuses(self):
         self.refuses(self.form_symlinked_ancestor(self.clone / "other"))
@@ -696,7 +709,19 @@ class FromInTheCommandLineTests(iso.CloneFolders):
         self.refuses(self.clone)
 
     def test_a_case_variant_refuses(self):
-        self.refuses(self.form_case_variant(self.clone / "other"))
+        variant = self.form_case_variant(self.clone / "other")
+        if self.case_sensitive(self.clone / "other"):
+            control = self.outside_control()
+            self.assertFalse(variant.exists())
+            for command in ("score", "report", "pilot-md"):
+                with self.subTest(command=command):
+                    code, text = self.main(command, variant)
+                    control_code, control_text = self.main(command, control)
+                    self.assertEqual((code, "REFUSED" in text), (control_code, "REFUSED" in control_text))
+                    self.assertNotIn("is inside the repository clone", control_text)
+                    self.assertFalse(control_text.startswith(f"{command}: REFUSED --from is inside"), control_text)
+            return
+        self.refuses(variant)
 
     def test_a_symlinked_ancestor_refuses(self):
         self.refuses(self.form_symlinked_ancestor(self.clone / "other"))

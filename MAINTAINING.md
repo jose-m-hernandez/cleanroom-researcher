@@ -38,3 +38,7 @@ The maintainers can approve one intentional use of a barred string, so the scan 
 3. Run the scan again. It must pass. A line that no longer matches a finding fails the scan as stale: delete it.
 
 An approval covers exact bytes. An edit to an approved file makes a new object, which needs its own line. A commit approval is lost if the commit is rewritten, for example by a rebase, an amend or a squash merge.
+
+## Running the gate after a rename
+
+The gate builds its file list from git's staging area, plus any untracked files that are not ignored. A file you renamed or deleted but have not staged still appears under its old name, so the gate fails on a file that is no longer there. Stage the change first with `git add -A`, then run the gate with the clean-environment command in `CONTRIBUTING.md`. If you would rather not stage in your working copy, run the gate in a fresh clone where the change is staged.

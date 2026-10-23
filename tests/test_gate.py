@@ -88,9 +88,11 @@ def job_blocks(text):
         if not in_jobs:
             in_jobs = line == "jobs:"
             continue
+        if line.startswith("#"):
+            continue
         if line.strip() and not line.startswith(" "):
             break
-        header = re.match(r"^  ([A-Za-z0-9_-]+):\s*$", line)
+        header = re.match(r"^  ([A-Za-z0-9_-]+):\s*(#.*)?$", line)
         if header:
             blocks.append((header.group(1), []))
         elif blocks:
@@ -494,6 +496,29 @@ class WorkflowTimeoutParserTests(unittest.TestCase):
             )
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(workflow_files(tmp), [])
+
+    def test_t7_a_column_zero_comment_between_jobs_loses_no_job(self):
+        text = JOB_A + "# a note\n  b:\n    runs-on: x\n"
+        names, missing = jobs_and_missing_timeouts(text)
+        self.assertEqual(names, ["a", "b"])
+        self.assertEqual(missing, ["b"])
+
+    def test_t8_a_job_header_with_a_trailing_comment_is_a_job(self):
+        text = JOB_A + "  b: # a comment\n    runs-on: x\n"
+        names, missing = jobs_and_missing_timeouts(text)
+        self.assertEqual(names, ["a", "b"])
+        self.assertEqual(missing, ["b"])
+
+    def test_t9_a_column_zero_key_still_ends_the_section_before_a_comment(self):
+        text = JOB_A + "env:\n  fake:\n# trailing\n"
+        names, _ = jobs_and_missing_timeouts(text)
+        self.assertEqual(names, ["a"])
+
+    def test_t10_an_indented_comment_between_jobs_loses_no_job(self):
+        text = JOB_A + "  # an indented comment\n  b:\n    timeout-minutes: 10\n"
+        names, missing = jobs_and_missing_timeouts(text)
+        self.assertEqual(names, ["a", "b"])
+        self.assertEqual(missing, [])
 
 
 class StableCheckNameTests(unittest.TestCase):

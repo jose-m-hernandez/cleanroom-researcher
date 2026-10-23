@@ -1182,7 +1182,18 @@ class AllowTests(Base):
         self.inside_file("allow.txt")
         shouted = os.path.join(self.tmp.name, "REPO", "allow.txt")
         if not os.path.exists(shouted):
-            self.skipTest("case-sensitive file system")
+            # Case-sensitive file system: the shouted path names a different, missing place,
+            # so it must get the verdict of a plainly outside, missing control path.
+            control = os.path.join(self.tmp.name, "OTHER", "allow.txt")
+            self.assertFalse(os.path.exists(control))
+            verdict = self.scan(env={"BARRED_ALLOW_PATH": shouted})
+            control_verdict = self.scan(env={"BARRED_ALLOW_PATH": control})
+            self.assertEqual(verdict, control_verdict)
+            self.assertEqual(
+                control_verdict,
+                (2, ["barred: DEAD the allow file is missing, a symlink or not a regular file"]),
+            )
+            return
         code, lines = self.scan(env={"BARRED_ALLOW_PATH": shouted})
         self.assertEqual((code, lines), (2, [self.INSIDE]))
 
@@ -1341,7 +1352,14 @@ class AllowTests(Base):
                 self.assertEqual((code, lines), (2, [self.LIST_INSIDE]))
         shouted = os.path.join(self.tmp.name, "REPO", "private-list.txt")
         if not os.path.exists(shouted):
-            self.skipTest("case-sensitive file system")
+            # Case-sensitive file system: same verdict as a plainly outside, missing control path.
+            control = os.path.join(self.tmp.name, "OTHER", "private-list.txt")
+            self.assertFalse(os.path.exists(control))
+            verdict = self.scan(env={"BARRED_STRINGS_PATH": shouted})
+            control_verdict = self.scan(env={"BARRED_STRINGS_PATH": control})
+            self.assertEqual(verdict, control_verdict)
+            self.assertEqual(control_verdict, (2, [self.BAD_LIST]))
+            return
         code, lines = self.scan(env={"BARRED_STRINGS_PATH": shouted})
         self.assertEqual((code, lines), (2, [self.LIST_INSIDE]))
 

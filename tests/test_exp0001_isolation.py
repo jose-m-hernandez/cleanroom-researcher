@@ -1410,10 +1410,24 @@ class CloneFolders(unittest.TestCase):
         return variant if variant.exists() else None
 
     def form_case_variant(self, inside):
+        """The case variant of an inside path, plus "new"; on a case-sensitive file system, the
+        upper-cased path names a missing place outside the clone, so return that (see case_sensitive)."""
         variant = self.case_variant(inside)
         if variant is None:
-            self.skipTest("the temporary folder's file system is case-sensitive: no case variant reaches the clone")
+            variant = Path(str(inside).replace("/clone/", "/CLONE/", 1))
+            self.assertFalse(variant.exists())
         return variant / "new"
+
+    def case_sensitive(self, inside):
+        """True when the upper-cased clone folder does not exist (a case-sensitive file system)."""
+        return self.case_variant(inside) is None
+
+    def outside_control(self):
+        """A plainly outside, nonexistent path, for the verdict a case variant must match when
+        the file system is case-sensitive."""
+        control = self.tmp / "OTHER" / "new"
+        self.assertFalse(control.exists())
+        return control
 
     def form_symlinked_ancestor(self, inside):
         ancestor = self.tmp / "ancestor-link"
@@ -1431,7 +1445,14 @@ class CloneFolders(unittest.TestCase):
 
 class InsideCloneTests(CloneFolders):
     def test_a_case_variant_is_inside(self):
-        self.assertTrue(claude_run.inside_clone(self.form_case_variant(self.clone / "other"), self.clone))
+        variant = self.form_case_variant(self.clone / "other")
+        if self.case_sensitive(self.clone / "other"):
+            control = self.outside_control()
+            verdict = claude_run.inside_clone(variant, self.clone)
+            self.assertEqual(verdict, claude_run.inside_clone(control, self.clone))
+            self.assertIs(claude_run.inside_clone(control, self.clone), False)
+            return
+        self.assertTrue(claude_run.inside_clone(variant, self.clone))
 
     def test_a_symlinked_ancestor_is_inside(self):
         self.assertTrue(claude_run.inside_clone(self.form_symlinked_ancestor(self.clone / "other"), self.clone))
@@ -1482,7 +1503,25 @@ class PluginRepoTests(CloneFolders):
         self.assertIn("inside the repository clone", str(caught.exception))
 
     def test_a_case_variant_of_an_inside_path_refuses(self):
-        self.refuses_inside(self.form_case_variant(self.clone / "other").parent)
+        variant = self.form_case_variant(self.clone / "other").parent
+        if self.case_sensitive(self.clone / "other"):
+            # A missing place outside the clone: same verdict as the control (not a directory, not "inside").
+            control = self.outside_control().parent
+            self.assertFalse(variant.exists())
+            self.assertFalse(control.exists())
+            outcomes = []
+            _, commit = self.make()
+            for path in (variant, control):
+                try:
+                    claude_run.plugin_repo(commit, {"CPR_EVAL_PLUGIN_REPO": str(path)}, root=self.clone)
+                except claude_run.PluginRepoError as caught:
+                    outcomes.append(str(caught))
+                else:
+                    outcomes.append(None)
+            self.assertEqual(outcomes[0], outcomes[1])
+            self.assertEqual(outcomes[1], "CPR_EVAL_PLUGIN_REPO is not an existing directory")
+            return
+        self.refuses_inside(variant)
 
     def test_a_path_whose_ancestor_is_a_symlink_into_the_clone_refuses(self):
         (self.clone / "other" / "new").mkdir()  # the variable must name an existing folder
@@ -1545,7 +1584,14 @@ class OutRefusalTests(CloneFolders):
         self.assertIn("inside the repository clone", self.refusal(path))
 
     def test_a_case_variant_of_an_inside_out_refuses(self):
-        self.refuses_inside(self.form_case_variant(self.clone / "other"))
+        variant = self.form_case_variant(self.clone / "other")
+        if self.case_sensitive(self.clone / "other"):
+            control = self.outside_control()
+            self.assertFalse(variant.exists())
+            self.assertEqual(self.refusal(variant), self.refusal(control))
+            self.assertEqual(self.refusal(control), "")
+            return
+        self.refuses_inside(variant)
 
     def test_an_out_whose_ancestor_is_a_symlink_into_the_clone_refuses(self):
         self.refuses_inside(self.form_symlinked_ancestor(self.clone / "other"))
