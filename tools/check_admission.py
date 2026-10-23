@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import hashlib
 import os
 import posixpath
 import re
@@ -20,18 +21,18 @@ import tempfile
 from typing import Dict, List, Optional, Set, Tuple
 
 try:
-    from lib import header, repofiles
+    from lib import header, paths, repofiles
 
     IMPORT_ERROR: Optional[BaseException] = None
 except Exception as _exc:  # reported as DEAD by run(), not as a traceback
-    header = repofiles = None  # type: ignore[assignment]
+    header = paths = repofiles = None  # type: ignore[assignment]
     IMPORT_ERROR = _exc
 
 CHECK = "admission"
 LEDGER = "docs/admissions.md"
 VOCABULARY = "docs/vocabulary.md"
 LEDGER_HEADER = "| path | class | basis | provenance |"
-CLASSES = ("sourced", "fixture", "original")
+CLASSES = ("sourced", "fixture", "original", "recorded")
 MAX_BYTES = 100000
 GENERATOR_TIMEOUT = 120
 HTTPS = "https" + ":" + "//"
@@ -45,6 +46,7 @@ ISO_DATE = re.compile(r"(?<![0-9])[0-9]{4}-[0-9]{2}-[0-9]{2}(?![0-9])")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 SEPARATOR = re.compile(r"^\|(\s*:?-+:?\s*\|)+$")
 FIXTURE_BASIS = re.compile(r"^generator=(\S+) seed=(-?[0-9]+)$")
+RECORDED_BASIS = re.compile(r"^sha256=[0-9a-f]{64}$")
 VOCAB_ROW = re.compile(r"^\| `([^`]+)` \| (.+) \|$")
 
 Finding = Tuple[str, Optional[int], str]
@@ -71,6 +73,11 @@ def is_normal_path(path: str) -> bool:
     if any(seg in ("", ".", "..") for seg in path.split("/")):
         return False
     return posixpath.normpath(path) == path
+
+
+def is_recorded_file(path: str, classes: Dict[str, str]) -> bool:
+    """True when the first row of path is class recorded and path is a recorded path."""
+    return classes.get(path) == "recorded" and paths.is_recorded_path(path)
 
 
 def host_of(url: str) -> str:
@@ -216,6 +223,18 @@ def run_generator(
     return None
 
 
+def recorded_digest(root: str, path: str) -> Optional[str]:
+    """The sha256 of a regular file's bytes, or None when path is not one."""
+    full = os.path.join(root, *path.split("/"))
+    try:
+        if not stat.S_ISREG(os.lstat(full).st_mode):
+            return None
+        with open(full, "rb") as handle:
+            return hashlib.sha256(handle.read()).hexdigest()
+    except OSError:
+        return None
+
+
 def check_a4(root: str, rows: List[Row], files: Set[str]) -> List[Finding]:
     found: List[Finding] = []
     first: Dict[str, Row] = {}
@@ -256,6 +275,25 @@ def check_a4(root: str, rows: List[Row], files: Set[str]) -> List[Finding]:
         elif cls == "original":
             if basis != "-":
                 found.append((LEDGER, line, "A4 original basis must be '-': " + path))
+        elif cls == "recorded":
+            shaped = RECORDED_BASIS.fullmatch(basis) is not None
+            if not shaped:
+                found.append(
+                    (LEDGER, line, "A4 recorded basis must be sha256= and 64 lowercase hex characters: " + path)
+                )
+            if not paths.is_recorded_path(path):
+                found.append(
+                    (LEDGER, line, "A4 a recorded row must sit under experiments/EXP-NNNN/recorded/: " + path)
+                )
+            elif shaped and path in files:
+                digest = recorded_digest(root, path)
+                if digest is not None and digest != basis[len("sha256="):]:
+                    found.append((LEDGER, line, "A4 recorded file does not match its sha256 basis: " + path))
+    for path in sorted(files):
+        if paths.is_recorded_path(path):
+            row = first.get(path)
+            if row is None or row["class"] != "recorded":
+                found.append((path, None, "A4 a file under recorded/ must have a recorded row: " + path))
     return found
 
 
@@ -275,9 +313,13 @@ def check_a5(texts: Dict[str, str], existing: Set[str]) -> List[Finding]:
     return found
 
 
-def check_a6(texts: Dict[str, str], registered: Set[str]) -> List[Finding]:
+def check_a6(
+    texts: Dict[str, str], registered: Set[str], classes: Dict[str, str]
+) -> List[Finding]:
     found: List[Finding] = []
     for path, text in texts.items():
+        if is_recorded_file(path, classes):
+            continue
         for number, match in line_matches(text, URL):
             url = match.group(0).rstrip(".,;:")
             if url in registered or is_reserved_host(host_of(url)):
@@ -289,7 +331,7 @@ def check_a6(texts: Dict[str, str], registered: Set[str]) -> List[Finding]:
 def check_a7(contents: Dict[str, bytes], classes: Dict[str, str]) -> List[Finding]:
     found: List[Finding] = []
     for path, data in contents.items():
-        if classes.get(path) == "fixture":
+        if classes.get(path) == "fixture" or is_recorded_file(path, classes):
             continue
         try:
             data.decode("utf-8")
@@ -336,6 +378,8 @@ def check_a8(sources: Dict[str, str], types: Optional[Set[str]]) -> List[Finding
 def check_a9(sizes: Dict[str, int], classes: Dict[str, str]) -> List[Finding]:
     found: List[Finding] = []
     for path, size in sizes.items():
+        if is_recorded_file(path, classes):
+            continue
         if size > MAX_BYTES and classes.get(path) != "fixture":
             found.append((path, None, "A9 %d bytes is over %d" % (size, MAX_BYTES)))
     return found
@@ -390,7 +434,7 @@ def control() -> bool:
     bad_url = HTTPS + "docs.python.org/3/"
     one = any(r.startswith("A1 not admitted") for _, _, r in check_a1(["control.txt"], []))
     five = bool(check_a5({"control.txt": bad_id + "\n"}, set()))
-    six = bool(check_a6({"control.txt": bad_url + "\n"}, set()))
+    six = bool(check_a6({"control.txt": bad_url + "\n"}, set(), {}))
     ten = bool(raw_segment_paths(["x/_raw/y"]))
     return one and five and six and ten
 
@@ -459,7 +503,7 @@ def run(root: str) -> Tuple[int, List[str]]:
     findings.extend(check_a3(rows))
     findings.extend(check_a4(root, rows, fileset))
     findings.extend(check_a5(texts, existing))
-    findings.extend(check_a6(texts, registered))
+    findings.extend(check_a6(texts, registered, classes))
     findings.extend(check_a7(contents, classes))
     findings.extend(check_a8({p: texts[p] for p in source_paths}, types))
     findings.extend(check_a9({p: len(d) for p, d in contents.items()}, classes))

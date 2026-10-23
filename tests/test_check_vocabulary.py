@@ -333,6 +333,135 @@ class V5Tests(Base):
                     self.assertHit(check_vocabulary.run(tmp), "V5", path + ":1:")
 
 
+# V8 examples: every token-shaped string is assembled here from parts.
+EXP = "EXP-" + "0001"
+TOKENS = {
+    "gh": ("gh" + "p" + "_") + "A" * 36,
+    "gh-u": ("gh" + "u" + "_") + "b1" * 20,
+    "fine-grained": ("github" + "_pat_") + "A_" * 11,
+    "aws": ("AK" + "IA") + "Q" * 16,
+    "sk": ("sk" + "-") + "a-" * 10,
+    "slack": ("xo" + "xb" + "-") + "1" * 12,
+    "google": ("AI" + "za") + "Z" * 35,
+    "key": "-----" + "BEGIN " + "RSA " + "PRIVATE KEY" + "-----",
+    "key-bare": "-----" + "BEGIN " + "PRIVATE KEY" + "-----",
+}
+NEAR_MISSES = {
+    "sk": "ta" + "sk" + "-" + "abcdefghijklmnopqrstuvwxy",
+    "aws": ("AK" + "IA") + "Q" * 15,
+    "gh": ("gh" + "p" + "_") + "A" * 35,
+    "slack": ("xo" + "xq" + "-") + "1" * 12,
+    "google": ("AI" + "za") + "Z" * 34,
+    "key": "-----" + "BEGIN " + "PUBLIC KEY" + "-----",
+    "fine-grained": ("github" + "_pat_") + "A" * 21,
+}
+
+
+class V8Tests(Base):
+    def test_every_pattern_has_a_positive(self):
+        for name, token in TOKENS.items():
+            with self.subTest(name=name):
+                with tempfile.TemporaryDirectory() as tmp:
+                    make_repo(tmp, {"a.txt": "value " + token + " end\n"})
+                    result = check_vocabulary.run(tmp)
+                    self.assertHit(result, "V8", "a.txt:1: V8 token-shaped string")
+                    self.assertNotIn(token, "\n".join(result[1]))
+
+    def test_every_pattern_has_a_near_miss(self):
+        for name, text in NEAR_MISSES.items():
+            with self.subTest(name=name):
+                with tempfile.TemporaryDirectory() as tmp:
+                    make_repo(tmp, {"a.txt": "value " + text + " end\n"})
+                    self.assertClean(check_vocabulary.run(tmp))
+
+    def test_sk_lookbehind_blocks_a_longer_word(self):
+        for before in ("a", "9", "_", "-"):
+            with self.subTest(before=before):
+                with tempfile.TemporaryDirectory() as tmp:
+                    make_repo(tmp, {"a.txt": before + "sk" + "-" + "a" * 25 + "\n"})
+                    self.assertClean(check_vocabulary.run(tmp))
+
+    def test_aws_shape_must_end_the_word(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            make_repo(tmp, {"a.txt": ("AK" + "IA") + "Q" * 16 + "R\n"})
+            self.assertClean(check_vocabulary.run(tmp))
+
+    def test_the_rule_is_case_sensitive(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            make_repo(tmp, {"a.txt": ("GH" + "P" + "_") + "A" * 36 + "\n"})
+            self.assertClean(check_vocabulary.run(tmp))
+
+    def test_a_recorded_file_holding_a_token_shape_is_a_hit(self):
+        path = "experiments/%s/recorded/out.txt" % EXP
+        with tempfile.TemporaryDirectory() as tmp:
+            make_repo(tmp, {path: "k " + TOKENS["gh"] + "\n"})
+            result = check_vocabulary.run(tmp)
+            self.assertHit(result, "V8", path + ":1:")
+            self.assertNotIn(TOKENS["gh"], "\n".join(result[1]))
+
+    def test_a_commit_message_holding_a_token_shape_is_a_hit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            make_repo(tmp, {"a.txt": "x\n"}, messages=["Add " + TOKENS["aws"]])
+            code, lines = check_vocabulary.run(tmp)
+            self.assertEqual(code, 1, lines)
+            self.assertRegex(lines[0], r"^vocabulary: commit [0-9a-f]+: V8 token-shaped string$")
+            self.assertNotIn(TOKENS["aws"], "\n".join(lines))
+
+    def test_an_identity_holding_a_token_shape_is_a_hit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            make_repo(tmp, {"a.txt": "x\n"}, messages=["First"])
+            write(tmp, "b.txt", "y\n")
+            git(tmp, "add", "-A")
+            commit_as(tmp, "Second", TOKENS["sk"], "t@example.invalid")
+            code, lines = check_vocabulary.run(tmp)
+            self.assertEqual(code, 1, lines)
+            self.assertTrue(any(": V8 author token-shaped string" in l for l in lines), lines)
+            self.assertNotIn(TOKENS["sk"], "\n".join(lines))
+
+    def test_the_v8_control_is_required(self):
+        make_repo(self.root, {"a.txt": "x\n"})
+        controls = dict(check_vocabulary.CONTROLS)
+        controls["V8"] = "nothing to see"
+        with mock.patch.object(check_vocabulary, "CONTROLS", controls):
+            code, lines = check_vocabulary.run(self.root)
+        self.assertEqual(code, 2)
+        self.assertIn("V8", lines[0])
+
+    def test_v8_is_a_commit_rule(self):
+        self.assertIn("V8", check_vocabulary.COMMIT_RULES)
+
+
+class RecordedV5Tests(Base):
+    CALL = "x = " + PATH_HOME + ")\n"
+
+    def test_a_recorded_python_file_is_not_checked_for_v5(self):
+        self.assertClean(self.check({"experiments/%s/recorded/a.py" % EXP: self.CALL}))
+
+    def test_the_same_file_under_code_fails(self):
+        path = "experiments/%s/code/a.py" % EXP
+        self.assertHit(self.check({path: self.CALL}), "V5", path + ":1:")
+
+    def test_a_recorded_folder_outside_an_experiment_is_checked(self):
+        for path in (
+            "tools/experiments/%s/recorded/a.py" % EXP,
+            "recorded/a.py",
+            "experiments/%s/recorded_x/a.py" % EXP,
+            "experiments/%s/code/recorded/a.py" % EXP,
+        ):
+            with self.subTest(path=path):
+                with tempfile.TemporaryDirectory() as tmp:
+                    make_repo(tmp, {path: self.CALL})
+                    self.assertHit(check_vocabulary.run(tmp), "V5", path + ":1:")
+
+    def test_other_rules_still_apply_to_a_recorded_file(self):
+        path = "experiments/%s/recorded/a.py" % EXP
+        self.assertHit(self.check({path: "x = '" + TILDE + "y'\n"}), "V4", path + ":1:")
+
+    def test_scan_text_takes_the_recorded_flag(self):
+        self.assertEqual(check_vocabulary.scan_text(self.CALL, True, in_recorded=True), [])
+        self.assertTrue(check_vocabulary.scan_text(self.CALL, True))
+
+
 class V6Tests(Base):
     def vocab_with(self, rows):
         lines = ["# Vocabulary", "", "## Terms", "", "| Value | Meaning |", "| --- | --- |"]

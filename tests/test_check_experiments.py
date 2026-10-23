@@ -8,8 +8,9 @@ import tempfile
 import unittest
 from unittest import mock
 
+import check_admission
 import check_experiments
-from lib import header, paths
+from lib import header, paths, repofiles
 from tests import test_check_admission as tca
 
 REAL_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -725,6 +726,176 @@ class SynthesisTests(Case):
         code, hits = self.rule_lines("S2")
         self.assertEqual(code, 1, hits)
         self.assertEqual(len(hits), 1, hits)
+
+
+E4_MESSAGE = (
+    "E4 recorded file changed after its first commit (%d versions); "
+    "recorded data is never edited: add a new file and say why in the "
+    "experiment's changelog"
+)
+
+
+class E4Tests(Case):
+    OTHER = "experiments/EXP-0001/recorded/other.txt"
+
+    def admit(self):
+        """Rewrite the ledger so every recorded file has a recorded row with its hash."""
+        files = [
+            p for p in repofiles.file_set(self.root)
+            if os.path.exists(os.path.join(self.root, *p.split("/")))
+        ]
+        over = {}
+        for path in files:
+            if paths.is_recorded_path(path):
+                with open(os.path.join(self.root, *path.split("/")), "rb") as handle:
+                    over[path] = ("recorded", tca.sha_basis(handle.read()))
+        rows = tca.auto_rows(set(files), over)
+        self.put(tca.LEDGER, tca.ledger_text(rows))
+
+    def start(self, data="one\n"):
+        self.make({README: readme_md()})
+        self.commit("readme")
+        self.put(RECORDED, data)
+        self.admit()
+        self.commit("data")
+
+    def test_a_file_committed_once_passes(self):
+        self.start()
+        self.assertClean()
+        self.assertNone("E4")
+
+    def test_a_change_with_its_basis_updated_is_e4_and_admission_alone_passes(self):
+        self.start()
+        self.put(RECORDED, "two\n")
+        self.admit()
+        self.commit("edit")
+        self.assertEqual(check_admission.run(self.root)[0], 0)
+        code, hits = self.rule_lines("E4")
+        self.assertEqual(code, 1, hits)
+        self.assertEqual(len(hits), 1, hits)
+        self.assertEqual(hits[0], "experiments: %s: %s" % (RECORDED, E4_MESSAGE % 2))
+
+    def test_a_change_in_the_working_tree_only_is_e4(self):
+        self.start()
+        self.put(RECORDED, "two\n")
+        self.assertHit("E4", RECORDED)
+
+    def test_changing_back_to_the_first_bytes_is_clean(self):
+        self.start()
+        self.put(RECORDED, "two\n")
+        self.put(RECORDED, "one\n")
+        self.assertNone("E4")
+
+    def test_a_change_that_is_then_undone_in_a_later_commit_is_still_e4(self):
+        self.start()
+        self.put(RECORDED, "two\n")
+        self.commit("edit")
+        self.put(RECORDED, "one\n")
+        self.commit("undo")
+        code, hits = self.rule_lines("E4")
+        self.assertEqual(len(hits), 1, hits)
+        self.assertIn("(2 versions)", hits[0])
+
+    def test_a_deleted_recorded_file_is_not_a_finding(self):
+        self.start()
+        os.remove(os.path.join(self.root, *RECORDED.split("/")))
+        self.admit()
+        self.commit("remove")
+        self.assertNone("E4")
+        self.assertClean()
+
+    def test_a_changed_then_deleted_file_is_e4(self):
+        self.start()
+        self.put(RECORDED, "two\n")
+        self.commit("edit")
+        os.remove(os.path.join(self.root, *RECORDED.split("/")))
+        self.commit("remove")
+        code, hits = self.rule_lines("E4")
+        self.assertEqual(len(hits), 1, hits)
+
+    def test_the_same_bytes_at_two_recorded_paths_pass(self):
+        self.start()
+        self.put(self.OTHER, "one\n")
+        self.admit()
+        self.commit("copy")
+        self.assertClean()
+
+    def test_a_file_outside_recorded_may_change(self):
+        self.make({README: readme_md(), "experiments/EXP-0001/%s/x.txt" % paths.METHOD_DIR: "a\n"})
+        self.commit("one")
+        self.put("experiments/EXP-0001/%s/x.txt" % paths.METHOD_DIR, "b\n")
+        self.commit("two")
+        self.assertNone("E4")
+
+    def test_a_recorded_looking_path_that_is_not_recorded_may_change(self):
+        odd = "tools/experiments/EXP-0001/recorded/data.txt"
+        self.make({odd: "a\n"})
+        self.commit("one")
+        self.put(odd, "b\n")
+        self.commit("two")
+        self.assertNone("E4")
+
+    def clone(self):
+        holder = tempfile.TemporaryDirectory()
+        self.addCleanup(holder.cleanup)
+        target = os.path.join(holder.name, "clone")
+        subprocess.run(
+            ["git", "clone", "-q", "--depth", "1", "file://" + self.root, target],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True,
+        )
+        return target
+
+    def test_a_shallow_clone_with_no_recorded_data_is_not_dead(self):
+        self.make()
+        self.commit("one")
+        self.put("a.txt", "a\n")
+        self.commit("two")
+        code, lines = check_experiments.run(self.clone())
+        self.assertEqual(code, 0, lines)
+
+    def test_a_shallow_clone_with_a_recorded_file_is_dead(self):
+        self.make()
+        self.commit("one")
+        self.put(RECORDED, "one\n")
+        self.commit("two")
+        code, lines = check_experiments.run(self.clone())
+        self.assertEqual(code, 2, lines)
+        self.assertTrue(lines[0].startswith("experiments: DEAD "), lines)
+        self.assertIn("git fetch --unshallow", lines[0])
+
+    def test_the_control_reports_e4_when_the_rule_finds_nothing(self):
+        self.assertEqual(check_experiments.control(), [])
+        self.make({README: readme_md()})
+        with mock.patch.object(check_experiments, "check_e4", return_value=[]):
+            self.assertEqual(check_experiments.control(), ["E4"])
+            code, lines = check_experiments.run(self.root)
+        self.assertEqual(code, 2, lines)
+        self.assertEqual(
+            lines, ["experiments: DEAD the positive control produced no finding for E4"]
+        )
+
+    def test_check_e4_message_and_threshold(self):
+        one = {RECORDED: ["a" * 40]}
+        two = {RECORDED: ["a" * 40, "b" * 40], self.OTHER: ["c" * 40]}
+        self.assertEqual(check_experiments.check_e4(one), [])
+        self.assertEqual(
+            check_experiments.check_e4(two), [(RECORDED, None, E4_MESSAGE % 2)]
+        )
+
+    def test_path_blobs_lists_distinct_ids_in_first_seen_order(self):
+        self.make({"a.txt": "a\n"})
+        self.put(RECORDED, "one\n")
+        self.commit("one")
+        self.put(RECORDED, "two\n")
+        self.commit("two")
+        self.put(RECORDED, "one\n")
+        self.commit("three")
+        held = repofiles.path_blobs(self.root, "experiments/")
+        self.assertEqual(list(held), [RECORDED])
+        first = repofiles.blob_id_of(self.root, b"one\n")
+        second = repofiles.blob_id_of(self.root, b"two\n")
+        self.assertEqual(held[RECORDED], [first, second])
+        self.assertEqual(repofiles.path_blobs(self.root, "nothing/"), {})
 
 
 class ShallowCloneTests(Case):

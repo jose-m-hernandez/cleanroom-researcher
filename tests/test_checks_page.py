@@ -16,12 +16,12 @@ OPENING = (
     "This page says what each check code means. The words this repository uses on purpose, "
     "and the values each field may take, are in `docs/vocabulary.md`."
 )
-CLOSING = "E4 is reserved for a check not yet built. E5 is the `_raw` rule, which A10 implements."
+CLOSING = "E5 is the `_raw` rule, which A10 implements."
 
 EXPECTED = (
     ["A%d" % n for n in range(0, 11)]
-    + ["V%d" % n for n in range(1, 8)]
-    + ["E1", "E2", "E3", "E6", "E7", "S1", "S2", "S3"]
+    + ["V%d" % n for n in range(1, 9)]
+    + ["E1", "E2", "E3", "E4", "E6", "E7", "S1", "S2", "S3"]
 )
 
 
@@ -154,10 +154,10 @@ class ChecksPageTests(unittest.TestCase):
         self.assertNotEqual(set(page_codes("\n".join(lines))), self.defined())
 
     def test_a_fake_vocabulary_bullet_is_caught(self):
-        fake = self.vocabulary.replace("- V7 ", "- V8 a rule that is not built.\n- V7 ", 1)
+        fake = self.vocabulary.replace("- V7 ", "- V9 a rule that is not built.\n- V7 ", 1)
         self.assertNotEqual(fake, self.vocabulary)
         derived = defined_codes(self.admission, fake, self.experiments)
-        self.assertIn("V8", derived)
+        self.assertIn("V9", derived)
         self.assertNotEqual(set(page_codes(self.page)), derived)
 
     def test_a_fake_admission_literal_is_caught(self):

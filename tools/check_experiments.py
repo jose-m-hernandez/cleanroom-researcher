@@ -16,6 +16,7 @@ Rules:
   a licence; a release-artifact source has a licence.
 - E3 the target text class: a file in an experiment's target/ folder needs a
   subject that is a source whose licence is on the redistributable list.
+- E4 recorded data never changes: a file under experiments/EXP-NNNN/recorded/ holds the same bytes in every commit that holds it and in the working tree. Deleting one is not a finding. To correct recorded data, add a new file and say why in the experiment's changelog.
 - E6 order and disclosure. E6a: in a preregistered experiment, every commit that adds or changes a file under recorded/ has an earlier commit, among its ancestors, that touched the experiment's README. E6b: in an experiment whose read log is contemporaneous, the first commit under the method folder is no later than the earliest read-log entry whose reason is method. E6c: an exploratory experiment's abstract says "exploratory", and an experiment with a reconstructed read log says "reconstructed" there. E6a uses git ancestry. E6b compares the committer time with times a person wrote down, and both can be set by hand: it is a consistency check on the read log, an honesty record, and not proof of order.
 - E7 live runs: an experiment with any recorded/runs/<run>/ file declares a positive spend_cap_usd and a launched_by, and each run folder holds an isolation.json proof.
 - S1 a synthesis file is syntheses/SYN-NNNN.md, holds at least one finding (a "### " heading), and each finding names its sources.
@@ -24,16 +25,15 @@ Rules:
 
 That every cited source exists is A5's job, and reserved id shapes are V1's.
 
-Rule numbers follow the repository's check list: E4 is reserved for a
-check not yet built, and E5 is the _raw rule, implemented as A10 in
-check_admission.py.
+Rule numbers follow the repository's check list: E5 is the _raw rule, implemented as A10 in check_admission.py.
 
 A repository with no experiments/ folder is clean. A positive control runs
-before any scan: each of E1 to E3, E6, E7 and S1 to S3 must find a planted
+before any scan: each of E1 to E4, E6, E7 and S1 to S3 must find a planted
 problem, or the check is DEAD. Each rule is a function of parsed data, so the
 control needs no disk; the history rules take history facts that run()
 gathers. A shallow clone is DEAD when an experiment needs history for E6a or
-E6b.
+E6b, or when the working tree holds a recorded file, which E4 needs history
+for.
 """
 
 from __future__ import annotations
@@ -316,6 +316,24 @@ def check_e3(
                 "E3 cannot read the Redistributable licences table in %s; restore that file" % VOCABULARY,
             )
         )
+    return found
+
+
+def check_e4(versions: Dict[str, List[str]]) -> List[Finding]:
+    """E4 over the blob ids each recorded path held, in history and in the working tree."""
+    found: List[Finding] = []
+    for path in sorted(versions):
+        count = len(versions[path])
+        if count > 1:
+            found.append(
+                (
+                    path,
+                    None,
+                    "E4 recorded file changed after its first commit (%d versions); "
+                    "recorded data is never edited: add a new file and say why in the "
+                    "experiment's changelog" % count,
+                )
+            )
     return found
 
 
@@ -785,6 +803,7 @@ def control() -> List[str]:
     e1 = check_e1(["experiments/notes.md"], {}, set(), set())
     e2 = check_e2({"sources/s/source.md": {"source_type": "code-repo", "commit": "abc", "licence": "-"}})
     e3 = check_e3([target], {"EXP-0001": "method"}, {}, set())
+    e4 = check_e4({"experiments/EXP-0001/recorded/x.txt": ["a" * 40, "b" * 40]})
 
     readme = "experiments/EXP-0001/README.md"
     log = "experiments/EXP-0001/read-log.md"
@@ -808,7 +827,7 @@ def control() -> List[str]:
     return [
         rule
         for rule, hits in (
-            ("E1", e1), ("E2", e2), ("E3", e3), ("E6", e6), ("E7", e7),
+            ("E1", e1), ("E2", e2), ("E3", e3), ("E4", e4), ("E6", e6), ("E7", e7),
             ("S1", s1), ("S2", s2), ("S3", s3),
         )
         if not hits
@@ -837,8 +856,15 @@ def history_facts(
     readmes: Dict[str, str],
     logs: Dict[str, str],
     reasons: Optional[Set[str]],
-) -> Tuple[Dict[str, List[Tuple[str, bool]]], Dict[str, Optional[int]]]:
-    """The facts E6a and E6b need, gathered only for the experiments that need them."""
+) -> Tuple[
+    Dict[str, List[Tuple[str, bool]]], Dict[str, Optional[int]], Dict[str, List[str]]
+]:
+    """The facts E4, E6a and E6b need, gathered only where they are needed.
+
+    The third value maps each recorded path to the distinct blob ids it held in
+    history, then the id of its working-tree bytes. It is gathered when the file
+    set holds a recorded path, or when the clone is complete enough to look for
+    one in history; a shallow clone with no recorded file never needs it."""
     ancestry: Dict[str, List[Tuple[str, bool]]] = {}
     first_method_time: Dict[str, Optional[int]] = {}
     records = experiment_records(files, readmes)
@@ -858,7 +884,21 @@ def history_facts(
                 )
                 times = [repofiles.commit_time(root, c) for c in commits]
                 first_method_time[folder] = min(times) if times else None
-    return ancestry, first_method_time
+    versions: Dict[str, List[str]] = {}
+    now = [p for p in files if paths.is_recorded_path(p)]
+    if now or not repofiles.is_shallow(root):
+        for path, ids in repofiles.path_blobs(root, EXPERIMENTS_DIR).items():
+            if paths.is_recorded_path(path):
+                versions[path] = list(ids)
+        for path in now:
+            full = os.path.join(root, *path.split("/"))
+            if os.path.islink(full) or not os.path.isfile(full):
+                continue  # not a regular file: admission reports it
+            blob = repofiles.blob_id_of(root, read_bytes(root, path))
+            held = versions.setdefault(path, [])
+            if blob not in held:
+                held.append(blob)
+    return ancestry, first_method_time, versions
 
 
 def run(root: str) -> Tuple[int, List[str]]:
@@ -903,7 +943,7 @@ def run(root: str) -> Tuple[int, List[str]]:
     synthesis_files = [p for p in files if p.startswith("syntheses/")]
     texts = {p: read_text(root, p) for p in synthesis_files if paths.SYNTHESIS_FILE.match(p)}
     try:
-        ancestry, first_method_time = history_facts(root, files, readmes, logs, reasons)
+        ancestry, first_method_time, versions = history_facts(root, files, readmes, logs, reasons)
     except repofiles.RepoFilesError as exc:
         return 2, ["%s: DEAD %s" % (CHECK, exc)]
 
@@ -911,6 +951,7 @@ def run(root: str) -> Tuple[int, List[str]]:
     findings.extend(check_e1(files, readmes, protocols, kinds))
     findings.extend(check_e2(records))
     findings.extend(check_e3(files, subjects, records, licences))
+    findings.extend(check_e4(versions))
     findings.extend(check_e6(files, readmes, logs, reasons, ancestry, first_method_time))
     findings.extend(check_e7(files, readmes, proofs))
     findings.extend(check_s1(files, texts))

@@ -84,7 +84,11 @@ def python_files(top, root=REAL_ROOT):
         for name in sorted(filenames):
             if name.endswith(".py"):
                 full = os.path.join(dirpath, name)
-                found.append(os.path.relpath(full, root).replace(os.sep, "/"))
+                rel = os.path.relpath(full, root).replace(os.sep, "/")
+                # Recorded files are data under study, not this repository's code.
+                if paths.is_recorded_path(rel):
+                    continue
+                found.append(rel)
     return found
 
 
@@ -355,6 +359,68 @@ class ExperimentLocalModuleTests(unittest.TestCase):
     def test_a_file_outside_code_gives_no_name(self):
         files = {"experiments/EXP-0001/notes.py": "", self.CODE + "a.py": "import notes\n"}
         self.assertEqual(self.violations(files), [self.CODE + "a.py imports notes"])
+
+
+class RecordedFileTests(unittest.TestCase):
+    EXP = "EXP-" + "0001"
+    BANNED = "import socket\nimport requests\nos.system('x')\n"
+
+    def build(self, files):
+        holder = tempfile.TemporaryDirectory()
+        self.addCleanup(holder.cleanup)
+        for path, data in files.items():
+            full = os.path.join(holder.name, *path.split("/"))
+            os.makedirs(os.path.dirname(full), exist_ok=True)
+            mode = "wb" if isinstance(data, bytes) else "w"
+            kwargs = {} if isinstance(data, bytes) else {"encoding": "utf-8"}
+            with open(full, mode, **kwargs) as handle:
+                handle.write(data)
+        return holder.name
+
+    def scanned(self, root):
+        found = []
+        for top in SCAN_DIRS:
+            found.extend(python_files(top, root))
+        return found
+
+    def test_a_recorded_python_file_is_neither_scanned_nor_parsed(self):
+        rec = "experiments/%s/recorded/" % self.EXP
+        root = self.build(
+            {
+                rec + "x.py": self.BANNED,
+                rec + "bad.py": b"\xff\xfe import socket\n",
+                rec + "runs/r1/y.py": self.BANNED,
+            }
+        )
+        self.assertEqual(self.scanned(root), [])
+        self.assertEqual(import_violations(root), [])
+        for top in TRIPWIRE_DIRS:
+            for rel in python_files(top, root):
+                parse(rel, root)
+
+    def test_the_same_banned_import_under_code_is_one_violation(self):
+        path = "experiments/%s/code/x.py" % self.EXP
+        root = self.build({path: "import requests\n"})
+        self.assertEqual(import_violations(root), [path + " imports requests"])
+        self.assertEqual(python_files("experiments", root), [path])
+
+    def test_a_recorded_folder_outside_an_experiment_is_still_scanned(self):
+        for path in (
+            "tools/recorded/x.py",
+            "tools/experiments/%s/recorded/x.py" % self.EXP,
+            "experiments/%s/code/recorded/x.py" % self.EXP,
+            "experiments/%s/recorded_x/x.py" % self.EXP,
+        ):
+            with self.subTest(path=path):
+                root = self.build({path: "import requests\n"})
+                self.assertEqual(python_files(path.split("/")[0], root), [path])
+                self.assertEqual(import_violations(root), [path + " imports requests"])
+
+    def test_the_tripwire_files_skip_recorded_paths(self):
+        rec = "experiments/%s/recorded/x.py" % self.EXP
+        code = "experiments/%s/code/x.py" % self.EXP
+        root = self.build({rec: "import socket\n", code: "x = 1\n"})
+        self.assertEqual(python_files("experiments", root), [code])
 
 
 class TripwireTests(unittest.TestCase):

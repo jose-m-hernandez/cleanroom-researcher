@@ -403,6 +403,34 @@ def historic_blobs(root: str) -> Tuple[List[Tuple[str, str]], List[str]]:
     return list(first_path.items()), list(paths)
 
 
+def path_blobs(root: str, prefix: str) -> Dict[str, List[str]]:
+    """For every path that starts with prefix, the distinct blob ids it held in
+    any commit reachable from HEAD, in first-seen order (commits oldest first)."""
+    _require_full_history(root)
+    if not _has_commits(root):
+        return {}
+    held: Dict[str, List[str]] = {}
+    for cid in _commit_ids(root):
+        proc = _run(root, ["ls-tree", "-r", "-z", "--full-tree", cid])
+        if proc.returncode != 0:
+            raise RepoFilesError("git ls-tree failed in %s" % root)
+        for entry in proc.stdout.split(b"\0"):
+            if not entry:
+                continue
+            meta, _tab, raw_path = entry.partition(b"\t")
+            fields = meta.split(b" ")
+            if len(fields) != 3:
+                raise RepoFilesError("git ls-tree returned a malformed entry")
+            path = raw_path.decode("utf-8", "replace")
+            if not path.startswith(prefix) or fields[1] != b"blob":
+                continue
+            blob = fields[2].decode("ascii", "replace")
+            seen = held.setdefault(path, [])
+            if blob not in seen:
+                seen.append(blob)
+    return held
+
+
 def blob_contents(root: str, ids: List[str], chunk: int = 64):
     """Yield the raw bytes of each blob in ids, in order."""
     for start in range(0, len(ids), chunk):

@@ -247,6 +247,38 @@ class TestsStageTests(unittest.TestCase):
         self.assertIn("tests: ok (1 tests)", out)
 
 
+class RecordedTestDiscoveryTests(unittest.TestCase):
+    """Test discovery starts at tests/, so a test-shaped file in recorded data never runs."""
+
+    def test_a_planted_test_under_recorded_is_not_collected_or_run(self):
+        exp = "EXP-" + "0001"
+        with tempfile.TemporaryDirectory() as tmp:
+            marker = os.path.join(tmp, "marker.txt")
+            ok = case_module("class T(unittest.TestCase):\n    def test_a(self):\n        pass\n")
+            planted = (
+                "import unittest\n\n"
+                "with open(%r, 'w') as handle:\n    handle.write('ran')\n\n"
+                "class P(unittest.TestCase):\n    def test_p(self):\n        pass\n" % marker
+            )
+            files = {
+                "tests/__init__.py": "",
+                "tests/test_ok.py": ok,
+                "experiments/__init__.py": "",
+                "experiments/%s/__init__.py" % exp: "",
+                "experiments/%s/recorded/__init__.py" % exp: "",
+                "experiments/%s/recorded/test_planted.py" % exp: planted,
+            }
+            for path, text in files.items():
+                full = os.path.join(tmp, *path.split("/"))
+                os.makedirs(os.path.dirname(full), exist_ok=True)
+                with open(full, "w", encoding="utf-8") as handle:
+                    handle.write(text)
+            code, lines = gate.run_tests(tmp)
+            self.assertEqual(code, 0, lines)
+            self.assertEqual(lines[0], "tests: ok (1 tests)")
+            self.assertFalse(os.path.exists(marker))
+
+
 class TestsStageInProcessTests(unittest.TestCase):
     def test_dead_control_gives_exit_two(self):
         with tempfile.TemporaryDirectory() as tmp:

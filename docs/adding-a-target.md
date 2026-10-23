@@ -97,7 +97,7 @@ The read log is an honesty record, not proof. It cannot show that nothing was re
 ## 7. Where things go
 
 - Method code goes under `experiments/EXP-NNNN/code/`, and code that builds and runs a live run goes under `experiments/EXP-NNNN/code/runner/`.
-- Results go under `experiments/EXP-NNNN/recorded/`.
+- Results go under `experiments/EXP-NNNN/recorded/`. Admit each one with the class `recorded` and the basis `sha256=` followed by the file's hash, which `shasum -a 256 <file>` prints. A recorded file is never edited after it is committed; to correct one, add a new file. Recorded data is made for the experiment, or everyone in it agreed to its use. It is never a real session transcript.
 - Raw output stays outside the clone, always. The gate fails on any path with a `_raw` part, even one that git ignores, so do not create one inside the clone.
 - Target text goes only under `experiments/EXP-NNNN/target/`, and only when step 2 allows it.
 - Every new file needs a row in `docs/admissions.md`. The new-target tool adds rows for the three files it writes; you add the rest.

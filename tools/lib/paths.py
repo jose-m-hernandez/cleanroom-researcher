@@ -8,8 +8,9 @@ run lives.
 METHOD_FILE matches a file under an experiment's method folder and captures
 the experiment id.
 RECORDED_FILE matches a file under an experiment's recorded/ folder and
-captures the experiment id: the recorded/ root; its admission class and
-exemptions are decided separately.
+captures the experiment id: the recorded/ root. It also matches a path with a
+.. segment, so nothing uses it alone: is_recorded_path is the one anchor for
+the recorded admission class and for every exemption that class carries.
 RUN_FILE matches a file inside one run folder, recorded/runs/<run>/, and
 captures the experiment id and the run name.
 SYNTHESIS_FILE matches a synthesis file, syntheses/SYN-NNNN.md, and captures
@@ -34,3 +35,17 @@ SYNTHESIS_FILE = re.compile(r"^syntheses/(SYN-[0-9]{4})\.md$")
 EXPERIMENT_FILE = re.compile(r"^experiments/([^/]+)/(.+)$")
 EXPERIMENT_ID = re.compile(r"^EXP-[0-9]{4}$")
 TARGET_FILE = re.compile(r"^experiments/(EXP-[0-9]{4})/target/.+$")
+
+
+def is_recorded_path(path: str) -> bool:
+    """True for a normal relative path under experiments/EXP-NNNN/recorded/.
+
+    Normal means the same as check_admission.is_normal_path: no leading slash
+    and no empty, . or .. segment. This is the one test for the recorded class.
+    """
+    if not path or path.startswith("/"):
+        return False
+    if any(seg in ("", ".", "..") for seg in path.split("/")):
+        return False
+    # fullmatch: the pattern's $ would also accept a path ending in a newline.
+    return RECORDED_FILE.fullmatch(path) is not None

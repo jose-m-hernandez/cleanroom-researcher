@@ -18,22 +18,29 @@ Rules, case-insensitive unless stated:
 - V5 in .py files only: a home-directory lookup call anywhere, or a quoted home
   key outside tests/ (a test may set a temporary HOME for a child process).
   Python files under experiments/<name>/code/runner/ are not checked for V5:
-  runner code builds the isolated environment for a live run.
+  runner code builds the isolated environment for a live run. Recorded files
+  (paths.is_recorded_path) are not checked for V5 either: they are data under
+  study, not this repository's code.
   V5 matches names as written: an aliased expanduser or Path.home, and a HOME
   key built at runtime, are not tracked.
   Rules are ASCII-defined; Unicode lookalikes are not matched.
 - V6 docs/vocabulary.md has exactly one row for that word under its Terms
   heading, no other file has a line shaped like that row, and the README's
   first heading and first paragraph do not use the word.
-- V7 every commit message passes V1 to V4, trailers included, and so do the
+- V7 every commit message passes V1 to V4 and V8, trailers included, and so do the
   author name, author email, committer name and committer email of every
   commit (reported as ``vocabulary: commit <short sha>: V<n> <field> <reason>``).
   Identity fields are checked for shapes only; names are not this check's job.
   Rules are ASCII-defined; Unicode lookalikes are not matched.
+- V8 token shapes, case-sensitive, in every file including recorded files, and
+  in commit messages and identities through V7: the common GitHub, AWS, Slack
+  and Google token and key shapes, keys that start with sk-, and private-key
+  headers. The finding names the line and the rule; the matched text is never
+  printed.
 
 Every pattern piece and every positive example is assembled at runtime, so this
 file passes its own rules. A positive control runs before any scan: each of V1
-to V5 must hit a synthetic string, or the check is DEAD.
+to V5 and V8 must hit a synthetic string, or the check is DEAD.
 """
 
 from __future__ import annotations
@@ -78,6 +85,18 @@ V5_CALL_PIECES = [
     re.escape("expand" + "user("),
 ]
 V5_KEY_PIECE = r"([\"'])" + "HO" + r"ME\1"
+# V8 token shapes. Each piece is joined from parts, so no line of this file
+# holds a token shape. Every piece is case-sensitive.
+_NOT_WORD = "(?<![A-Za-z0-9_])"
+V8_PIECES = [
+    _NOT_WORD + "gh" + "[pousr]" + "_" + "[A-Za-z0-9]{36,}",
+    _NOT_WORD + "github" + "_pat_" + "[A-Za-z0-9_]{22,}",
+    "(?<![A-Za-z0-9])" + "AK" + "IA" + "[0-9A-Z]{16}" + "(?![A-Za-z0-9])",
+    "(?<![A-Za-z0-9_-])" + "sk" + "-" + "[A-Za-z0-9_-]{20,}",
+    _NOT_WORD + "xo" + "x[abprs]" + "-" + "[A-Za-z0-9-]{10,}",
+    _NOT_WORD + "AI" + "za" + "[0-9A-Za-z_-]{35}",
+    "-----" + "BEGIN " + "([A-Z]+ )*" + "PRIVATE" + " KEY" + "-----",
+]
 TESTS_DIR = "tests"
 
 # (rule, compiled pattern, reason). V1 is case-sensitive; the rest are not.
@@ -86,12 +105,13 @@ TEXT_RULES = [
     ("V2", re.compile(V2_PATTERN, re.IGNORECASE), "reserved word in a compound"),
     ("V3", re.compile(V3_PATTERN, re.IGNORECASE), "reserved word followed by lane"),
     ("V4", re.compile("|".join(V4_PIECES), re.IGNORECASE), "home or machine path"),
+    ("V8", re.compile("|".join(V8_PIECES)), "token-shaped string"),
 ]
 # Both V5 entries report as V5 with the same reason; the key entry is skipped
 # for files under tests/.
 V5_CALLS = ("V5", re.compile("|".join(V5_CALL_PIECES), re.IGNORECASE), "home lookup in code")
 V5_KEY = ("V5", re.compile(V5_KEY_PIECE, re.IGNORECASE), "home lookup in code")
-COMMIT_RULES = ("V1", "V2", "V3", "V4")
+COMMIT_RULES = ("V1", "V2", "V3", "V4", "V8")
 IDENTITY_FIELDS = ("author", "author email", "committer", "committer email")
 
 TERMS_ROW = re.compile(r"^\|\s*`" + WORD + r"`\s*\|")
@@ -104,21 +124,26 @@ CONTROLS: Dict[str, str] = {
     "V3": WORD + " " + LANE,
     "V4": "~" + "/" + "x",
     "V5": "Path" + ".home(",
+    "V8": "gh" + "p" + "_" + "A" * 36,
 }
 
 Finding = Tuple[str, Optional[int], str]
 
 
 def scan_text(
-    text: str, is_py: bool, in_tests: bool = False, in_runner: bool = False
+    text: str,
+    is_py: bool,
+    in_tests: bool = False,
+    in_runner: bool = False,
+    in_recorded: bool = False,
 ) -> List[Tuple[str, int, str]]:
-    """Hits of V1 to V5 in text as (rule, line, reason), one per rule and line.
+    """Hits of V1 to V5 and V8 in text as (rule, line, reason), one per rule and line.
 
     in_tests drops the quoted-key piece of V5; the call pieces still apply.
-    in_runner drops both V5 entries; V1 to V4 still apply.
+    in_runner and in_recorded drop both V5 entries; the other rules still apply.
     """
     rules = list(TEXT_RULES)
-    if is_py and not in_runner:
+    if is_py and not in_runner and not in_recorded:
         rules.append(V5_CALLS)
         if not in_tests:
             rules.append(V5_KEY)
@@ -138,7 +163,7 @@ def scan_text(
 def control() -> Optional[str]:
     """None when every rule hits its synthetic string, else the rules that did not."""
     missed = []
-    for rule in ("V1", "V2", "V3", "V4", "V5"):
+    for rule in ("V1", "V2", "V3", "V4", "V5", "V8"):
         sample = CONTROLS.get(rule, "")
         if not any(r == rule for r, _l, _why in scan_text(sample, True)):
             missed.append(rule)
@@ -220,8 +245,9 @@ def run(root: str) -> Tuple[int, List[str]]:
             texts[path] = handle.read()
         in_tests = path.split("/")[0] == TESTS_DIR and "/" in path
         in_runner = paths.RUNNER_ROOT.match(path) is not None
+        in_recorded = paths.is_recorded_path(path)
         for rule, line, reason in scan_text(
-            texts[path], path.endswith(".py"), in_tests, in_runner
+            texts[path], path.endswith(".py"), in_tests, in_runner, in_recorded
         ):
             findings.append((path, line, "%s %s" % (rule, reason)))
     findings.extend(check_v6(texts))

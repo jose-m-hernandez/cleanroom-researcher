@@ -1,3 +1,4 @@
+import hashlib
 import os
 import shutil
 import subprocess
@@ -7,7 +8,7 @@ import unittest
 from unittest import mock
 
 import check_admission
-from lib import header, repofiles
+from lib import header, paths, repofiles
 
 REAL_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPT = os.path.join(REAL_ROOT, "tools", "check_admission.py")
@@ -337,6 +338,222 @@ class A4Tests(RepoCase):
     def test_original_passes(self):
         self.build()
         self.assertClean()
+
+
+def exp_id():
+    return "EXP-" + "0001"
+
+
+def rec_path(name="x.txt"):
+    return "experiments/%s/recorded/%s" % (exp_id(), name)
+
+
+def code_path(name="x.txt"):
+    return "experiments/%s/code/%s" % (exp_id(), name)
+
+
+def sha_basis(data):
+    if isinstance(data, str):
+        data = data.encode("utf-8")
+    return "sha256=" + hashlib.sha256(data).hexdigest()
+
+
+class RecordedPathTests(unittest.TestCase):
+    def test_is_recorded_path_agrees_with_is_normal_path(self):
+        cases = [
+            "../outside.txt",
+            "/abs.txt",
+            "a/./b.txt",
+            "a//b.txt",
+            "a/b.txt",
+            "",
+            "a/",
+            rec_path(),
+            "/" + rec_path(),
+            rec_path("a/b/c.txt"),
+            rec_path("../code/x.txt"),
+            rec_path("./x.txt"),
+            "experiments/%s/recorded//x.txt" % exp_id(),
+            "experiments/%s/./recorded/x.txt" % exp_id(),
+            "experiments/%s/recorded/x.txt\n" % exp_id(),
+            "experiments/%s/recorded/" % exp_id(),
+            "experiments/%s/recorded" % exp_id(),
+            code_path(),
+            "experiments/EXP-12/recorded/x.txt",
+            "tools/experiments/%s/recorded/x.txt" % exp_id(),
+        ]
+        for path in cases:
+            with self.subTest(path=path):
+                expected = check_admission.is_normal_path(path) and (
+                    paths.RECORDED_FILE.fullmatch(path) is not None
+                )
+                self.assertEqual(paths.is_recorded_path(path), expected)
+
+    def test_is_recorded_path_true_and_false_cases(self):
+        self.assertTrue(paths.is_recorded_path(rec_path()))
+        self.assertTrue(paths.is_recorded_path(rec_path("runs/r1/out.json")))
+        for path in (rec_path("../code/x.txt"), "/" + rec_path(), code_path(), "experiments/x/recorded/y"):
+            with self.subTest(path=path):
+                self.assertFalse(paths.is_recorded_path(path))
+
+    def test_is_recorded_path_refuses_a_trailing_newline(self):
+        self.assertFalse(paths.is_recorded_path(rec_path() + "\n"))
+
+
+class RecordedClassTests(RepoCase):
+    def files_with(self, data="result 1\n", name="x.txt"):
+        files = base_files()
+        files[rec_path(name)] = data
+        return files
+
+    def recorded(self, data="result 1\n", name="x.txt", basis=None):
+        files = self.files_with(data, name)
+        override = {rec_path(name): ("recorded", sha_basis(data) if basis is None else basis)}
+        return files, override
+
+    def test_a_valid_recorded_file_passes(self):
+        files, over = self.recorded()
+        self.build(files, overrides=over)
+        self.assertClean()
+
+    def test_a_flipped_byte_fails_the_hash(self):
+        files, over = self.recorded()
+        files[rec_path()] = "result 2\n"
+        self.build(files, overrides=over)
+        self.assertFinding("A4 recorded file does not match its sha256 basis: " + rec_path())
+
+    def test_uppercase_hex_is_refused(self):
+        files, over = self.recorded()
+        upper = "sha256=" + hashlib.sha256(b"result 1\n").hexdigest().upper()
+        over[rec_path()] = ("recorded", upper)
+        self.build(files, overrides=over)
+        self.assertFinding(
+            "A4 recorded basis must be sha256= and 64 lowercase hex characters: " + rec_path()
+        )
+
+    def test_a_basis_without_the_prefix_is_refused(self):
+        files, over = self.recorded()
+        over[rec_path()] = ("recorded", hashlib.sha256(b"result 1\n").hexdigest())
+        self.build(files, overrides=over)
+        self.assertFinding(
+            "A4 recorded basis must be sha256= and 64 lowercase hex characters: " + rec_path()
+        )
+
+    def test_a_recorded_row_outside_recorded_is_refused(self):
+        files = base_files()
+        files[code_path()] = "x\n"
+        self.build(files, overrides={code_path(): ("recorded", sha_basis("x\n"))})
+        self.assertFinding(
+            "A4 a recorded row must sit under experiments/EXP-NNNN/recorded/: " + code_path()
+        )
+
+    def test_an_original_row_for_a_recorded_file_is_refused(self):
+        files = self.files_with()
+        self.build(files)
+        self.assertFinding("A4 a file under recorded/ must have a recorded row: " + rec_path())
+
+    def test_a_recorded_file_with_no_row_is_refused(self):
+        files = self.files_with()
+        rows = [r for r in auto_rows(files) if r[0] != rec_path()]
+        self.build(files, rows=rows)
+        code, out = self.result()
+        self.assertEqual(code, 1, out)
+        self.assertIn("A1 not admitted", out)
+        self.assertIn("A4 a file under recorded/ must have a recorded row: " + rec_path(), out)
+
+    def test_a_dotdot_path_in_a_recorded_row_gets_no_exemption(self):
+        files = base_files()
+        files[code_path()] = "x\n"
+        sneaky = rec_path("../code/x.txt")
+        rows = auto_rows(files) + [(sneaky, "recorded", sha_basis(files[code_path()]), PROV)]
+        self.build(files, rows=rows)
+        code, out = self.result()
+        self.assertEqual(code, 1, out)
+        self.assertIn("A2 escapes root: " + sneaky, out)
+        self.assertIn("A4 a recorded row must sit under experiments/EXP-NNNN/recorded/: " + sneaky, out)
+
+    def test_a_dotdot_row_cannot_exempt_the_real_file(self):
+        files = base_files()
+        bad = "see " + HTTPS + "unlisted.invalidhost.net/x\n"
+        files[code_path()] = bad
+        sneaky = rec_path("../code/x.txt")
+        rows = auto_rows(files)
+        rows.append((sneaky, "recorded", sha_basis(bad), PROV))
+        self.build(files, rows=rows)
+        self.assertFinding("A6 unregistered URL")
+
+    def test_a_symlinked_recorded_folder_gives_no_exemption(self):
+        files = base_files()
+        self.build(files)
+        outside = os.path.join(self.root, "elsewhere")
+        write(self.root, "elsewhere/x.txt", "see " + HTTPS + "unlisted.invalidhost.net/x\n")
+        link_parent = os.path.join(self.root, "experiments", exp_id())
+        os.makedirs(link_parent)
+        os.symlink(outside, os.path.join(link_parent, "recorded"))
+        write(self.root, LEDGER, ledger_text(
+            auto_rows(set(files) | {"elsewhere/x.txt", "experiments/%s/recorded" % exp_id()})
+            + [(rec_path(), "recorded", sha_basis("see " + HTTPS + "unlisted.invalidhost.net/x\n"), PROV)]
+        ))
+        code, out = self.result()
+        self.assertEqual(code, 1, out)
+        self.assertIn("A0 cannot classify", out)
+        self.assertIn("experiments/%s/recorded: A0" % exp_id(), out)
+        self.assertIn("A2 listed but missing: " + rec_path(), out)
+        self.assertIn("elsewhere/x.txt:1: A6 unregistered URL", out)
+
+    URL_TEXT = "see " + HTTPS + "unlisted.invalidhost.net/x\n"
+
+    def exemption(self, data, finding):
+        """The same data passes as a recorded file, fails as an original file and
+        as a recorded row outside recorded/."""
+        files, over = self.recorded(data)
+        self.build(files, overrides=over)
+        self.assertClean()
+
+        # The first case's recorded file stays on disk unless it is removed, and
+        # its own finding would satisfy a loose check on the output.
+        shutil.rmtree(os.path.join(self.root, "experiments"))
+
+        files = base_files()
+        files[code_path()] = data
+        self.build(files)
+        self.assertFindingAt(finding, code_path())
+
+        files = base_files()
+        files[code_path()] = data
+        self.build(files, overrides={code_path(): ("recorded", sha_basis(data))})
+        self.assertFindingAt(finding, code_path())
+
+    def assertFindingAt(self, ident, path):
+        """A finding line that starts at path and holds ident."""
+        code, out = self.result()
+        self.assertEqual(code, 1, out)
+        prefix = "%s: %s" % (check_admission.CHECK, path)
+        self.assertTrue(
+            any(ln.startswith(prefix) and ident in ln for ln in out.splitlines()), out
+        )
+
+    def test_a6_exemption_pair(self):
+        self.exemption(self.URL_TEXT, "A6 unregistered URL")
+
+    def test_a7_exemption_pair(self):
+        self.exemption(b"\xff\xfe\x00", "A7 not valid UTF-8")
+
+    def test_a9_exemption_pair(self):
+        self.exemption("x" * 100001, "A9")
+
+    def test_a_generator_that_is_a_recorded_file_has_no_original_row(self):
+        files = self.files_with("print(1)\n", "gen.py")
+        files["data/f.txt"] = "seed=7\n"
+        overrides = {
+            rec_path("gen.py"): ("recorded", sha_basis("print(1)\n")),
+            "data/f.txt": ("fixture", "generator=%s seed=7" % rec_path("gen.py")),
+        }
+        self.build(files, overrides=overrides)
+        self.assertFinding("A4 generator %s has no original row" % rec_path("gen.py"))
+
+    def test_recorded_is_a_known_class(self):
+        self.assertIn("recorded", check_admission.CLASSES)
 
 
 class A5Tests(RepoCase):

@@ -32,6 +32,7 @@ Sign off every commit with `git commit -s`. The sign-off certifies the Developer
 
 - [ ] The protocol was committed before the first recorded run, or the experiment is labelled exploratory and its abstract says so.
 - [ ] The read log is kept.
+- [ ] Recorded data is made for the experiment, or everyone in it agreed to its use. It is never a real session transcript.
 - [ ] Every new file has a row in `docs/admissions.md`.
 - [ ] Target text appears only where its licence allows (`docs/decisions/2026-10-21-the-clean-room-line.md`).
 - [ ] A live run declares its spend cap and isolation proof (`docs/decisions/2026-10-21-live-runs-stay-inside-boundaries.md`).
