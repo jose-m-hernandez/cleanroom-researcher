@@ -61,6 +61,13 @@ The quoted phrases in `agent harness` and `evaluation harness` are from Anthropi
 | `preregistered` | The protocol was committed here before the first recorded run. It was not entered in an outside registry. |
 | `exploratory` | The protocol was not committed before the first recorded run. |
 
+## Experiment claims
+
+| Value | Meaning |
+| --- | --- |
+| `confirmatory` | The protocol was committed before the first recorded run, and the method was written before its author read the target for method work. A result may be stated as supporting the prediction or counting against it. |
+| `exploratory` | Not confirmatory: either the protocol was not committed before the first recorded run, or the method was written after its author read the target for method work. |
+
 ## Redistributable licences
 
 | Value | Meaning |

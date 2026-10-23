@@ -18,6 +18,7 @@ This is the ledger. Every file in the repository has exactly one row below sayin
 | docs/decisions/2026-10-21-standard-library-allowlist.md | original | - | Claude Code (claude-opus-5-5), 2026-10-21 |
 | docs/decisions/2026-10-21-the-clean-room-line.md | original | - | Claude Code (claude-opus-5-5), 2026-10-21 |
 | docs/decisions/2026-10-21-write-ups-and-data-are-cc-by-4.md | original | - | Claude Code (claude-opus-5-5), 2026-10-21 |
+| docs/decisions/2026-10-23-an-experiment-claim-is-confirmatory-only-when-committed-first-and-clean-room.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23 |
 | docs/experiment-template.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22 |
 | docs/writing-a-synthesis.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-21 |
 | docs/vocabulary.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |

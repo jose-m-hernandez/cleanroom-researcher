@@ -9,7 +9,7 @@ launched_by: write - when there is no live run; otherwise who runs the experimen
 
 ## Abstract
 
-Write one paragraph that says what was asked, what was done and what was found. If the protocol is exploratory, the paragraph must say so. If the read log is reconstructed, it must say that too. State the finding with its scope: the target at its pinned version, the models, and the number of recorded runs. Claim nothing here that the Analysis section does not support.
+Write one paragraph that says what was asked, what was done and what was found. If the claim is exploratory (the `Experiment claims` table in `docs/vocabulary.md`), the paragraph must say so. If the read log is reconstructed, it must say that too. State the finding with its scope: the target at its pinned version, the models, and the number of recorded runs. Claim nothing here that the Analysis section does not support.
 
 **Under test:** <the target, its pinned version, and a link to its source record, such as [SRC-NNNN](../../sources/SRC-NNNN/source.md); or "this repository's own method; no outside tool">
 
