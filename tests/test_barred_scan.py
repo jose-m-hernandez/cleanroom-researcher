@@ -1355,6 +1355,55 @@ class AllowTests(Base):
     # FormatTests.test_a_clean_tree_is_ok_by_both_routes, whose path route
     # writes the list into the temporary folder beside the repository.
 
+    LIST_UNREAD = "barred: DEAD the list file could not be read"
+    ALLOW_UNREAD = "barred: DEAD the allow file could not be read"
+
+    def missing_root(self):
+        return os.path.join(self.tmp.name, "no-such-repo")
+
+    def dotdot_layout(self, ignored_name):
+        """A repository with sub/a.txt and a gitignored top-level file name,
+        plus a symlink outside it that points at the sub folder. Returns the
+        symlink path."""
+        make_repo(
+            self.root,
+            {"sub/a.txt": "nothing here\n", ".gitignore": ignored_name + "\n"},
+        )
+        link = os.path.join(self.tmp.name, "to-sub")
+        try:
+            os.symlink(os.path.join(self.root, "sub"), link)
+        except (AttributeError, NotImplementedError, OSError):
+            self.skipTest("symlinks unavailable")
+        return link
+
+    def test_p1_a_list_path_whose_root_cannot_be_examined_is_dead_not_outside(self):
+        path = self.list_file(self.tmp.name)
+        code, lines = self.scan(
+            root=self.missing_root(), env={"BARRED_STRINGS_PATH": path}
+        )
+        self.assertEqual((code, lines), (2, [self.LIST_UNREAD]))
+
+    def test_p2_an_allow_path_whose_root_cannot_be_examined_is_dead_not_outside(self):
+        path = self.write_allow("")
+        code, lines = self.scan(
+            via="env", root=self.missing_root(), env={"BARRED_ALLOW_PATH": path}
+        )
+        self.assertEqual((code, lines), (2, [self.ALLOW_UNREAD]))
+
+    def test_p3_a_list_reached_through_an_outside_symlink_and_dotdot_is_inside(self):
+        link = self.dotdot_layout("private-list.txt")
+        self.list_file(self.root)
+        spelled = os.path.join(link, "..", "private-list.txt")
+        code, lines = self.scan(env={"BARRED_STRINGS_PATH": spelled})
+        self.assertEqual((code, lines), (2, [self.LIST_INSIDE]))
+
+    def test_p4_an_allow_file_reached_through_an_outside_symlink_and_dotdot_is_inside(self):
+        link = self.dotdot_layout("allow.txt")
+        self.inside_file("allow.txt")
+        spelled = os.path.join(link, "..", "allow.txt")
+        code, lines = self.scan(via="env", env={"BARRED_ALLOW_PATH": spelled})
+        self.assertEqual((code, lines), (2, [self.INSIDE]))
+
 
 class FoldTests(unittest.TestCase):
     def test_the_fold_order_and_steps(self):
