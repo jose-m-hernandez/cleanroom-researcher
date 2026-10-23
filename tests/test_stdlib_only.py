@@ -103,9 +103,11 @@ def imported_modules(tree):
     return names
 
 
-def local_modules():
-    tools = os.path.join(REAL_ROOT, "tools")
+def local_modules(root=REAL_ROOT):
+    tools = os.path.join(root, "tools")
     names = {"tests"}
+    if not os.path.isdir(tools):
+        return names
     for entry in os.listdir(tools):
         full = os.path.join(tools, entry)
         if entry.endswith(".py"):
@@ -115,16 +117,68 @@ def local_modules():
     return names
 
 
+def experiment_local_modules(root=REAL_ROOT):
+    """Return {experiment id: {local name: [relative paths that define it]}}.
+
+    A name is the stem of any .py file under experiments/<id>/code/, or a
+    directory there that holds an __init__.py.
+    """
+    found = {}
+    experiments = os.path.join(root, "experiments")
+    if not os.path.isdir(experiments):
+        return found
+    for exp in sorted(os.listdir(experiments)):
+        code = os.path.join(experiments, exp, "code")
+        if not os.path.isdir(code):
+            continue
+        names = {}
+        for dirpath, dirnames, filenames in os.walk(code):
+            dirnames[:] = sorted(d for d in dirnames if d != "__pycache__")
+            for d in dirnames:
+                if os.path.isfile(os.path.join(dirpath, d, "__init__.py")):
+                    full = os.path.join(dirpath, d)
+                    rel = os.path.relpath(full, root).replace(os.sep, "/")
+                    names.setdefault(d, []).append(rel)
+            for name in sorted(filenames):
+                if name.endswith(".py"):
+                    full = os.path.join(dirpath, name)
+                    rel = os.path.relpath(full, root).replace(os.sep, "/")
+                    names.setdefault(name[:-3], []).append(rel)
+        found[exp] = names
+    return found
+
+
+def experiment_of(rel):
+    parts = rel.split("/")
+    if len(parts) > 3 and parts[0] == "experiments" and parts[2] == "code":
+        return parts[1]
+    return None
+
+
 def import_violations(root=REAL_ROOT):
-    local = local_modules()
+    local = local_modules(root)
+    experiments = experiment_local_modules(root)
+    every_experiment_name = set()
+    for names in experiments.values():
+        every_experiment_name.update(names)
+    reserved = STDLIB_ALLOWED | RUNNER_ONLY | BANNED_MODULES | CAPABILITY_MODULES
     found = []
+    for exp in sorted(experiments):
+        for name in sorted(experiments[exp]):
+            if name in reserved:
+                for rel in experiments[exp][name]:
+                    found.append("%s shadows %s" % (rel, name))
     for top in SCAN_DIRS:
         if not os.path.isdir(os.path.join(root, top)):
             continue
         for rel in python_files(top, root):
-            allowed = allowed_for(rel)
+            allowed = allowed_for(rel) | local
+            if top == "tests":
+                allowed = allowed | every_experiment_name
+            elif experiment_of(rel):
+                allowed = allowed | set(experiments.get(experiment_of(rel), {}))
             for name in imported_modules(parse(rel, root)):
-                if name not in allowed and name not in local:
+                if name not in allowed:
                     found.append("%s imports %s" % (rel, name))
     return found
 
@@ -239,6 +293,68 @@ class RunnerRootTests(unittest.TestCase):
 
     def test_runner_only_is_disjoint_from_the_allowlist(self):
         self.assertTrue(RUNNER_ONLY.isdisjoint(STDLIB_ALLOWED))
+
+
+class ExperimentLocalModuleTests(unittest.TestCase):
+    def violations(self, files):
+        with tempfile.TemporaryDirectory() as tmp:
+            for path, text in files.items():
+                full = os.path.join(tmp, *path.split("/"))
+                os.makedirs(os.path.dirname(full), exist_ok=True)
+                with open(full, "w", encoding="utf-8") as handle:
+                    handle.write(text)
+            return import_violations(tmp)
+
+    RUNNER = "experiments/EXP-0001/code/runner/"
+    CODE = "experiments/EXP-0001/code/"
+
+    def test_runner_modules_import_each_other_by_name(self):
+        files = {self.RUNNER + "isolation.py": "", self.RUNNER + "claude_run.py": "import isolation\n"}
+        self.assertEqual(self.violations(files), [])
+
+    def test_code_may_import_a_runner_module_of_its_own_experiment(self):
+        files = {self.RUNNER + "stats.py": "", self.CODE + "score.py": "import stats\n"}
+        self.assertEqual(self.violations(files), [])
+
+    def test_tests_may_import_any_experiments_modules(self):
+        files = {self.RUNNER + "isolation.py": "", "tests/test_x.py": "import isolation\n"}
+        self.assertEqual(self.violations(files), [])
+
+    def test_code_may_not_import_another_experiments_modules(self):
+        files = {self.RUNNER + "isolation.py": "", "experiments/EXP-0002/code/a.py": "import isolation\n"}
+        self.assertEqual(
+            self.violations(files), ["experiments/EXP-0002/code/a.py imports isolation"]
+        )
+
+    def test_tools_gain_no_experiment_names(self):
+        files = {self.RUNNER + "isolation.py": "", "tools/x.py": "import isolation\n"}
+        self.assertEqual(self.violations(files), ["tools/x.py imports isolation"])
+
+    def test_a_local_name_that_shadows_a_reserved_name_is_refused(self):
+        for path, name in (
+            (self.CODE + "json.py", "json"),
+            (self.RUNNER + "random.py", "random"),
+            (self.CODE + "socket.py", "socket"),
+            (self.CODE + "importlib.py", "importlib"),
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(
+                    self.violations({path: ""}), ["%s shadows %s" % (path, name)]
+                )
+
+    def test_a_package_directory_gives_a_name_only_with_init(self):
+        files = {self.CODE + "pkg/__init__.py": "", self.CODE + "a.py": "import pkg\n"}
+        self.assertEqual(self.violations(files), [])
+        files = {self.CODE + "pkg/data.txt": "", self.CODE + "a.py": "import pkg\n"}
+        self.assertEqual(self.violations(files), [self.CODE + "a.py imports pkg"])
+
+    def test_an_unknown_name_is_still_a_violation(self):
+        files = {self.CODE + "a.py": "import nosuchmodule\n"}
+        self.assertEqual(self.violations(files), [self.CODE + "a.py imports nosuchmodule"])
+
+    def test_a_file_outside_code_gives_no_name(self):
+        files = {"experiments/EXP-0001/notes.py": "", self.CODE + "a.py": "import notes\n"}
+        self.assertEqual(self.violations(files), [self.CODE + "a.py imports notes"])
 
 
 class TripwireTests(unittest.TestCase):
