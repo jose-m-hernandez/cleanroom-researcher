@@ -46,3 +46,6 @@ This is the ledger. Every file in the repository has exactly one row below sayin
 | tools/lib/repofiles.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | tools/new_target.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-21 |
 | tools/reproduce.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22 |
+| sources/SRC-0003/source.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22 |
+| experiments/EXP-0001/README.md | original | - | Claude Code (claude-opus-5-5), 2026-10-22 |
+| experiments/EXP-0001/read-log.md | original | - | Claude Code (claude-opus-5-5), 2026-10-22 |
