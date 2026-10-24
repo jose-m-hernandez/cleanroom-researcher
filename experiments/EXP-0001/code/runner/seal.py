@@ -144,7 +144,7 @@ def runner_config_dir(environ) -> Path:
 
 
 def create_canary_file(config_dir, token: str) -> tuple:
-    """Create cpr-eval-canary-<first 8 hex of the token>.txt in config_dir, exclusively. Returns (path, (inode, device))."""
+    """Create cpr-eval-canary-<first 8 hex of the token>.txt in config_dir, exclusively. Returns (path, (inode, device, token))."""
     path = Path(config_dir) / f"cpr-eval-canary-{token[:8]}.txt"
     fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     try:
@@ -154,18 +154,29 @@ def create_canary_file(config_dir, token: str) -> tuple:
     except BaseException:
         os.unlink(str(path))
         raise
-    return path, (seen.st_ino, seen.st_dev)
+    return path, (seen.st_ino, seen.st_dev, token)
 
 
 def remove_canary_file(path, ident) -> bool:
-    """Remove the canary file only if it is still the file create_canary_file made (same inode and device)."""
+    """Remove the canary file only if it is still the one create_canary_file made. Three checks: lstat gives the same
+    inode and device; it is a regular file (a symlink is never followed); its bytes are exactly the token and a newline.
+    Limits: a replacement holding the exact token passes (only someone who has read the canary could write it), and
+    the file can change between the checks and the unlink."""
     try:
-        seen = os.stat(str(path))
+        seen = os.lstat(str(path))
+        if (seen.st_ino, seen.st_dev) != (ident[0], ident[1]) or not stat.S_ISREG(seen.st_mode):
+            return False
+        want = (ident[2] + "\n").encode("utf-8")
+        fd = os.open(str(path), os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            got = os.read(fd, len(want) + 1)
+        finally:
+            os.close(fd)
+        if got != want:
+            return False
+        os.unlink(str(path))
     except OSError:
         return False
-    if (seen.st_ino, seen.st_dev) != tuple(ident):
-        return False
-    os.unlink(str(path))
     return True
 
 
