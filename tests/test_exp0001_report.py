@@ -35,13 +35,15 @@ class ReportBytesTests(unittest.TestCase):
         self.tmp = Path(self._tmp.name)
 
     def test_regenerating_from_the_synthetic_tree_reproduces_the_committed_bytes(self):
-        self.assertEqual(report.write_report(TREE, self.tmp / "r1", io.StringIO()), 0)
+        shutil.copytree(TREE, self.tmp / "src")  # a results tree inside the clone is refused, so read a copy
+        self.assertEqual(report.write_report(self.tmp / "src", self.tmp / "r1", io.StringIO()), 0)
         for name in ("REPORT.md",):
             self.assertEqual((self.tmp / "r1" / name).read_bytes(), (TREE / name).read_bytes(), name)
 
     def test_two_runs_are_byte_identical(self):
-        report.write_report(TREE, self.tmp / "a", io.StringIO())
-        report.write_report(TREE, self.tmp / "b", io.StringIO())
+        shutil.copytree(TREE, self.tmp / "src")  # a results tree inside the clone is refused, so read a copy
+        report.write_report(self.tmp / "src", self.tmp / "a", io.StringIO())
+        report.write_report(self.tmp / "src", self.tmp / "b", io.StringIO())
         for name in ("REPORT.md",):
             self.assertEqual((self.tmp / "a" / name).read_bytes(), (self.tmp / "b" / name).read_bytes())
 

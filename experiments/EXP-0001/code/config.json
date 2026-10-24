@@ -41,7 +41,7 @@
   "judge": {
     "backend": "claude",
     "model": "claude-opus-5-5",
-    "cross_family_attempt": "failed: global AGENTS.md injected despite documented flags (0.156.1)",
+    "cross_family_attempt": "failed: the other family's command-line tool could not be kept from loading the runner's user instructions",
     "max_calls": 30
   },
   "phase_caps": {

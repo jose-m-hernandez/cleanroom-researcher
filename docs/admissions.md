@@ -119,6 +119,11 @@ This is the ledger. Every file in the repository has exactly one row below sayin
 | tests/test_exp0001_score.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; port of the evaluation harness at 08ef45f |
 | tests/test_exp0001_seal.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23 |
 | tests/test_exp0001_canary_identity.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23 |
+| tests/test_exp0001_from_in_library.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-24 |
+| tests/test_exp0001_resume_owner.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-24 |
+| tests/test_exp0001_budget_before_retry.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-24 |
+| tests/test_exp0001_seal_text_scan.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-24 |
+| tests/test_exp0001_canary_left_behind.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-24 |
 | tests/test_exp0001_stats.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; port of the evaluation harness at 08ef45f |
 | tests/test_check_vocabulary.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | tests/test_checks_page.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22 |

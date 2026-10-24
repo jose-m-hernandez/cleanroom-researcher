@@ -25,6 +25,9 @@ import fixtures
 import isolation
 import score
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "tools"))
+import check_vocabulary  # noqa: E402  (the repository's vocabulary rules: V4 is the home-path shape)
+
 GATES_NAME = "gates.json"
 CANARY_KEYS = {"preserve": "C6", "generation": "C7"}  # --type -> the canary's name in the protocol
 OUTCOMES = ("PASS", "FAIL", "ERROR")
@@ -159,7 +162,8 @@ def create_canary_file(config_dir, token: str) -> tuple:
 
 def remove_canary_file(path, ident) -> bool:
     """Remove the canary file only if it is still the one create_canary_file made. Three checks: lstat gives the same
-    inode and device; it is a regular file (a symlink is never followed); its bytes are exactly the token and a newline.
+    inode and device; it is a regular file (a symlink is never followed, and the open never blocks on a FIFO); its
+    bytes are exactly the token and a newline.
     Limits: a replacement holding the exact token passes (only someone who has read the canary could write it), and
     the file can change between the checks and the unlink."""
     try:
@@ -167,7 +171,7 @@ def remove_canary_file(path, ident) -> bool:
         if (seen.st_ino, seen.st_dev) != (ident[0], ident[1]) or not stat.S_ISREG(seen.st_mode):
             return False
         want = (ident[2] + "\n").encode("utf-8")
-        fd = os.open(str(path), os.O_RDONLY | os.O_NOFOLLOW)
+        fd = os.open(str(path), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         try:
             got = os.read(fd, len(want) + 1)
         finally:
@@ -282,6 +286,8 @@ def judge_canary(record: dict, cfg: dict, markers: list, canary_path, canary_tok
 
 
 def _canary_run(canary_type, fixtures_root, cfg, environ, runner, out) -> int:
+    """Run one canary. A canary file that changed is left in place and reported (a line, and canary_left_behind in the
+    PASS or FAIL entry); the ERROR entry is recorded before the file is dealt with, so it gets the line only."""
     key = CANARY_KEYS[canary_type]
     allowed, contributors = None, []
     if canary_type == "generation":
@@ -315,10 +321,13 @@ def _canary_run(canary_type, fixtures_root, cfg, environ, runner, out) -> int:
                                   "type": canary_type}, environ)
         raise
     finally:
-        remove_canary_file(path, ident)
+        left_behind = not remove_canary_file(path, ident) and os.path.lexists(path)
+        if left_behind:
+            print(f"canary left behind (changed): remove it by hand: {path}", file=out)
     result = judge_canary(record, cfg, markers, path, token, sandbox_token)
     record_gate(canary_type, {"outcome": result["outcome"], "started_utc": record.get("started_utc") or started,
-                              "run_id": record.get("run_id"), "token": token, "type": canary_type}, environ)
+                              "run_id": record.get("run_id"), "token": token, "type": canary_type,
+                              "canary_left_behind": left_behind}, environ)
     print(f"canary {canary_type} ({key}): {result['outcome']} run {record.get('run_id')}", file=out)
     if result["reasons"]:
         print("  reasons: " + "; ".join(result["reasons"]), file=out)
@@ -429,6 +438,23 @@ def excluded_fixtures(fixtures_root) -> dict:
     return dict(sorted(found.items()))
 
 
+def copied_text_hits(fields: dict) -> list:
+    """[(field name, kind)] for each text in fields (name -> text) that holds the account name (case-insensitive) or a
+    home path (rule V4). The kind is "account name" or "home path"; the matched text is never returned. Refuses
+    (SealStop) when the account name is unknown, as the transcript scan does."""
+    try:
+        user = fixtures._current_username().casefold()
+    except fixtures.UsernameError:
+        raise SealStop("the account name is unknown")
+    hits = []
+    for name, text in fields.items():
+        if user in text.casefold():
+            hits.append((name, "account name"))
+        if any(rule == "V4" for rule, _line, _reason in check_vocabulary.scan_text(text, False)):
+            hits.append((name, "home path"))
+    return hits
+
+
 def git_head(root=None) -> str:
     try:
         done = subprocess.run(["git", "-C", str(root or claude_run.ROOT), "rev-parse", "HEAD"], capture_output=True,
@@ -508,8 +534,16 @@ def command_seal(fixtures_root, source, repair_log, guide, count_rule, out, envi
         record = {"version": 1, "fixtures": record_of_scores(scores), "excluded_fixtures": excluded_fixtures(fixtures_root),
                   "count_rule": count_text}
         head = git_head(repo_root)
+        fields = {f"excluded block of {fid}": json.dumps(block, ensure_ascii=False, sort_keys=True)
+                  for fid, block in record["excluded_fixtures"].items()}
+        fields["count rule"] = count_text
+        fields["repair log"] = Path(repair_log).read_bytes().decode("utf-8", errors="replace")
+        text_hits = copied_text_hits(fields)
     except (SealStop, score.ScoreAbort, OSError, ValueError, KeyError, UnicodeDecodeError) as exc:
         return refuse(str(exc) if isinstance(exc, (SealStop, score.ScoreAbort)) else type(exc).__name__, 1)
+    if text_hits:
+        return refuse("a text copied into the seal holds " + "; ".join(f"{n}: {k}" for n, k in text_hits)
+                      + " (nothing written)")
     try:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.mkdir()  # exclusive: an existing folder raises
@@ -685,8 +719,7 @@ def carry_preseal(seal_dir, preseal, out) -> list:
 
 def is_final(run: dict) -> bool:
     """Final scoring and its report: held-out results that hold an arm other than floor and oracle."""
-    return isinstance(run, dict) and is_heldout(run.get("split"), run.get("fixtures") or []) and any(
-        a not in LOCKED_ARM_DIRS for a in (run.get("arms") or []))
+    return isinstance(run, dict) and needs_seal(run.get("split"), run.get("fixtures") or [], run.get("arms") or [])
 
 
 def final_record_diff(seal_dir, scores: dict) -> list:

@@ -124,7 +124,8 @@ class Scripted(base.Env):
         return [c for c in self.calls() if c["argv"][1] == "/cpr:preserve quick"]
 
     def raw_files(self, out=None):
-        return sorted(arms.raw_dir(self.run_json(out)["raw_run_id"], self.environ).iterdir())
+        raw = arms.raw_dir(self.run_json(out)["raw_run_id"], self.environ)
+        return sorted(p for p in raw.iterdir() if p.name != arms.OWNER_FILE)
 
 
 # --------------------------------------------------------------------------

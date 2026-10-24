@@ -687,8 +687,11 @@ class HelperTests(unittest.TestCase):
 
 
 FAKE = r'''#!/usr/bin/env python3
-import json, os, re, sys
+import json, os, re, sys, time
 here = os.path.dirname(os.path.abspath(__file__))
+delay_file = os.path.join(here, "start_delay_s")
+if os.path.exists(delay_file):
+    time.sleep(float(open(delay_file).read()))
 open(os.path.join(here, "calls.jsonl"), "a").write(json.dumps({"argv": sys.argv[1:], "env": sorted(os.environ), "env_values": {k: v for k, v in os.environ.items() if k.startswith("CLAUDE_CODE_")}, "stdin_tty": sys.stdin.isatty()}) + "\n")
 a = sys.argv
 if a[2] == "sleep":
@@ -834,13 +837,26 @@ class FakeClaudeTests(unittest.TestCase):
         self.assertTrue(rec["timed_out"])
         self.assertAlmostEqual(claude_run.spend_total(self.environ), 0.75)
 
-    def test_probe_run_gets_output_cap_env_and_probe_timeout(self):
-        sandbox = claude_run.make_sandbox("t", self.environ)
-        cfg = dict(CFG, probe_max_output_tokens=777, probe_timeout_s=1)
+    def _check_probe_env(self, sandbox):
+        cfg = dict(CFG, probe_max_output_tokens=777, probe_timeout_s=60)  # generous: this test is about the env only
         claude_run.run_claude(cfg, "hello", sandbox, label="t", phase="control", probe=True, environ=self.environ)
         self.assertIn("CLAUDE_CODE_MAX_OUTPUT_TOKENS", self.calls()[-1]["env"])
         self.assertEqual(self.calls()[-1]["env_values"]["CLAUDE_CODE_MAX_OUTPUT_TOKENS"], "777")
+
+    def test_probe_run_gets_output_cap_env(self):
+        self._check_probe_env(claude_run.make_sandbox("t", self.environ))
+
+    def test_probe_run_gets_output_cap_env_when_the_fake_starts_slowly(self):
+        (self.bin / "start_delay_s").write_text("2", encoding="utf-8")
+        self._check_probe_env(claude_run.make_sandbox("t", self.environ))
+
+    def test_probe_run_gets_probe_timeout(self):
+        sandbox = claude_run.make_sandbox("t", self.environ)
+        claude_run.run_claude(dict(CFG, probe_timeout_s=60), "hello", sandbox, label="t", phase="control", probe=True,
+                              environ=self.environ)
+        cfg = dict(CFG, probe_max_output_tokens=777, probe_timeout_s=1)
         # the probe timeout (1 s), not RUN_TIMEOUT (900 s), ends a slow probe and charges the whole cap
+        # (no assertion here reads calls.jsonl: a loaded machine can start the fake late)
         with mock.patch.object(subprocess.Popen, "communicate", autospec=True, side_effect=subprocess.Popen.communicate) as spy:
             rec = claude_run.run_claude(cfg, "sleep", sandbox, label="t", phase="control", probe=True, environ=self.environ)
         self.assertEqual(spy.call_args_list[0].kwargs["timeout"], 1)

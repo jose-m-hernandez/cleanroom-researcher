@@ -127,15 +127,36 @@ def raw_dir(run_id, environ=None) -> Path:
     return claude_run.eval_root(environ) / "raw" / run_id
 
 
-def create_raw_folder(run_id, environ=None) -> Path:
-    """Create the raw folder of a new run. A folder that already exists refuses: it is never reused or overwritten."""
+OWNER_FILE = "owner.json"
+
+
+def create_raw_folder(run_id, environ=None, out=None) -> Path:
+    """Create the raw folder of a new run. A folder that already exists refuses: it is never reused or overwritten.
+
+    With out, the folder also gets owner.json holding the resolved path of that results folder, so a resume can tell
+    a folder that belongs to another results folder (a copy) from its own.
+    """
     path = raw_dir(run_id, environ)
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
         path.mkdir()
     except FileExistsError:
         raise RawError("raw folder already exists")
+    if out is not None:
+        write_json(path / OWNER_FILE, {"results_folder": str(Path(out).resolve())})
     return path
+
+
+def check_raw_owner(run_id, out, environ=None) -> None:
+    """Refuse (RawError) unless the raw folder of run_id exists and its owner file names out."""
+    problem = "raw folder belongs to another results folder (or is missing): a copied results folder must be run into a new --out"
+    path = raw_dir(run_id, environ)
+    try:
+        owner = read_json(path / OWNER_FILE).get("results_folder")
+    except (OSError, ValueError, AttributeError):
+        raise RawError(problem)
+    if owner != str(Path(out).resolve()):
+        raise RawError(problem)
 
 
 def run_id_of(out) -> str:
