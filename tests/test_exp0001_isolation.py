@@ -841,9 +841,9 @@ class FakeClaudeTests(unittest.TestCase):
         self.assertIn("CLAUDE_CODE_MAX_OUTPUT_TOKENS", self.calls()[-1]["env"])
         self.assertEqual(self.calls()[-1]["env_values"]["CLAUDE_CODE_MAX_OUTPUT_TOKENS"], "777")
         # the probe timeout (1 s), not RUN_TIMEOUT (900 s), ends a slow probe and charges the whole cap
-        with mock.patch.object(subprocess, "run", wraps=subprocess.run) as spy:
+        with mock.patch.object(subprocess.Popen, "communicate", autospec=True, side_effect=subprocess.Popen.communicate) as spy:
             rec = claude_run.run_claude(cfg, "sleep", sandbox, label="t", phase="control", probe=True, environ=self.environ)
-        self.assertEqual(spy.call_args.kwargs["timeout"], 1)
+        self.assertEqual(spy.call_args_list[0].kwargs["timeout"], 1)
         self.assertTrue(rec["timed_out"])
         self.assertAlmostEqual(claude_run.spend_total(self.environ), 0.01 + 0.75)
 
@@ -856,9 +856,9 @@ class FakeClaudeTests(unittest.TestCase):
         old = claude_run.RUN_TIMEOUT
         claude_run.RUN_TIMEOUT = 2
         self.addCleanup(setattr, claude_run, "RUN_TIMEOUT", old)
-        with mock.patch.object(subprocess, "run", wraps=subprocess.run) as spy:
+        with mock.patch.object(subprocess.Popen, "communicate", autospec=True, side_effect=subprocess.Popen.communicate) as spy:
             claude_run.run_claude(cfg, "sleep", sandbox, label="t", phase="control", environ=self.environ)
-        self.assertEqual(spy.call_args.kwargs["timeout"], 2)  # RUN_TIMEOUT applied, not probe_timeout_s=1
+        self.assertEqual(spy.call_args_list[0].kwargs["timeout"], 2)  # RUN_TIMEOUT applied, not probe_timeout_s=1
 
     def test_spend_file_missing_is_zero_unreadable_refuses(self):
         self.assertEqual(claude_run.spend_total(self.environ), 0.0)

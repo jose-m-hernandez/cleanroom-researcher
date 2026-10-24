@@ -470,3 +470,4 @@ This criterion was fixed in this protocol, before any result was seen.
   - The rule for counting answers that name more than one value (P:160) is fixed at the seal, after this protocol's commit, and is recorded in the sealed record.
   - The cluster bootstrap for the judge-minus-person difference (P:159) uses b = 10000 resamples and the seed 20261017, the same as the primary interval (P:85).
 - 2026-10-23: the method code under `code/` lands in stages: first a port of the evaluation harness to this repository's rules, then the runner features and the analysis this protocol requires. Methods step 2 is complete only when a later Changelog entry says the method code is complete. No live call has been made and no run is recorded.
+- 2026-10-23: a clarification made before any data. In C7 (P:243), "the widest `allowed_bash` among the 25 specs" means the union of every spec's `allowed_bash` entries, which is at least as wide as any one spec's list.

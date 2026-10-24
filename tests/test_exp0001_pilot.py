@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import io
 import json
+import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -382,7 +384,12 @@ class HelperTests(unittest.TestCase):
         self.assertIsNone(pilot.failed_unit_labels("budget reached"))
 
     def test_the_cli_refuses_a_budget_above_the_cap_and_a_missing_live_flag(self):
-        env = {"PATH": "/usr/bin:/bin"}
+        gated = tempfile.mkdtemp()  # the C6 gate must be open for the command to reach the live check
+        self.addCleanup(shutil.rmtree, gated, True)
+        os.makedirs(os.path.join(gated, "cpr-eval"))
+        with open(os.path.join(gated, "cpr-eval", "gates.json"), "w", encoding="utf-8") as fh:
+            json.dump({"C6": {"outcome": "PASS", "token": "0" * 64, "started_utc": "2026-10-23T00:00:00Z"}}, fh)
+        env = {"PATH": "/usr/bin:/bin", "TMPDIR": gated}
         run = lambda *a: subprocess.run([sys.executable, exp0001_paths.RUN, "pilot", *a], capture_output=True,
                                         text=True, encoding="utf-8", env=env)
         with tempfile.TemporaryDirectory() as out:  # --out is required and must lie outside the clone

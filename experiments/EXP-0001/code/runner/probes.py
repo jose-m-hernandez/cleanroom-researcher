@@ -19,6 +19,7 @@ import claude_run
 import fixtures
 import isolation
 import judge
+import seal
 
 PROMPTS = Path(__file__).resolve().parents[1] / "prompts"
 UNKNOWN = "UNKNOWN"
@@ -344,22 +345,41 @@ def run_batch(fixtures_root, out, split, fids, arm_names, seeds, cfg, environ, r
 
 
 def command_run(fixtures_root, out, split, wanted, arm_names, seeds, budget_usd, date, environ=None, stdout=None,
-                runner=None, arms_dir=None) -> int:
-    """Live: needs CPR_EVAL_LIVE=1, a clean environment and a passing preflight. --out follows the CLI's rule."""
+                runner=None, arms_dir=None, seal_dir=None, preseal=None, repo_root=None) -> int:
+    """Live: needs CPR_EVAL_LIVE=1, a clean environment and a passing preflight. --out follows the CLI's rule.
+
+    A baseline arm on held-out fixtures needs seal_dir (a seal whose manifest.txt is committed in repo_root) and
+    preseal (the floor and oracle results the seal covers): the seal is verified before any launch, and the pre-seal
+    labels and session files are carried into out read-only (P:276). Dev fixtures are unchanged.
+    """
     stdout = stdout or sys.stdout
     refusal = claude_run.out_refusal(None if out is None else str(out))
     if refusal:
         print(f"run: REFUSED {refusal}", file=stdout)
         return 2
+    try:
+        chosen = select_fixtures(fixtures_root, wanted)
+    except BatchStop:
+        chosen = None  # the batch reports it
+    if chosen is not None:
+        code, text = seal.baseline_guard(split, chosen, arm_names, fixtures_root, seal_dir, preseal, repo_root)
+        if code:
+            print(f"run: {'REFUSED' if code == 2 else 'STOP'} {text}", file=stdout)
+            return code
+        carry = seal.needs_seal(split, chosen, arm_names)
+    else:
+        carry = False
 
     def work(cfg, env, o):
         try:
             fids = select_fixtures(fixtures_root, wanted)
             if not fids:
                 raise BatchStop("no fixtures selected")
+            if carry:
+                seal.carry_preseal(seal_dir, preseal, out)
             return run_batch(fixtures_root, out, split, fids, arm_names, seeds, cfg, env, runner, budget_usd, date,
                              arms_dir, o)
-        except (BatchStop, arms.ArmError) as exc:
+        except (BatchStop, arms.ArmError, seal.SealStop) as exc:
             print(f"run: STOP {exc}", file=o)
             return 1
     return fixtures._guarded("run", work, environ, stdout)

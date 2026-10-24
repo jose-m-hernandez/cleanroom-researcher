@@ -7,6 +7,7 @@ leaves the proof to isolation.py.
 
 from __future__ import annotations
 
+import datetime
 import hashlib
 import io
 import json
@@ -107,6 +108,10 @@ class SpendCapReached(Exception):
 
 class LiveRefused(Exception):
     """CPR_EVAL_LIVE is not set to 1: refuse to launch."""
+
+
+class SpawnError(OSError):
+    """The claude process could not be started: no child ran."""
 
 
 def _finite_nonneg(value) -> bool:
@@ -485,7 +490,7 @@ def parse_stream(text: str) -> list:
 def run_claude(cfg: dict, prompt: str, sandbox: Path, *, label: str, phase: str, kind: str = "plain",
                session_id=None, resume=None, plugin=None, plain=False, probe=False,
                model=None, environ=None, prior=None, allowed_tools=None, fork_session=False,
-               extra_session_ids=()) -> dict:
+               extra_session_ids=(), on_launch=None) -> dict:
     """One `claude -p` call. Returns the run record; proof is isolation.check().
 
     Every launch is gated here: CPR_EVAL_LIVE=1, a valid config, and the phase's cumulative spend under
@@ -522,14 +527,31 @@ def run_claude(cfg: dict, prompt: str, sandbox: Path, *, label: str, phase: str,
     elif mem_state != "absent" and mem_state != "empty":
         raise MemoryDirError("auto-memory dir not empty at start")
     started = time.time()
+    started_utc = datetime.datetime.fromtimestamp(started, datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    launched_model = model if plain else (model or cfg.get("model"))
     timed_out = False
-    try:
-        proc = subprocess.run(argv, cwd=str(sandbox), env=env, stdin=subprocess.DEVNULL, capture_output=True,
-                              text=True, encoding="utf-8", errors="replace", timeout=timeout)
-        stdout, returncode, stderr_chars = proc.stdout, proc.returncode, len(proc.stderr)
-    except subprocess.TimeoutExpired:
-        # True cost unknown: count the whole per-run cap as spent.
-        timed_out, stdout, returncode, stderr_chars = True, "", None, 0
+    # Known limit: in CPython's own Popen.__init__ (3.9 subprocess.py lines 1764-1777) the child exists before the
+    # parent reads the exec-status pipe, so an exception in that window leaves a live child that is reported here
+    # as SpawnError, "not launched". Shown only by fault injection; accepted.
+    try:  # "launched" means Popen returned: a child process exists. Any failure inside this call is "not launched".
+        child = subprocess.Popen(argv, cwd=str(sandbox), env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+    except Exception as exc:  # no child exists (a missing claude, a bad argument or environment): not a launch
+        raise SpawnError("the claude command could not be started") from exc
+    with child:  # closes the pipes and waits, as subprocess.run does
+        try:
+            if on_launch is not None:
+                on_launch()  # the spawn point: a caller learns here that a child exists
+            stdout, stderr = child.communicate(timeout=timeout)
+            returncode, stderr_chars = child.returncode, len(stderr)
+        except subprocess.TimeoutExpired:
+            child.kill()
+            child.wait()  # as subprocess.run does: reading the pipes again would block on a grandchild holding them
+            # True cost unknown: count the whole per-run cap as spent.
+            timed_out, stdout, returncode, stderr_chars = True, "", None, 0
+        except BaseException:  # after the launch: never a SpawnError
+            child.kill()
+            raise
     events = parse_stream(stdout)
     result = isolation.result_event(events) or {}
     if fork_session:
@@ -543,6 +565,9 @@ def run_claude(cfg: dict, prompt: str, sandbox: Path, *, label: str, phase: str,
         "session_id": sid, "session_ids": sorted({sid, *extra_session_ids}), "phase": phase,
         "resumed": bool(resume), "plugin": str(plugin) if plugin else None,
         "sandbox": str(sandbox), "config_dir": str(config_dir), "memory_dir_at_start": mem_state, "transcript": str(transcript) if transcript.is_file() else None,
+        "started_utc": started_utc,
+        "pins": {"claude_code_version": cfg.get("claude_code_version"), "model": launched_model,
+                 "isolation": cfg.get("isolation"), "plugin_ref": cfg.get("plugin_ref") if plugin else None},
         "env_names": sorted(env), "returncode": returncode, "stderr_chars": stderr_chars, "timed_out": timed_out,
         "events": events, "cost_usd_reported": reported_usd,
         "cost_usd": invocation_cost(reported_usd, prior, resumed=bool(resume), forked=bool(fork_session and resume)),

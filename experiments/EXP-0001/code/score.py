@@ -36,6 +36,8 @@ MISMATCH_RECALL_MAX = 0.05
 ABSTENTION_GOLD = judge.ABSTENTION_GOLD
 METRICS = ("primary", "primary_code", "primary_nocode", "primary_all", "recall", "precision", "placement", "false_answer", "d_lines", "d_tokens")
 JUDGE_LABELS = ("correct", "incorrect", "abstained")
+LOCKED_ARMS = ("floor", "oracle")  # in a final pass these arms' labels come only from the sealed labels file
+FINAL_LABELS_NAME = "labels-final.json"
 GALLERY_MAX = 10
 ANSWER_CHARS = 160
 SEED_RE = re.compile(r"^s(\d+)\.json$")
@@ -73,28 +75,52 @@ class Labeller:
     Items labels are cached one per call. Probe labels are cached per answer key, but stored one entry per
     batched call under "probe": {"value": {answer key: label}, "probes", "excluded", cost and tokens once}.
     Entries from the one-call-per-answer form (value is a label string, key is the answer key) still load.
+
+    Three modes. "normal" is the pass described above. "final" is a scoring pass after the seal (P:276-282): the
+    sealed labels.json is read and never opened for writing, new labels go to labels-final.json, and a floor or
+    oracle label missing from the sealed file is never asked of the judge again (it comes back None). "replay" reads
+    labels.json, makes no judge call and writes nothing: the seal uses it to rebuild the scorable record.
     """
 
-    def __init__(self, out, cfg, environ, label_probe, label_items, model=None, max_calls=None):
-        self.path = Path(out) / "labels.json"
+    def __init__(self, out, cfg, environ, label_probe, label_items, model=None, max_calls=None, mode="normal"):
+        if mode not in ("normal", "final", "replay"):
+            raise ScoreAbort("labeller mode invalid")
+        self.mode = mode
+        self.path = Path(out) / ("labels.json" if mode == "normal" else FINAL_LABELS_NAME)
         self.cfg, self.environ, self.model = cfg, environ, model
         self._probe, self._items = label_probe, label_items
         self.max_calls = int(cfg.get("score", {}).get("max_judge_calls", 0) if max_calls is None else max_calls)
+        self.sealed = {"probe": {}, "items": {}}
+        if mode != "normal":
+            self.sealed = self._load(Path(out) / "labels.json", required=True)
         self.data = {"probe": {}, "items": {}}
-        if self.path.is_file():
-            self.data = arms.read_json(self.path)
-            if not (isinstance(self.data, dict) and isinstance(self.data.get("probe"), dict)
-                    and isinstance(self.data.get("items"), dict)):
-                raise ScoreAbort("labels file unreadable")
-        self.known = self._index_probe_labels()
+        if mode != "replay" and self.path.is_file():
+            self.data = self._load(self.path)
+        self.known = self._index_probe_labels(self.sealed["probe"])
+        self.known.update(self._index_probe_labels(self.data["probe"]))
         self.calls = 0
         self.cached = 0
         self.invalid = 0
 
-    def _index_probe_labels(self) -> dict:
+    @staticmethod
+    def _load(path, required=False) -> dict:
+        if not path.is_file():
+            if required:
+                raise ScoreAbort("labels file unreadable")
+            return {"probe": {}, "items": {}}
+        data = arms.read_json(path)
+        if not (isinstance(data, dict) and isinstance(data.get("probe"), dict) and isinstance(data.get("items"), dict)):
+            raise ScoreAbort("labels file unreadable")
+        return data
+
+    def _no_call(self, arm) -> bool:
+        """Whether a label missing from the cache must not be asked of the judge (replay, or a locked arm after the seal)."""
+        return self.mode == "replay" or (self.mode == "final" and arm in LOCKED_ARMS)
+
+    def _index_probe_labels(self, entries) -> dict:
         """{answer key: label} from both entry shapes; anything else is unreadable."""
         known = {}
-        for key, entry in self.data["probe"].items():
+        for key, entry in entries.items():
             value = entry.get("value") if isinstance(entry, dict) else None
             if isinstance(value, str):
                 known[key] = value
@@ -109,11 +135,13 @@ class Labeller:
         return dict(fields, cost_usd=rec.get("cost_usd"), wall_s=rec.get("wall_s"), input_tokens_total=arms.input_total(usage),
                     output_tokens=usage.get("output_tokens") if isinstance(usage, dict) else None)
 
-    def _take(self, kind, key, case, fn):
-        entry = self.data[kind].get(key)
+    def _take(self, kind, key, case, fn, arm=None):
+        entry = self.data[kind].get(key) or self.sealed[kind].get(key)
         if entry is not None:
             self.cached += 1
             return entry["value"]
+        if self._no_call(arm):
+            return None
         value, rec = fn(self.cfg, case, self.environ, self.model, phase="evaluation", counter="score", max_calls=self.max_calls)
         self.calls += 1
         proof = rec.get("proof") or {}
@@ -134,7 +162,7 @@ class Labeller:
     def answer_key(self, case) -> str:
         return answer_key(case, self.judge_model)
 
-    def probes(self, cases, session_id="batch") -> dict:
+    def probes(self, cases, session_id="batch", arm=None) -> dict:
         """Labels for one probe session: {probe id: label or None}. cases are probe cases with unique ids.
 
         Answers whose key is already labelled are cache hits. The rest go to the judge in one call (each distinct
@@ -154,6 +182,10 @@ class Labeller:
                 first.add(key)
                 sent.append(c)
         if not sent:
+            return result
+        if self._no_call(arm):
+            for c in sent + repeats:
+                result[c["id"]] = None
             return result
         labels, rec = self._probe(self.cfg, {"id": session_id, "probes": sent}, self.environ, self.model,
                                   phase="evaluation", counter="score", max_calls=self.max_calls)
@@ -179,12 +211,12 @@ class Labeller:
             self.cached += 1 if result[c["id"]] is not None else 0
         return result
 
-    def items(self, case):
-        return self._take("items", items_key(case, self.judge_model), case, self._items)
+    def items(self, case, arm=None):
+        return self._take("items", items_key(case, self.judge_model), case, self._items, arm)
 
     def call_rows(self) -> dict:
         """Cost and tokens of every cached label, for the cost table."""
-        rows = list(self.data["probe"].values()) + list(self.data["items"].values())
+        rows = [r for d in (self.sealed, self.data) for kind in ("probe", "items") for r in d[kind].values()]
 
         def total(key):
             return _r(sum(r[key] for r in rows if isinstance(r.get(key), (int, float))))
@@ -285,8 +317,8 @@ def sanity_controls(specs: dict, labeller: Labeller) -> dict:
     for k, fid in enumerate(ids):
         spec, nxt = specs[fid], specs[ids[(k + 1) % len(ids)]]
         added = arms.added_lines(arms.static_text("floor", spec), arms.static_text("oracle", spec))
-        own = item_cell(spec, added, labeller.items(items_case(fid, spec, added)))
-        other = item_cell(nxt, added, labeller.items(items_case(fid, nxt, added)))
+        own = item_cell(spec, added, labeller.items(items_case(fid, spec, added), arm="oracle"))
+        other = item_cell(nxt, added, labeller.items(items_case(fid, nxt, added), arm="oracle"))
         if own["recall"] is None or other["recall"] is None:
             raise ScoreAbort("sanity control labels invalid")
         oracle_recalls.append(own["recall"])
@@ -347,8 +379,11 @@ def blind_case_id(fid: str, seed, cases) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:10]
 
 
-def score_run(out, specs: dict, cfg: dict, environ, label_probe=None, label_items=None, model=None, max_calls=None) -> dict:
-    """Score a results directory. Returns the scores dict (also written to <out>/scores.json by write_scores)."""
+def score_run(out, specs: dict, cfg: dict, environ, label_probe=None, label_items=None, model=None, max_calls=None,
+              mode="normal") -> dict:
+    """Score a results directory. Returns the scores dict (also written to <out>/scores.json by write_scores).
+
+    mode is the Labeller's ("normal", "final" after the seal, "replay" for the seal's own record)."""
     out = Path(out)
     run = arms.read_json(out / "run.json")
     fids = [f for f in run["fixtures"] if f in specs]
@@ -356,7 +391,7 @@ def score_run(out, specs: dict, cfg: dict, environ, label_probe=None, label_item
     if "floor" not in arm_names or "oracle" not in arm_names:
         raise ScoreAbort("floor and oracle arms are required")
     labeller = Labeller(out, cfg, environ, label_probe or judge.label_probe, label_items or judge.label_items,
-                        model, max_calls)
+                        model, max_calls, mode)
     sanity = sanity_controls({f: specs[f] for f in fids}, labeller)
 
     # Probe labels for every session on disk.
@@ -386,7 +421,7 @@ def score_run(out, specs: dict, cfg: dict, environ, label_probe=None, label_item
                         judged.append(probe_case(p, answer))
                         continue
                     labels[f][(a, seed, p["id"])] = label
-                for pid, label in labeller.probes(judged, blind_case_id(f, seed, judged)).items():
+                for pid, label in labeller.probes(judged, blind_case_id(f, seed, judged), arm=a).items():
                     labels[f][(a, seed, pid)] = label
 
     per_seed = {a: {f: {} for f in fids} for a in arm_names}
@@ -431,7 +466,7 @@ def score_run(out, specs: dict, cfg: dict, environ, label_probe=None, label_item
                         item = item_cell(spec, added, [])
                     else:
                         added = arms.added_lines(floor_text, text)
-                        item = item_cell(spec, added, labeller.items(items_case(f, spec, added)) if added else [])
+                        item = item_cell(spec, added, labeller.items(items_case(f, spec, added), arm=a) if added else [])
                     cell.update(recall=item["recall"], precision=item["precision"], placement=item["placement"])
                     cell["_matched"] = item["matched"]
                 per_seed[a][f][str(seed)] = cell
@@ -528,8 +563,13 @@ def summary_line(scores: dict) -> str:
 
 
 def command_score(out, fixtures_root, environ=None, stdout=None, label_probe=None, label_items=None, model=None,
-                  max_calls=None) -> int:
-    """Live: the judge calls need CPR_EVAL_LIVE=1, a clean environment and a passing preflight."""
+                  max_calls=None, seal_dir=None) -> int:
+    """Live: the judge calls need CPR_EVAL_LIVE=1, a clean environment and a passing preflight.
+
+    With seal_dir this is the final scoring (P:276-282): <out>/labels.json is re-hashed against seal.json before it is
+    read and is never opened for writing; floor and oracle labels come from it alone; every new label goes to
+    labels-final.json; and the final scorable record must equal the sealed record.json, or scoring stops.
+    """
     stdout = stdout or sys.stdout
 
     def work(config, env, o):
@@ -540,7 +580,20 @@ def command_score(out, fixtures_root, environ=None, stdout=None, label_probe=Non
             return 1
         try:
             specs = load_specs(fixtures_root, run["fixtures"])
-            scores = score_run(out, specs, config, env, label_probe, label_items, model, max_calls)
+            if seal_dir:
+                import seal as seal_mod  # here, not at the top: seal imports this module
+                mismatch = seal_mod.verify_labels(seal_dir, out)
+                if mismatch:
+                    print(f"score: STOP the sealed labels.json {mismatch} (outcome not determined)", file=o)
+                    return 1
+            scores = score_run(out, specs, config, env, label_probe, label_items, model, max_calls,
+                               "final" if seal_dir else "normal")
+            if seal_dir:
+                diff = seal_mod.final_record_diff(seal_dir, scores)
+                if diff:
+                    print("score: STOP the final scorable record differs from the sealed record (outcome not determined): "
+                          + "; ".join(diff), file=o)
+                    return 1
         except ScoreAbort as exc:
             print(f"score: ABORT {exc}", file=o)
             return 1

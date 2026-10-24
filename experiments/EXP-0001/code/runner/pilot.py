@@ -31,6 +31,7 @@ import judge
 import probes
 import report  # noqa: E402
 import score  # noqa: E402
+import seal
 
 STATE_NAME = "pilot-state.json"
 PILOT_MD = "PILOT.md"
@@ -349,11 +350,19 @@ def _fold_judge_counter(state: dict, before: dict, environ) -> None:
 def command_pilot(fixtures_root, out, split, wanted, arm_names, seeds, budget_usd, date, environ=None, stdout=None,
                   runner=None, label_probe=None, label_items=None, sleep=None, head=None, arms_dir=None) -> int:
     """Live: needs CPR_EVAL_LIVE=1, a clean environment and a passing preflight. --budget-usd above the cap refuses,
-    and so does an --out the CLI would refuse."""
+    and so does an --out the CLI would refuse, and held-out fixtures (the pilot runs on development fixtures only)."""
     stdout = stdout or sys.stdout
     refusal = claude_run.out_refusal(None if out is None else str(out))
     if refusal:
         print(f"pilot: REFUSED {refusal}", file=stdout)
+        return 2
+    try:
+        chosen = expand_fixtures(fixtures_root, wanted)
+    except probes.BatchStop:
+        chosen = None  # the pilot reports it
+    if chosen is not None and seal.is_heldout(split, chosen):
+        print("pilot: REFUSED the pilot runs on development fixtures only; held-out fixtures are never piloted",
+              file=stdout)
         return 2
     try:
         cap = claude_run.phase_cap(claude_run.load_config(), "evaluation")
