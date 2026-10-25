@@ -601,6 +601,14 @@ def _placeholder_identity(text: str) -> str:
     """Home path to {{HOME}}, then the whole-word username to 'user'. The group name is not touched.
 
     It expects one string, not a JSON dump: a dump hides a name at the start of a line behind backslash-n.
+    A name right after one of the five one-letter JSON escapes (a backslash followed by n, r, t, b or f) counts as a
+    whole word, because a string can itself show escaped text.
+    The stated limit: other encodings of the name are not decoded: unicode escapes, double-escaped text,
+    percent-encoding, base64, HTML entities and any other encoding. The backstop is the seal's pre-seal username
+    scan, which refuses.
+    A known over-replacement: in a Windows-style path, a folder name made of the letter n, r, t, b or f followed by
+    the account name (after a backslash) also has the name part replaced. It replaces more, never less, and only in
+    normalized transcripts.
     """
     name = _current_username()
     if not name:
@@ -612,7 +620,8 @@ def _placeholder_identity(text: str) -> str:
         pass
     for home in sorted((h for h in homes if len(h) > 1), key=len, reverse=True):
         text = re.sub(_slash_pattern(home) + r"(?![A-Za-z0-9_.-])", PLACEHOLDER_HOME, text)
-    return re.sub(r"(?<![A-Za-z0-9_])" + re.escape(name) + r"(?![A-Za-z0-9_])", PLACEHOLDER_USER, text)
+    return re.sub(r"(?:(?<![A-Za-z0-9_])|(?<=\\[nrtbf]))" + re.escape(name) + r"(?![A-Za-z0-9_])", PLACEHOLDER_USER,
+                  text)
 
 
 def _map_strings(node, fn):

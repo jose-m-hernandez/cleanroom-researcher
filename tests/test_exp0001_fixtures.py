@@ -827,6 +827,21 @@ class NormalizeTests(unittest.TestCase):
             with self.subTest(sep=repr(sep)):
                 self.assertEqual(self.norm_text("log" + sep + "zed ran it"), "log" + sep + "user ran it")
 
+    def test_a_name_after_a_json_escape_is_replaced_as_a_whole_word(self):
+        for esc in ("\\n", "\\t", "\\r\\n"):  # the two-character JSON forms
+            with self.subTest(esc=esc):
+                self.assertEqual(self.norm_text("log" + esc + "zed ran it"), "log" + esc + "user ran it")
+
+    def test_a_name_inside_a_longer_word_after_a_json_escape_is_kept(self):
+        self.assertEqual(self.norm_text("log" + "\\n" + "zedge ran"), "log" + "\\n" + "zedge ran")
+
+    def test_the_realpath_and_path_alias_pair_as_keys_is_an_error(self):
+        row = {"type": "assistant", "uuid": "a3", "parentUuid": None,
+               "message": {"content": [{"type": "tool_use", "id": "t1", "name": "Read",
+                                        "input": {"/private/opt/sb/x": 1, "/opt/sb/x": 2}}]}}
+        with self.assertRaises(fixtures.GenError):
+            fixtures.normalize_transcript([row], ["/private/opt/sb", "/opt/sb"], "")
+
     def test_a_home_path_after_a_newline_is_replaced(self):
         self.assertEqual(self.norm_text("log\n" + self.home_of("zed") + "/work"), "log\n{{HOME}}/work")
 
@@ -858,8 +873,8 @@ class NormalizeTests(unittest.TestCase):
             self.assertNotIn("\\", json.dumps(rows))  # no quote, backslash or control character in any string
             with mock.patch.object(Path, "home", return_value=Path(self.home_of("someuser"))):
                 new = fixtures.normalize_transcript(rows, aliases, slug, environ=environ)
-                with mock.patch.object(fixtures, "_placeholder_temp", side_effect=lambda text, environ=None: text), \
-                        mock.patch.object(fixtures, "_placeholder_identity", side_effect=lambda text: text):
+                with mock.patch.object(fixtures, "_placeholder_row",
+                                       side_effect=lambda row, aliases, slug, environ=None: row):
                     kept = fixtures.normalize_transcript(rows, [], "", environ=environ)
                 old = []
                 for row in kept:
@@ -873,7 +888,7 @@ class NormalizeTests(unittest.TestCase):
         dumped = json.dumps(new, ensure_ascii=False)
         for marker in ("{{SANDBOX}}", "{{SANDBOX_SLUG}}", "{{TMP}}", "{{HOME}}"):
             self.assertIn(marker, dumped)
-        self.assertRegex(dumped, r"(?<![A-Za-z0-9_])user(?![A-Za-z0-9_])")
+        self.assertNotIn("someuser", dumped)
 
     def test_a_row_that_held_only_thinking_is_dropped(self):
         rows = [{"type": "assistant", "uuid": "a", "parentUuid": None,

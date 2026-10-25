@@ -42,6 +42,7 @@ HOME_SHAPE = re.compile("|".join(
     check_vocabulary.V4_PIECES[:1] + check_vocabulary.V4_PIECES[3:]
     + [_FIRST_SEGMENT + re.escape("/Us" + "ers/") + "[A-Za-z]", _FIRST_SEGMENT + re.escape("/ho" + "me/") + "[A-Za-z]"]),
     re.IGNORECASE)
+_JSON_ESCAPE = re.compile(r"\\[nrtbf]")  # a backslash followed by n, r, t, b or f: a one-letter JSON escape
 
 GATES_NAME = "gates.json"
 CANARY_KEYS = {"preserve": "C6", "generation": "C7"}  # --type -> the canary's name in the protocol
@@ -495,16 +496,22 @@ def copied_text_hits(fields: dict) -> list:
     right after the double slash of any URL scheme is refused).
     The kind is "account name" or "home path"; the matched text is never returned. The limit: an HTTP method word,
     a space and a route whose first segment is a users folder is still refused (fail-closed). Refuses (SealStop)
-    when the account name is unknown, as the transcript scan does."""
+    when the account name is unknown, as the transcript scan does.
+    Each text is also scanned with the five one-letter JSON escapes (a backslash followed by n, r, t, b or f) turned
+    into a newline, so a path after a pasted JSON line break is caught. A kind is reported at most once per field.
+    The stated limit: other encodings of a home path or the account name are not decoded: unicode escapes,
+    double-escaped text, percent-encoding, base64, HTML entities and any other encoding. For those, the backstops are
+    the seal's pre-seal username scan of the transcripts and the repository's V4 rule."""
     try:
         user = fixtures._current_username().casefold()
     except fixtures.UsernameError:
         raise SealStop("the account name is unknown")
     hits = []
     for name, text in fields.items():
-        if user in text.casefold():
+        copies = (text, _JSON_ESCAPE.sub("\n", text))
+        if any(user in copy.casefold() for copy in copies):
             hits.append((name, "account name"))
-        if HOME_SHAPE.search(text):
+        if any(HOME_SHAPE.search(copy) for copy in copies):
             hits.append((name, "home path"))
     return hits
 

@@ -91,6 +91,38 @@ class SealTextScanTests(unittest.TestCase):
             with self.assertRaises(seal.SealStop):
                 seal.copied_text_hits({"a": "clean"})
 
+    ESCAPES = ("\\n", "\\t", "\\r\\n")  # the two-character JSON forms, never a real line break
+
+    def test_a_path_after_a_pasted_json_escape_in_the_repair_log_refuses(self):
+        for esc in self.ESCAPES:
+            with self.subTest(esc=esc):
+                self.setUp()  # a fresh world per case
+                self.w.repair.write_text('repair log: evidence {"result": "done' + esc + HOME_PATH + '"}\n',
+                                         encoding="utf-8")
+                out = self.w.refused(2, "repair log")
+                self.assertIn("home path", out)
+                self.assertNotIn(HOME_PATH, out)
+
+    def test_a_path_after_a_pasted_json_escape_in_the_count_rule_refuses(self):
+        for esc in self.ESCAPES:
+            with self.subTest(esc=esc):
+                self.setUp()  # a fresh world per case
+                self.w.rule.write_text(st.COUNT_RULE + "see" + esc + HOME_PATH + "\n", encoding="utf-8")
+                out = self.w.refused(2, "count rule")
+                self.assertIn("home path", out)
+                self.assertNotIn(HOME_PATH, out)
+
+    def test_a_path_after_a_json_escape_inside_a_walked_string_refuses(self):
+        self.excluded_spec("pasted" + "\\n" + HOME_PATH)  # json.dumps writes it; the walk sees the two characters
+        self.check_excluded_refusal()
+
+    def test_the_helper_reports_each_kind_once_per_field_with_the_decoded_copy(self):
+        got = seal.copied_text_hits({"a": "x" + "\\b" + HOME_PATH, "b": "plain " + HOME_PATH, "c": "clean"})
+        self.assertEqual(got, [("a", "home path"), ("b", "home path")])
+
+    def test_the_block_text_helper_walks_a_dict_inside_a_list(self):
+        self.assertEqual(seal.excluded_block_text({"l": [{"k": "v"}, "w"]}), "l\nk\nv\nw")
+
 
 if __name__ == "__main__":
     unittest.main()
