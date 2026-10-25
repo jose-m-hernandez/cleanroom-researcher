@@ -30,10 +30,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "tools"))
 import check_vocabulary  # noqa: E402  (the repository's vocabulary rules: V4 is the home-path shape)
 
 # The home-path shape of the seal's copied-text scan (SF1). It is V4 with its users-folder and home-folder pieces (the
-# second and third) replaced by a form that matches only when the slash before the folder name opens the first
-# segment: at the start of the text, after whitespace, a quote, "=", ":" or "(", or after the "//" of a file URL. A web
-# route such as /v2/<folder>/me therefore does not match. The repository's V4 rule and the lint are unchanged.
-_FIRST_SEGMENT = r"""(?:^|(?<=[\s"'=:(])|(?<=//))"""
+# second and third) replaced by a form that matches only when the slash before the folder name opens a first segment.
+# The rule is fail-closed: the slash opens a path unless the character before it is a path-segment character (an ASCII
+# letter, a digit, a dot, an underscore, a hyphen, a tilde, a percent sign or a closing brace), so any other character
+# opens a path, a quote, a backtick or a bracket among them. A web route such as /v2/<folder>/me therefore does not
+# match. A slash is not a segment character, so a folder name right after the double slash of any URL scheme is
+# refused, not only after the double slash of a file URL (a ruled widening). The repository's V4 rule and the lint are
+# unchanged.
+_FIRST_SEGMENT = r"(?<![A-Za-z0-9._~%}-])"
 HOME_SHAPE = re.compile("|".join(
     check_vocabulary.V4_PIECES[:1] + check_vocabulary.V4_PIECES[3:]
     + [_FIRST_SEGMENT + re.escape("/Us" + "ers/") + "[A-Za-z]", _FIRST_SEGMENT + re.escape("/ho" + "me/") + "[A-Za-z]"]),
@@ -462,7 +466,9 @@ def excluded_fixtures(fixtures_root) -> dict:
 
 def copied_text_hits(fields: dict) -> list:
     """[(field name, kind)] for each text in fields (name -> text) that holds the account name (case-insensitive) or a
-    home path (rule V4, narrowed by HOME_SHAPE: a users or home folder counts only as the first segment of a path).
+    home path (rule V4, narrowed by HOME_SHAPE: a users or home folder counts only as the first segment of a path,
+    and fail-closed: any character before the slash other than a path-segment character opens a path, and a folder name
+    right after the double slash of any URL scheme is refused).
     The kind is "account name" or "home path"; the matched text is never returned. The limit: an HTTP method word,
     a space and a route whose first segment is a users folder is still refused (fail-closed). Refuses (SealStop)
     when the account name is unknown, as the transcript scan does."""

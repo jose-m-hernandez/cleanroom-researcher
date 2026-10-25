@@ -42,7 +42,13 @@ def command_lint(fixtures_root, environ=None, out=None) -> int:
         return 2
     findings = []
     files = 0
-    for here, dirnames, filenames in os.walk(root, followlinks=False):
+
+    def unreadable(error):
+        rel_err = os.path.relpath(error.filename, root) if error.filename else "."
+        rel_err = "." if rel_err == "." else Path(rel_err).as_posix()
+        findings.append(f"lint: {barred_scan.display_path(rel_err, entries)}: unreadable")
+
+    for here, dirnames, filenames in os.walk(root, followlinks=False, onerror=unreadable):
         dirnames.sort()
         filenames.sort()
         rel_here = os.path.relpath(here, root)

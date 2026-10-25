@@ -106,6 +106,44 @@ class LintTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("REFUSED", text)
 
+    def make_unreadable(self, path, restore):
+        self.addCleanup(os.chmod, path, restore)
+        os.chmod(path, 0)
+
+    @unittest.skipIf(os.geteuid() == 0, "root ignores folder permissions")
+    def test_an_unreadable_folder_is_a_finding_and_never_a_pass(self):
+        (self.root / "dev-003").mkdir()
+        (self.root / "dev-003" / "spec.json").write_text("{}\n", encoding="utf-8")
+        self.make_unreadable(self.root / "dev-003", 0o700)
+        code, text = self.run_lint()
+        self.assertEqual(code, 1, text)
+        self.assertIn("lint: dev-003: unreadable", text)
+        self.assertNotIn("lint: ok", text)
+
+    @unittest.skipIf(os.geteuid() == 0, "root ignores folder permissions")
+    def test_an_unreadable_file_is_a_finding(self):
+        self.make_unreadable(self.root / "dev-001" / "spec.json", 0o600)
+        code, text = self.run_lint()
+        self.assertEqual(code, 1, text)
+        self.assertTrue(any(line.endswith(": unreadable") for line in text.splitlines()), text)
+
+    def test_the_reserved_word_joined_to_a_letter_by_a_hyphen_fails_rule_v2(self):
+        (self.root / "dev-001" / "notes.txt").write_text("a " + "harn" + "ess-x\n", encoding="utf-8")
+        code, text = self.run_lint()
+        self.assertEqual(code, 1, text)
+        self.assertIn(" V2 ", text)
+
+    def test_the_reserved_word_and_the_lane_word_fail_rule_v3(self):
+        (self.root / "dev-001" / "notes.txt").write_text("a " + "harn" + "ess " + "la" + "ne\n", encoding="utf-8")
+        code, text = self.run_lint()
+        self.assertEqual(code, 1, text)
+        self.assertIn(" V3 ", text)
+
+    def test_a_comment_only_list_is_dead(self):
+        code, text = self.run_lint(environ={"BARRED_STRINGS": "# a comment\n"})
+        self.assertEqual(code, 2, text)
+        self.assertTrue(text.startswith("lint: DEAD"), text)
+
 
 if __name__ == "__main__":
     unittest.main()
