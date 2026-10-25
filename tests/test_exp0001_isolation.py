@@ -1641,11 +1641,16 @@ class OutRefusalTests(CloneFolders):
                     self.assertEqual(run.main(argv), 2)
                 self.assertTrue(shown.getvalue().startswith(message), shown.getvalue())
 
-    def test_the_lint_command_is_gone(self):
+    def test_the_lint_command_exists_and_needs_a_list(self):
         import run
-        with mock.patch("sys.stderr", new=io.StringIO()):
-            with self.assertRaises(SystemExit):
-                run.main(["lint"])
+        with tempfile.TemporaryDirectory() as folder:
+            with mock.patch.dict(os.environ):
+                os.environ.pop("BARRED_STRINGS", None)
+                os.environ.pop("BARRED_STRINGS_PATH", None)
+                with mock.patch("sys.stdout", new=io.StringIO()) as shown:
+                    code = run.main(["lint", folder])
+        self.assertEqual(code, 2)
+        self.assertTrue(shown.getvalue().startswith("lint: DEAD"), shown.getvalue())
 
 
 if __name__ == "__main__":

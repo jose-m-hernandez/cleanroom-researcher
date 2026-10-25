@@ -290,6 +290,8 @@ def run_batch(fixtures_root, out, split, fids, arm_names, seeds, cfg, environ, r
     done = skipped = 0
 
     def check_budget():
+        if claude_run.spend_sum(environ) >= claude_run.spend_ceiling(cfg):
+            raise BatchStop("spend ceiling reached")
         if budget_usd is not None and claude_run.spend_total(environ, "evaluation") - start >= budget_usd:
             raise BatchStop("budget reached")
 

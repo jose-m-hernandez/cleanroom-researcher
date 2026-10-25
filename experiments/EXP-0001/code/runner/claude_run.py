@@ -223,6 +223,7 @@ def spend_rebuild(environ=None, write=False, out=None, cfg=None) -> int:
     Records are grouped by session id and taken in file-modification order (a record carries no turn number).
     A record with no phase key predates phases and counts toward control (then the only ledger). A timed-out record, or one whose reported cost is unusable, counts as the per-run cap, as at launch.
     An unreadable or malformed record, or an unreadable current spend.json, refuses (exit 1) and writes nothing.
+    A record with "forked" true (a fork of a resumed session) is charged its full reported value, as at launch.
     """
     out = out or sys.stdout
     try:
@@ -248,7 +249,8 @@ def spend_rebuild(environ=None, write=False, out=None, cfg=None) -> int:
         if rec.get("timed_out") or reported is None:
             amount = cap
         else:
-            amount = invocation_cost(reported, last.get(sid), resumed=rec["resumed"])
+            amount = invocation_cost(reported, last.get(sid), resumed=rec["resumed"],
+                                     forked=rec.get("forked") is True)
         last[sid] = rec
         ledger = ledger_of(rec.get("phase", "control"))
         new[ledger] = round(new[ledger] + amount, 6)
@@ -563,7 +565,7 @@ def run_claude(cfg: dict, prompt: str, sandbox: Path, *, label: str, phase: str,
     record = {
         "run_id": run_id, "label": label, "kind": kind, "isolation": cfg.get("isolation"),
         "session_id": sid, "session_ids": sorted({sid, *extra_session_ids}), "phase": phase,
-        "resumed": bool(resume), "plugin": str(plugin) if plugin else None,
+        "resumed": bool(resume), "forked": bool(fork_session and resume), "plugin": str(plugin) if plugin else None,
         "sandbox": str(sandbox), "config_dir": str(config_dir), "memory_dir_at_start": mem_state, "transcript": str(transcript) if transcript.is_file() else None,
         "started_utc": started_utc,
         "pins": {"claude_code_version": cfg.get("claude_code_version"), "model": launched_model,
@@ -679,6 +681,7 @@ def _control(environ, out, runner, config_path) -> int:
         print(f"preflight: FAIL {reason}", file=out)
         return 1
     cap = phase_cap(cfg, "control")
+    ceiling = spend_ceiling(cfg)
     spend_total(environ)  # raises SpendError on an unreadable file, before any run
     markers = isolation.host_markers(environ)
     host_names = isolation.host_skill_agent_names(environ)
@@ -693,12 +696,18 @@ def _control(environ, out, runner, config_path) -> int:
             print("hook event fields: " + json.dumps(isolation.hook_field_shapes(rec["events"])), file=out)
         return 1
 
-    def guard() -> bool:
-        return spend_total(environ) < cap
+    def guard():
+        """None when the control cap and the whole-run ceiling both have room, else the reason to stop."""
+        if spend_total(environ) >= cap:
+            return "spend cap reached"
+        if spend_sum(environ) >= ceiling:
+            return "spend ceiling reached"
+        return None
 
     # C1 plain: the instrument must fire.
-    if not guard():
-        return stop("spend cap reached")
+    why = guard()
+    if why:
+        return stop(why)
     sid1 = str(uuid.uuid4())
     before = isolation.ledger_snapshot(dirs)
     c1 = runner(cfg, PROMPT_OK, make_sandbox("c1", environ), label="c1", phase="control", session_id=sid1, plain=True,
@@ -725,8 +734,9 @@ def _control(environ, out, runner, config_path) -> int:
         return stop("claude code version differs from the pin")
 
     # C3 isolated, no plugin.
-    if not guard():
-        return stop("spend cap reached")
+    why = guard()
+    if why:
+        return stop(why)
     c3 = runner(cfg, PROMPT_OK, make_sandbox("c3", environ), label="c3", phase="control", session_id=str(uuid.uuid4()), environ=environ)
     init3 = _init(c3)
     allow = {"skills": sorted(isolation.names_of(init3.get("skills"))),
@@ -751,8 +761,9 @@ def _control(environ, out, runner, config_path) -> int:
     cfg["isolated_baseline_hooks"] = baseline
 
     # C2 isolated with the plugin.
-    if not guard():
-        return stop("spend cap reached")
+    why = guard()
+    if why:
+        return stop(why)
     before = isolation.ledger_snapshot(dirs)
     c2 = runner(cfg, PROMPT_OK, make_sandbox("c2", environ), label="c2", phase="control", session_id=str(uuid.uuid4()),
                 plugin=export, environ=environ)
@@ -766,8 +777,9 @@ def _control(environ, out, runner, config_path) -> int:
         return stop("C2 failed (not switching modes)", c2)
 
     # C4 seeded log.
-    if not guard():
-        return stop("spend cap reached")
+    why = guard()
+    if why:
+        return stop(why)
     before = isolation.ledger_snapshot(dirs)
     sb4 = make_sandbox("c4", environ)
     (sb4 / "CC-Session-Logs").mkdir()
@@ -784,8 +796,9 @@ def _control(environ, out, runner, config_path) -> int:
         return stop("C4 failed", c4)
 
     # C5 preserve quick, headless.
-    if not guard():
-        return stop("spend cap reached")
+    why = guard()
+    if why:
+        return stop(why)
     before = isolation.ledger_snapshot(dirs)
     sb5 = make_sandbox("c5", environ)
     _seed_c5(sb5)

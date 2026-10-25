@@ -12,6 +12,7 @@ import datetime
 import hashlib
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -27,6 +28,16 @@ import score
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "tools"))
 import check_vocabulary  # noqa: E402  (the repository's vocabulary rules: V4 is the home-path shape)
+
+# The home-path shape of the seal's copied-text scan (SF1). It is V4 with its users-folder and home-folder pieces (the
+# second and third) replaced by a form that matches only when the slash before the folder name opens the first
+# segment: at the start of the text, after whitespace, a quote, "=", ":" or "(", or after the "//" of a file URL. A web
+# route such as /v2/<folder>/me therefore does not match. The repository's V4 rule and the lint are unchanged.
+_FIRST_SEGMENT = r"""(?:^|(?<=[\s"'=:(])|(?<=//))"""
+HOME_SHAPE = re.compile("|".join(
+    check_vocabulary.V4_PIECES[:1] + check_vocabulary.V4_PIECES[3:]
+    + [_FIRST_SEGMENT + re.escape("/Us" + "ers/") + "[A-Za-z]", _FIRST_SEGMENT + re.escape("/ho" + "me/") + "[A-Za-z]"]),
+    re.IGNORECASE)
 
 GATES_NAME = "gates.json"
 CANARY_KEYS = {"preserve": "C6", "generation": "C7"}  # --type -> the canary's name in the protocol
@@ -160,12 +171,10 @@ def create_canary_file(config_dir, token: str) -> tuple:
     return path, (seen.st_ino, seen.st_dev, token)
 
 
-def remove_canary_file(path, ident) -> bool:
-    """Remove the canary file only if it is still the one create_canary_file made. Three checks: lstat gives the same
+def canary_is_ours(path, ident) -> bool:
+    """True only if the file at path is still the one create_canary_file made. Three checks: lstat gives the same
     inode and device; it is a regular file (a symlink is never followed, and the open never blocks on a FIFO); its
-    bytes are exactly the token and a newline.
-    Limits: a replacement holding the exact token passes (only someone who has read the canary could write it), and
-    the file can change between the checks and the unlink."""
+    bytes are exactly the token and a newline. Any failure, including an unreadable file, is False."""
     try:
         seen = os.lstat(str(path))
         if (seen.st_ino, seen.st_dev) != (ident[0], ident[1]) or not stat.S_ISREG(seen.st_mode):
@@ -176,8 +185,18 @@ def remove_canary_file(path, ident) -> bool:
             got = os.read(fd, len(want) + 1)
         finally:
             os.close(fd)
-        if got != want:
-            return False
+    except OSError:
+        return False
+    return got == want
+
+
+def remove_canary_file(path, ident) -> bool:
+    """Remove the canary file only if canary_is_ours says it is still the one create_canary_file made.
+    Limits: a replacement holding the exact token passes (only someone who has read the canary could write it), and
+    the file can change between the checks and the unlink."""
+    if not canary_is_ours(path, ident):
+        return False
+    try:
         os.unlink(str(path))
     except OSError:
         return False
@@ -287,7 +306,9 @@ def judge_canary(record: dict, cfg: dict, markers: list, canary_path, canary_tok
 
 def _canary_run(canary_type, fixtures_root, cfg, environ, runner, out) -> int:
     """Run one canary. A canary file that changed is left in place and reported (a line, and canary_left_behind in the
-    PASS or FAIL entry); the ERROR entry is recorded before the file is dealt with, so it gets the line only."""
+    PASS or FAIL entry); the ERROR entry is recorded before the file is dealt with, so it gets the line only. The line
+    says why: "(changed)" when the file is no longer the one made, "(could not remove)" when it is still ours but the
+    unlink failed."""
     key = CANARY_KEYS[canary_type]
     allowed, contributors = None, []
     if canary_type == "generation":
@@ -323,7 +344,8 @@ def _canary_run(canary_type, fixtures_root, cfg, environ, runner, out) -> int:
     finally:
         left_behind = not remove_canary_file(path, ident) and os.path.lexists(path)
         if left_behind:
-            print(f"canary left behind (changed): remove it by hand: {path}", file=out)
+            why = "could not remove" if canary_is_ours(path, ident) else "changed"
+            print(f"canary left behind ({why}): remove it by hand: {path}", file=out)
     result = judge_canary(record, cfg, markers, path, token, sandbox_token)
     record_gate(canary_type, {"outcome": result["outcome"], "started_utc": record.get("started_utc") or started,
                               "run_id": record.get("run_id"), "token": token, "type": canary_type,
@@ -440,8 +462,10 @@ def excluded_fixtures(fixtures_root) -> dict:
 
 def copied_text_hits(fields: dict) -> list:
     """[(field name, kind)] for each text in fields (name -> text) that holds the account name (case-insensitive) or a
-    home path (rule V4). The kind is "account name" or "home path"; the matched text is never returned. Refuses
-    (SealStop) when the account name is unknown, as the transcript scan does."""
+    home path (rule V4, narrowed by HOME_SHAPE: a users or home folder counts only as the first segment of a path).
+    The kind is "account name" or "home path"; the matched text is never returned. The limit: an HTTP method word,
+    a space and a route whose first segment is a users folder is still refused (fail-closed). Refuses (SealStop)
+    when the account name is unknown, as the transcript scan does."""
     try:
         user = fixtures._current_username().casefold()
     except fixtures.UsernameError:
@@ -450,7 +474,7 @@ def copied_text_hits(fields: dict) -> list:
     for name, text in fields.items():
         if user in text.casefold():
             hits.append((name, "account name"))
-        if any(rule == "V4" for rule, _line, _reason in check_vocabulary.scan_text(text, False)):
+        if HOME_SHAPE.search(text):
             hits.append((name, "home path"))
     return hits
 

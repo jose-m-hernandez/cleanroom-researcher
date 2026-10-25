@@ -976,7 +976,7 @@ class GenerateTests(GenTestBase):
         code, out = self.generate(runner)
         self.assertEqual(code, 1)
         self.assertIn("tool_evidence_missing:k1", out)
-        self.assertEqual(len(runner.calls), 14)  # two attempts, no install-check reached
+        self.assertEqual(len(runner.calls), 21)  # three attempts, no install-check reached
         self.assertFalse((self.fdir / "transcript.jsonl").exists())
 
     def test_every_run_goes_through_the_runner_in_the_generate_phase(self):
@@ -1006,8 +1006,15 @@ class GenerateTests(GenTestBase):
         self.assertEqual(runner.attempt, 2)
         self.assertEqual(len(runner.calls), 7 + 7 + 2)
 
-    def test_two_floor_edits_fail_and_nothing_is_installed(self):
-        code, out = self.generate(GenRunner(self.tmp, floor_edit_attempts=(1, 2)))
+    def test_floor_edits_on_two_attempts_then_the_third_installs(self):
+        runner = GenRunner(self.tmp, floor_edit_attempts=(1, 2))
+        code, out = self.generate(runner)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(runner.attempt, 3)
+        self.assertTrue((self.fdir / "transcript.jsonl").exists())
+
+    def test_three_floor_edits_fail_and_nothing_is_installed(self):
+        code, out = self.generate(GenRunner(self.tmp, floor_edit_attempts=(1, 2, 3)))
         self.assertEqual(code, 1)
         self.assertIn("claude_md_changed", out)
         self.assertFalse((self.fdir / "transcript.jsonl").exists())
@@ -1019,7 +1026,7 @@ class GenerateTests(GenTestBase):
         self.assertEqual(code, 1)
         self.assertIn("turn 3 proof: markers_found", out)
         self.assertNotIn(HOST_MARKER, out)
-        self.assertEqual(len(runner.calls), 6)  # two attempts, stopped at turn 3
+        self.assertEqual(len(runner.calls), 9)  # three attempts, stopped at turn 3
         self.assertFalse((self.fdir / "transcript.jsonl").exists())
 
     def test_the_token_check_gates_the_install(self):

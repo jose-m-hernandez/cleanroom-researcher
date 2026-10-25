@@ -55,5 +55,15 @@ class ResumeOwnerTests(plumbing.Scripted):  # Scripted defines no tests; it supp
     def test_a_missing_raw_folder_refuses(self):
         self.go(arm_names=("floor",), seeds=1)
         shutil.rmtree(arms.raw_dir(self.run_json()["raw_run_id"], self.environ))
-        with self.assertRaises(arms.RawError):
+        with self.assertRaises(arms.RawError) as ctx:
             self.go(arm_names=("floor",), seeds=2)
+        self.assertIn("raw folder missing", str(ctx.exception))
+        self.assertIn("TMPDIR", str(ctx.exception))
+
+    def test_another_spelling_of_the_same_results_folder_resumes_and_reuses_its_run_id(self):
+        self.go(arm_names=("floor",), seeds=1)
+        first = self.run_json()["raw_run_id"]
+        link = self.tmp / "results-link"
+        link.symlink_to(self.out, target_is_directory=True)
+        self.assertEqual(self.go(arm_names=("floor",), seeds=2, out=link), 0)
+        self.assertEqual(self.run_json()["raw_run_id"], first)

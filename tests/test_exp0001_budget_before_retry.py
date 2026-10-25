@@ -24,6 +24,14 @@ class BudgetBeforeRetryTests(plumbing.Scripted):  # Scripted defines no tests
         self.assertEqual(len(self.calls()), 1)  # no second launch
         self.assertAlmostEqual(claude_run.spend_total(self.environ, "evaluation"), 0.2)
 
+    def test_a_budget_used_up_by_a_probe_stops_the_batch_before_the_probe_re_run(self):
+        self.script = {1: plumbing.mcp_loaded}  # floor is static: the first launch is the probe, and it fails the proof
+        with self.assertRaises(probes.BatchStop) as ctx:
+            self.go(arm_names=("floor",), budget_usd=0.01)  # the scripted cost of one probe launch
+        self.assertEqual(str(ctx.exception), "budget reached")
+        self.assertEqual(len(self.calls()), 1)  # no second launch
+        self.assertAlmostEqual(claude_run.spend_total(self.environ, "evaluation"), 0.01)
+
     def test_with_room_left_the_re_run_still_happens(self):
         self.script = {1: plumbing.mcp_loaded}
         self.assertEqual(self.go(budget_usd=5.0), 0)

@@ -530,7 +530,7 @@ PLACEHOLDER_USER = "user"
 GIT_ENV = {"GIT_AUTHOR_NAME": "eval", "GIT_AUTHOR_EMAIL": "eval@example.com",
            "GIT_COMMITTER_NAME": "eval", "GIT_COMMITTER_EMAIL": "eval@example.com",
            "GIT_AUTHOR_DATE": "2026-01-01T00:00:00Z", "GIT_COMMITTER_DATE": "2026-01-01T00:00:00Z"}
-MAX_ATTEMPTS = 2
+MAX_ATTEMPTS = 3
 
 
 class GenError(Exception):

@@ -4,7 +4,7 @@ Every `claude -p` call goes through `experiments/EXP-0001/code/runner/claude_run
 
 ## Running it
 
-1. The clean-room leak lint is not part of this port: there is no `lint` command.
+1. `python3 experiments/EXP-0001/code/runner/run.py lint <fixtures-root>` is P:249's clean-room lint: it runs the repository's vocabulary rules V1 to V4 and its barred-string scan over the fixture store, needs the list in `BARRED_STRINGS` or `BARRED_STRINGS_PATH` (DEAD, exit 2, without one), and prints entry numbers only.
 2. `python3 experiments/EXP-0001/code/runner/run.py preflight` checks the sandbox root, the pinned `claude` version and the config, with no model call.
 3. `CPR_EVAL_LIVE=1 CPR_EVAL_HOST_LEDGERS=<dir>[:<dir>...] python3 experiments/EXP-0001/code/runner/run.py control` runs the five isolation controls (live, sequential). The ledger directories are the host's own session ledgers; every regular file in them is read (gzip is out of scope). `CLAUDE_CONFIG_DIR` must be unset.
 4. `CPR_EVAL_LIVE=1 python3 experiments/EXP-0001/code/runner/run.py judge-check` runs the judge sanity cases (two calls: the seven probe cases as one batch, one of them an abstention probe with the neutral abstention gold, for which `abstained` and `correct` both pass; then the items case, each through the same per-run proof).

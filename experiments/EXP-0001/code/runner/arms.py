@@ -15,6 +15,7 @@ import difflib
 import datetime
 import hashlib
 import json
+import os
 import re
 import uuid
 from pathlib import Path
@@ -148,14 +149,22 @@ def create_raw_folder(run_id, environ=None, out=None) -> Path:
 
 
 def check_raw_owner(run_id, out, environ=None) -> None:
-    """Refuse (RawError) unless the raw folder of run_id exists and its owner file names out."""
-    problem = "raw folder belongs to another results folder (or is missing): a copied results folder must be run into a new --out"
+    """Refuse (RawError) unless the raw folder of run_id exists and its owner file names the same folder as out.
+
+    The compare is by file identity (os.path.samestat of the recorded path and out), not by spelling, so another name
+    for the same results folder (a symlink, a different case) passes. A missing raw folder and an owner that is
+    another folder (or unreadable) get two different messages. create_raw_folder still records the resolved path."""
     path = raw_dir(run_id, environ)
+    if not path.is_dir():
+        raise RawError("raw folder missing: TMPDIR changed or the folder was swept; resume with the TMPDIR the run "
+                       "started with, or run into a new --out")
+    problem = "raw folder belongs to another results folder: a copied or moved results folder must be run into a new --out"
     try:
         owner = read_json(path / OWNER_FILE).get("results_folder")
-    except (OSError, ValueError, AttributeError):
+        same = os.path.samestat(os.stat(owner), os.stat(out))
+    except (OSError, ValueError, AttributeError, TypeError):
         raise RawError(problem)
-    if owner != str(Path(out).resolve()):
+    if not same:
         raise RawError(problem)
 
 
