@@ -30,6 +30,12 @@ class SealTextScanTests(unittest.TestCase):
         spec["excluded"]["reason"] = reason
         path.write_text(json.dumps(spec), encoding="utf-8")
 
+    def excluded_extra(self, key, value):
+        path = self.w.store / st.EXTRA / "spec.json"
+        spec = json.loads(path.read_text(encoding="utf-8"))
+        spec["excluded"][key] = value
+        path.write_text(json.dumps(spec), encoding="utf-8")
+
     def plant(self, field, kind):
         text = st.SENTINEL.upper() if kind == "account name" else HOME_PATH
         if field == "count rule":
@@ -50,6 +56,29 @@ class SealTextScanTests(unittest.TestCase):
                     self.assertIn(kind, out)
                     self.assertNotIn(text, out)
                     self.assertNotIn(text.casefold(), out.casefold())
+
+    def check_excluded_refusal(self):
+        out = self.w.refused(2, f"excluded block of {st.EXTRA}")
+        self.assertIn("home path", out)
+        self.assertNotIn(HOME_PATH, out)
+
+    def test_a_path_after_any_line_break_in_a_reason_still_refuses(self):
+        for sep in ("\n", "\t", "\r\n", "\x0b"):
+            with self.subTest(sep=repr(sep)):
+                self.setUp()  # a fresh world per case
+                self.excluded_spec("pasted output" + sep + HOME_PATH)
+                self.check_excluded_refusal()
+
+    def test_a_path_in_a_nested_list_refuses(self):
+        self.excluded_extra("log", ["ok", ["line one\n" + HOME_PATH]])
+        self.check_excluded_refusal()
+
+    def test_a_path_in_a_key_refuses(self):
+        self.excluded_extra("\n" + HOME_PATH, "x")
+        self.check_excluded_refusal()
+
+    def test_the_block_text_helper_walks_keys_and_strings_in_order(self):
+        self.assertEqual(seal.excluded_block_text({"a": 1, "b": [None, "x", True], "k": {"y": "z"}}), "a\nb\nx\nk\ny\nz")
 
     def test_a_clean_seal_still_passes(self):
         self.w.sealed()

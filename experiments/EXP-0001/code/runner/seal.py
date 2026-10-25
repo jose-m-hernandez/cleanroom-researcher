@@ -464,6 +464,30 @@ def excluded_fixtures(fixtures_root) -> dict:
     return dict(sorted(found.items()))
 
 
+def excluded_block_text(block) -> str:
+    """Every string in an excluded block (keys and values, nested), joined by newlines.
+
+    It gives the scan the parsed strings, because a JSON dump turns a newline into backslash-n and hides a path at the
+    start of a line from the scan.
+    """
+    found = []
+
+    def walk(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if isinstance(key, str):
+                    found.append(key)
+                walk(value)
+        elif isinstance(node, list):
+            for element in node:
+                walk(element)
+        elif isinstance(node, str):
+            found.append(node)
+
+    walk(block)
+    return "\n".join(found)
+
+
 def copied_text_hits(fields: dict) -> list:
     """[(field name, kind)] for each text in fields (name -> text) that holds the account name (case-insensitive) or a
     home path (rule V4, narrowed by HOME_SHAPE: a users or home folder counts only as the first segment of a path,
@@ -564,7 +588,7 @@ def command_seal(fixtures_root, source, repair_log, guide, count_rule, out, envi
         record = {"version": 1, "fixtures": record_of_scores(scores), "excluded_fixtures": excluded_fixtures(fixtures_root),
                   "count_rule": count_text}
         head = git_head(repo_root)
-        fields = {f"excluded block of {fid}": json.dumps(block, ensure_ascii=False, sort_keys=True)
+        fields = {f"excluded block of {fid}": excluded_block_text(block)
                   for fid, block in record["excluded_fixtures"].items()}
         fields["count rule"] = count_text
         fields["repair log"] = Path(repair_log).read_bytes().decode("utf-8", errors="replace")

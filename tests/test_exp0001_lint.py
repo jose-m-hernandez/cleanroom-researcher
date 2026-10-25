@@ -118,6 +118,7 @@ class LintTests(unittest.TestCase):
         code, text = self.run_lint()
         self.assertEqual(code, 1, text)
         self.assertIn("lint: dev-003: unreadable", text)
+        self.assertTrue(any(line.endswith("dev-003: unreadable") for line in text.splitlines()), text)
         self.assertNotIn("lint: ok", text)
 
     @unittest.skipIf(os.geteuid() == 0, "root ignores folder permissions")
