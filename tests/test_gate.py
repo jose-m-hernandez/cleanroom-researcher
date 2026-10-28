@@ -437,6 +437,14 @@ class WorkflowTests(unittest.TestCase):
         for line in uses:
             self.assertRegex(line, r"@[0-9a-f]{40}(\s|$)")
 
+    def test_dev_tools_job_runs_pytest_on_tests_only(self):
+        block = job_block("dev-tools")
+        runs = [l.strip() for l in block if re.match(r"^\s*(- )?run:", l)]
+        self.assertEqual(runs, [
+            "- run: python3 -m pip install -r requirements-dev.txt",
+            "- run: python3 -m pytest -q -p no:cacheprovider tests",
+        ])
+
     def test_every_action_is_pinned_to_a_commit(self):
         uses = [l for l in read_workflow().split("\n") if re.match(r"^\s*(- )?uses:", l)]
         self.assertTrue(uses)
