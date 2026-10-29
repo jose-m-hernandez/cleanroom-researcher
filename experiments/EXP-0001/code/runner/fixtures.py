@@ -598,7 +598,8 @@ def _placeholder_temp(text: str, environ=None) -> str:
 
 
 def _placeholder_identity(text: str) -> str:
-    """Home path to {{HOME}}, then the whole-word username to 'user'. The group name is not touched.
+    """Home path to {{HOME}}, then the username, in any letter case and as a whole word, to 'user'. The group name is
+    not touched.
 
     It expects one string, not a JSON dump: a dump hides a name at the start of a line behind backslash-n.
     A name right after one of the five one-letter JSON escapes (a backslash followed by n, r, t, b or f) counts as a
@@ -606,6 +607,9 @@ def _placeholder_identity(text: str) -> str:
     The stated limit: other encodings of the name are not decoded: unicode escapes, double-escaped text,
     percent-encoding, base64, HTML entities and any other encoding. The backstop is the seal's pre-seal username
     scan, which refuses.
+    The stated limit on the boundary: a name glued to a letter, digit or underscore (inside a longer word, or joined
+    by an underscore) is not replaced. The seal's pre-seal scan matches the name case-insensitively anywhere in the
+    text, so the seal refuses such a transcript (fail-closed).
     A known over-replacement: in a Windows-style path, a folder name made of the letter n, r, t, b or f followed by
     the account name (after a backslash) also has the name part replaced. It replaces more, never less, and only in
     normalized transcripts.
@@ -620,8 +624,8 @@ def _placeholder_identity(text: str) -> str:
         pass
     for home in sorted((h for h in homes if len(h) > 1), key=len, reverse=True):
         text = re.sub(_slash_pattern(home) + r"(?![A-Za-z0-9_.-])", PLACEHOLDER_HOME, text)
-    return re.sub(r"(?:(?<![A-Za-z0-9_])|(?<=\\[nrtbf]))" + re.escape(name) + r"(?![A-Za-z0-9_])", PLACEHOLDER_USER,
-                  text)
+    return re.sub(r"(?:(?<![A-Za-z0-9_])|(?<=\\[nrtbf]))(?i:" + re.escape(name) + r")(?![A-Za-z0-9_])",
+                  PLACEHOLDER_USER, text)
 
 
 def _map_strings(node, fn):

@@ -1,6 +1,8 @@
 """Offline tests for the scan of the texts the seal copies unscanned: each spec's excluded block, the count rule and
 the repair log. A hit refuses with exit 2, names the field and the kind, never the matched text, and writes nothing.
 
+It also covers a normalized transcript reaching the seal.
+
 The held-out world of tests/test_exp0001_seal.py is built by calling its setUp on an instance, never by subclassing.
 """
 
@@ -16,6 +18,7 @@ import seal  # noqa: E402
 from tests import test_exp0001_seal as st  # noqa: E402
 
 HOME_PATH = "/Us" + "ers/" + "alice/notes"  # built from parts: the vocabulary rule V4 reads this file too
+WIN = "C:" + "\\Us" + "ers\\"  # a Windows profile prefix, from parts for the same reason
 
 
 class SealTextScanTests(unittest.TestCase):
@@ -120,8 +123,64 @@ class SealTextScanTests(unittest.TestCase):
         got = seal.copied_text_hits({"a": "x" + "\\b" + HOME_PATH, "b": "plain " + HOME_PATH, "c": "clean"})
         self.assertEqual(got, [("a", "home path"), ("b", "home path")])
 
+    def test_the_raw_copy_catches_a_profile_folder_that_starts_with_an_escape_letter(self):
+        for folder in ("build", "files", "notes", "repo", "tools"):
+            with self.subTest(folder=folder):
+                self.assertEqual(seal.copied_text_hits({"a": "see " + WIN + folder}), [("a", "home path")])
+
+    def test_a_profile_path_in_the_repair_log_refuses_end_to_end(self):
+        self.w.repair.write_text("repair log: see " + WIN + "notes\n", encoding="utf-8")
+        out = self.w.refused(2, "repair log")
+        self.assertIn("home path", out)
+        self.assertNotIn(WIN + "notes", out)
+
+    def test_a_bare_backslash_r_or_f_before_a_path_still_hits(self):
+        for esc in ("\\r", "\\f"):
+            with self.subTest(esc=esc):
+                self.assertEqual(seal.copied_text_hits({"a": "done" + esc + HOME_PATH}), [("a", "home path")])
+
+    def test_the_account_name_is_reported_once_per_field(self):
+        self.assertEqual(seal.copied_text_hits({"a": "x " + st.SENTINEL + " y"}), [("a", "account name")])
+
+    def test_the_account_name_is_reported_before_the_home_path(self):
+        self.assertEqual(seal.copied_text_hits({"a": HOME_PATH + " " + st.SENTINEL}),
+                         [("a", "account name"), ("a", "home path")])
+
     def test_the_block_text_helper_walks_a_dict_inside_a_list(self):
         self.assertEqual(seal.excluded_block_text({"l": [{"k": "v"}, "w"]}), "l\nk\nv\nw")
+
+
+class NormalizeThenSealTests(unittest.TestCase):
+    def setUp(self):
+        self.w = st.World("setUp")
+        self.w.setUp()
+        self.addCleanup(self.w.doCleanups)
+
+    def normalized_row(self, form):
+        row = {"type": "user", "uuid": "u", "parentUuid": None,
+               "message": {"content": [{"type": "text", "text": "Hi " + form + ", done"}]}}
+        return st.fixtures.normalize_transcript([row], [], "", environ=self.w.environ)
+
+    def append_row(self, out):
+        with open(self.w.store / st.HIDS[0] / "transcript.jsonl", "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(out[0]) + "\n")
+
+    def test_a_capitalised_name_is_normalized_away_and_the_seal_passes(self):
+        for form in (st.SENTINEL.title(), st.SENTINEL.upper()):
+            with self.subTest(form=form):
+                self.setUp()  # a fresh world per case
+                out = self.normalized_row(form)
+                self.assertNotIn(form.casefold(), json.dumps(out).casefold())
+                self.append_row(out)
+                self.w.sealed()
+
+    def test_a_glued_name_survives_normalization_and_the_seal_refuses(self):
+        form = st.SENTINEL.title() + "_x"
+        out = self.normalized_row(form)
+        self.assertIn(form, json.dumps(out))
+        self.append_row(out)
+        text = self.w.refused(1, "(username)")
+        self.assertNotIn(st.SENTINEL.casefold(), text.casefold())
 
 
 if __name__ == "__main__":

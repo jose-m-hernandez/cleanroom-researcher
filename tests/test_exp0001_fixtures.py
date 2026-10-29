@@ -835,6 +835,35 @@ class NormalizeTests(unittest.TestCase):
     def test_a_name_inside_a_longer_word_after_a_json_escape_is_kept(self):
         self.assertEqual(self.norm_text("log" + "\\n" + "zedge ran"), "log" + "\\n" + "zedge ran")
 
+    def test_the_username_is_replaced_in_any_letter_case(self):
+        self.assertEqual(self.norm_text("Hi Zed, ran it"), "Hi user, ran it")
+        self.assertEqual(self.norm_text("ZED ran"), "user ran")
+        self.assertEqual(self.norm_text("log" + "\\n" + "Zed ran"), "log" + "\\n" + "user ran")
+
+    def test_a_name_glued_to_a_letter_digit_or_underscore_is_kept_in_any_case(self):
+        text = "Zedge Zed_x ZEDx xZed"
+        self.assertEqual(self.norm_text(text), text)
+
+    def test_the_lower_case_name_is_still_replaced(self):
+        self.assertEqual(self.norm_text("zed ran"), "user ran")
+
+    def test_the_escape_set_stays_lower_case(self):
+        for esc in ("\\N", "\\R", "\\T", "\\B", "\\F"):
+            with self.subTest(esc=esc):
+                text = "log" + esc + "zed ran"
+                self.assertEqual(self.norm_text(text), text)
+
+    def test_a_name_after_the_other_three_json_escapes_is_replaced(self):
+        for esc in ("\\r", "\\b", "\\f"):
+            with self.subTest(esc=esc):
+                self.assertEqual(self.norm_text("log" + esc + "zed ran"), "log" + esc + "user ran")
+
+    def test_a_letter_without_its_backslash_is_not_an_escape(self):
+        for letter in "nrtbf":
+            with self.subTest(letter=letter):
+                text = "x" + letter + "zed ran"
+                self.assertEqual(self.norm_text(text), text)
+
     def test_the_realpath_and_path_alias_pair_as_keys_is_an_error(self):
         row = {"type": "assistant", "uuid": "a3", "parentUuid": None,
                "message": {"content": [{"type": "tool_use", "id": "t1", "name": "Read",

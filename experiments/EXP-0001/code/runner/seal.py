@@ -389,7 +389,9 @@ def command_canary(canary_type, fixtures_root=None, environ=None, out=None, runn
 def scan_transcripts(fixtures_root, environ=None) -> list:
     """[(fixture id, pattern)] for every normalized transcript under fixtures_root that holds a canary token or the
     account name (case-insensitive). The pattern is "C6 token", "C7 token" or "username"; the matched text is never
-    returned. Refuses (SealStop) unless both canaries are PASS, and when the account name is unknown."""
+    returned. Refuses (SealStop) unless both canaries are PASS, and when the account name is unknown.
+    The normalizer replaces the account name only as a whole word (any letter case), so a name glued to a letter, digit
+    or underscore in a transcript is a hit here and the seal refuses; that is a stated limit."""
     gates, reason = read_gates(environ)
     if gates is None:
         raise SealStop(reason)
