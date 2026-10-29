@@ -977,5 +977,15 @@ class CliTests(unittest.TestCase):
         self.assertIn("experiments: ok (", out)
 
 
+class RealVocabularyLicenceTests(unittest.TestCase):
+    def test_cc_by_sa_is_not_redistributable_until_its_review_lands(self):
+        with open(os.path.join(REAL_ROOT, "docs/vocabulary.md")) as f:
+            text = f.read()
+        values = check_admission.vocabulary_values(text, "Redistributable licences")
+        self.assertNotIn("CC-BY-SA-4.0", values)
+        self.assertIn("MIT", values)
+        self.assertIn("CC-BY-4.0", values)
+
+
 if __name__ == "__main__":
     unittest.main()

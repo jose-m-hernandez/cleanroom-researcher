@@ -78,4 +78,3 @@ The quoted phrases in `agent harness` and `evaluation harness` are from Anthropi
 | `BSD-3-Clause` | BSD 3-Clause License. |
 | `CC0-1.0` | Creative Commons Zero 1.0 Universal. |
 | `CC-BY-4.0` | Creative Commons Attribution 4.0 International. |
-| `CC-BY-SA-4.0` | Creative Commons Attribution-ShareAlike 4.0 International. |

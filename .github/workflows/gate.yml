@@ -47,7 +47,7 @@ jobs:
         with:
           python-version: "3.13"
       - run: python3 -m pip install -r requirements-dev.txt
-      - run: python3 -m pytest -q -p no:cacheprovider
+      - run: python3 -m pytest -q -p no:cacheprovider tests
 
   barred:
     runs-on: ubuntu-24.04
