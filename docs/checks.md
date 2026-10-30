@@ -33,6 +33,6 @@ This page says what each check code means. The words this repository uses on pur
 | S2 | Each finding has a grade from the `Evidence grades` table. | `tools/check_experiments.py` |
 | S3 | Each finding has a falsifier that is not empty. | `tools/check_experiments.py` |
 
-The reserved word is the one `docs/vocabulary.md` says is not used alone. V2 and V3 refuse the shapes that join it to another word, so this page does not write those shapes out.
+The reserved word is the one in the first row of the Terms table in `docs/vocabulary.md`, which says it is not used alone. V2 and V3 refuse the shapes that join it to another word. This page does not write those shapes out, because it is checked too and would fail its own check.
 
 E5 is the `_raw` rule, which A10 implements.

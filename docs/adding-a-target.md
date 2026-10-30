@@ -123,7 +123,9 @@ From the root of the clone, run the whole gate in a clean environment:
 env -i PATH=/usr/bin:/bin HOME="$(mktemp -d)" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=user.useConfigOnly GIT_CONFIG_VALUE_0=true python3 tools/gate.py
 ```
 
-The command clears the environment so the gate sees nothing from your home directory or git settings. If `python3` or `git` is not in `/usr/bin` or `/bin`, add its directory to `PATH` in the command.
+The command clears the environment so the gate sees nothing from your home directory or git settings. If `python3` or `git` is not in `/usr/bin` or `/bin`, add its directory to `PATH` in the command. The command is written for a Unix shell, such as the one on macOS or Linux.
+
+The whole gate runs about 1430 tests and takes several minutes on a laptop, and it prints nothing until the end. To run the checks without the tests, run `python3 tools/gate.py --checks-only`. It takes a few seconds and ends with `gate: PASS (checks only)`.
 
 A pass ends with these lines, with your own counts:
 
@@ -135,7 +137,7 @@ tests: ok (... tests)
 gate: PASS
 ```
 
-Any other last line (`gate: FAIL` or `gate: DEAD`) means a stage found a problem. Each finding names the file and says how to fix it.
+Any other last line (`gate: FAIL` or `gate: DEAD`) means a stage found a problem. Each finding names the file and says how to fix it. `DEAD` means a stage could not run at all, for example because a check raised an error, or because the test run found no tests, skipped some, or its positive control did not fire. It exits 2, and it says the environment or a test file is wrong, not that your change has a finding.
 
 ## 10. New vocabulary is data
 

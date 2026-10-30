@@ -14,6 +14,7 @@ The words this repository uses on purpose, each with one meaning.
 | `runtime` | This repository's term: the part of an agent harness that runs the model in a loop and executes its tool calls. |
 | `target` | The outside tool under test. |
 | `synthesis` | A set of findings, each graded, with a falsifier and the pinned sources that support it. |
+| `generated file` | A file with a `fixture` row in `docs/admissions.md`. `tools/reproduce.py` rebuilds it by running the generator that row names, and compares the result with the committed copy. |
 
 The quoted phrases in `agent harness` and `evaluation harness` are from Anthropic, "Demystifying evals for AI agents" (2026-01-09). The other definitions are this repository's wording.
 

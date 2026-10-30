@@ -4,8 +4,8 @@ id: EXP-NNNN
 subject: SRC-NNNN (the target's source record), or the word method when the experiment tests this repository's own method
 protocol: preregistered or exploratory (defined under Hypotheses and planned analysis)
 read_log: contemporaneous or reconstructed
-spend_cap_usd: write - when there is no live run; otherwise a positive amount, such as 5 or 2.50
-launched_by: write - when there is no live run; otherwise who runs the experiment and pays for it
+spend_cap_usd: a positive amount, such as 5 or 2.50; it may be set before any run and must be set before the first live call; write - until then
+launched_by: who runs the experiment and pays for it; it may be set before any run and must be set before the first live call; write - until then
 
 ## Abstract
 

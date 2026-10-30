@@ -10,13 +10,17 @@ You can help in three ways. Read the one that fits, then the checklist.
 
 ## Before you open a pull request
 
+You need Python 3.9 or later and `git`, and nothing else to install. The file `requirements-dev.txt` holds only `pytest>=8`; it is for running the suite under pytest, as the CI job `dev-tools` does (`.github/workflows/gate.yml`).
+
 Run the whole gate, which is every check in `docs/checks.md` and the tests, in a clean environment, from the root of your clone:
 
 ```
 env -i PATH=/usr/bin:/bin HOME="$(mktemp -d)" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=user.useConfigOnly GIT_CONFIG_VALUE_0=true python3 tools/gate.py
 ```
 
-The command clears the environment so the gate sees nothing from your home directory or git settings. If `python3` or `git` is not in `/usr/bin` or `/bin`, add its directory to `PATH` in the command.
+The command clears the environment so the gate sees nothing from your home directory or git settings. If `python3` or `git` is not in `/usr/bin` or `/bin`, add its directory to `PATH` in the command. The command is written for a Unix shell, such as the one on macOS or Linux.
+
+The whole gate runs about 1430 tests and takes several minutes on a laptop, and it prints nothing until the end. To run the checks without the tests, run `python3 tools/gate.py --checks-only`. It takes a few seconds and ends with `gate: PASS (checks only)`.
 
 Then rebuild every experiment's generated files:
 
