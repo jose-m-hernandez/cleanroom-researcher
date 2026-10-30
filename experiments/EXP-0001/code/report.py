@@ -8,6 +8,7 @@ P:66-70, with the overrides of P:109, P:135 and P:146); every other report is un
 
 from __future__ import annotations
 
+import math
 import sys
 from pathlib import Path
 
@@ -87,6 +88,10 @@ def decide(lo, hi, sealed, left, kappa) -> tuple:
     or a kappa under the audit's bar, is "inconclusive"; then the interval against THRESHOLD: wholly above supports,
     wholly below counts against, anything else (a bound equal to the threshold included) is inconclusive.
     """
+    for name, value in (("kappa", kappa), ("lo", lo), ("hi", hi)):
+        if (value is not None or name == "kappa") and (
+                isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)):
+            raise ValueError("%s is not a finite number" % name)
     if sealed < MIN_SEALED:
         return "not determined", ["fewer than 20 fixtures sealed (P:109)"]
     if left > MAX_LEFT:
@@ -157,12 +162,16 @@ def final_sections(run: dict, scores: dict, final: dict, seed) -> list:
            "Interval bounds as decided, at full precision with no rounding: lower %s, upper %s." % (
                "n/a" if lo is None else repr(lo), "n/a" if hi is None else repr(hi)),
            "Threshold T = %s." % fmt(THRESHOLD),
-           "The audit's kappa is %s against the bar %s%s." % (fmt(kappa), fmt(audit.KAPPA_BAR, 1), caveat),
+           "The audit's kappa is %s against the bar %s%s." % (repr(kappa), fmt(audit.KAPPA_BAR, 1), caveat),
            "Fixtures sealed: %d. Fixtures left out of the primary: %d (the planned %d less those sealed, as dropped "
            "and not replaced, plus the sealed fixtures with no baseline value)." % (who["sealed"], who["left"], PLANNED_FIXTURES),
            "Sealed fixtures with no baseline value: %s." % (", ".join(who["no_value"]) or "none"),
-           "Excluded fixtures: %s." % ("; ".join("%s (%s)" % (f, r) for f, r in who["excluded"].items()) or "none"), "",
-           "Outcome: %s." % outcome]
+           ]
+    if who["excluded"]:  # a reason is free text: an indented block keeps it from making a heading
+        out += ["Excluded fixtures:", ""] + indented("\n".join("%s: %s" % (f, r) for f, r in who["excluded"].items()))
+    else:
+        out += ["Excluded fixtures: none.", ""]
+    out += ["Outcome: %s." % outcome]
     out += ["- " + r for r in reasons]
     out += ["", "Every outcome is stated relative to T = %s (P:71)." % fmt(THRESHOLD), ""]
     filtered = t_filter_cells(scores)
@@ -206,6 +215,10 @@ def load_final(seal_dir, audit_path) -> dict:
                 raise ValueError(v)
     except (OSError, ValueError, KeyError, TypeError):
         raise ReportError("audit.json missing or unreadable")
+    if not math.isfinite(kappa):
+        raise ReportError("audit.json kappa is not a finite number")
+    if isinstance(n, float) or n < 1:
+        raise ReportError("audit.json n is not an integer of at least 1")
     return {"record": record, "repair_log_text": text, "audit": summary}
 
 
@@ -432,6 +445,9 @@ def write_report(results_dir, out_dir=None, stdout=None, seal_dir=None, audit_pa
                 print("report: REFUSED a held-out final report needs --seal and --audit", file=stdout)
                 return 2
             final = load_final(seal_dir, audit_path)
+            for key in ("labels", "multi_value"):
+                if key not in scores:
+                    raise ReportError("scores.json has no %s: re-run score" % key)
         md = build_markdown(run, scores, final)
     except ReportError as exc:
         print(f"report: STOP {exc}", file=stdout)

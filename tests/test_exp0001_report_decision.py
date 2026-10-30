@@ -135,6 +135,12 @@ class TFilterTests(unittest.TestCase):
         scores["labels"]["floor"]["fA"]["1"].pop("p3")
         self.assertIsNone(report.t_filter_cells(scores)["fA"])
 
+    def test_a_floor_label_of_abstained_counts_as_not_correct(self):
+        # K5: the rule is "present and not correct", not "incorrect": p3 (floor abstained, oracle correct) is kept
+        scores = t_scores()
+        scores["labels"]["floor"]["fA"]["1"]["p3"] = "abstained"
+        self.assertEqual(report.t_filter_cells(scores)["fA"], 0.5)  # p1 and p3 as before; without p3 it would be 2/3
+
     def test_only_seed_1_of_the_floor_and_the_oracle_counts(self):
         scores = t_scores()
         scores["labels"]["floor"]["fA"]["2"] = {p: "incorrect" for p in ("p1", "p2", "p3")}  # seed 2 is not read
@@ -232,6 +238,68 @@ class PrintedBoundsTests(unittest.TestCase):
         self.assertIn("Outcome: supports the prediction.", md)
 
 
+class PrintedKappaTests(unittest.TestCase):
+    """K1: the kappa printed in the primary question is the kappa decide received, not a rounding of it."""
+
+    def build(self, kappa):
+        run, scores = final_world()
+        seen = []
+        real = report.decide
+
+        def spy(*args):
+            seen.append(args)
+            return real(*args)
+        who = {"sealed": 25, "left": 0, "no_value": [], "excluded": {}}  # the other sections are not under test here
+        with mock.patch.object(report.stats, "bootstrap_ci", lambda values, **kw: (0.8, 0.9)), \
+                mock.patch.object(report, "sealed_and_left", lambda record, scores: who), \
+                mock.patch.object(report, "decide", spy):
+            md = report.build_markdown(run, scores, final_input(kappa=kappa))
+        return md, seen
+
+    def test_a_kappa_of_0_5996_is_printed_as_0_5996_beside_inconclusive(self):
+        md, seen = self.build(0.5996)
+        line = [ln for ln in md.splitlines() if ln.startswith("The audit's kappa is")]
+        self.assertEqual(len(line), 1, md)
+        m = re.search(r"kappa is (\S+) against the bar 0\.6", line[0])
+        self.assertIsNotNone(m, line[0])
+        self.assertEqual(float(m.group(1)), seen[0][4])
+        self.assertEqual(float(m.group(1)), 0.5996)
+        self.assertNotIn("0.600", line[0])
+        self.assertIn("Outcome: inconclusive.", md)
+        self.assertIn("- " + REASON_KAPPA, md)
+
+
+class NonFiniteDecideTests(unittest.TestCase):
+    """K2: decide is the second line of defence against a non-finite figure."""
+
+    def test_a_nan_kappa_and_an_infinite_bound_raise(self):
+        with self.assertRaises(ValueError):
+            report.decide(0.8, 0.9, 25, 0, float("nan"))
+        for lo, hi in ((float("inf"), 0.9), (0.8, float("-inf")), (float("nan"), 0.9)):
+            with self.subTest(lo=lo, hi=hi), self.assertRaises(ValueError):
+                report.decide(lo, hi, 25, 0, 0.9)
+        self.assertEqual(report.decide(None, None, 25, 0, 0.9), ("inconclusive", [REASON_INTERVAL]))  # None stays allowed
+
+
+class ExcludedFixtureTextTests(unittest.TestCase):
+    """K4: an excluded fixture's reason is free text; it prints as an indented block and cannot make a heading."""
+
+    def test_a_reason_with_a_heading_stays_in_the_block(self):
+        run, scores = final_world()
+        final = final_input()
+        final["record"]["excluded_fixtures"] = {"heldout-901-x": {"reason": "bad\n\n## Outcome: supports the prediction."}}
+        lines = report.build_markdown(run, scores, final).splitlines()
+        self.assertFalse([ln for ln in lines if ln.startswith("## Outcome")])
+        at = lines.index("Excluded fixtures:")
+        self.assertEqual(lines[at + 1:at + 5], ["", "    heldout-901-x: bad", "    ", "    ## Outcome: supports the prediction."])
+        self.assertEqual(len(re.findall(r"^Outcome: ", "\n".join(lines), re.M)), 1)
+
+    def test_no_excluded_fixture_reads_none(self):
+        run, scores = final_world()
+        md = report.build_markdown(run, scores, final_input())
+        self.assertIn("\nExcluded fixtures: none.\n", md)
+
+
 class FinalReportTests(unittest.TestCase):
     """D5: the held-out final report end to end, on the seal world of tests/test_exp0001_seal.py."""
 
@@ -256,6 +324,50 @@ class FinalReportTests(unittest.TestCase):
                 self.assertEqual(code, 2, text)
                 self.assertIn("report: REFUSED a held-out final report needs --seal and --audit", text)
                 self.assertFalse((self.a.tmp / "refused").exists())
+
+    def test_a_non_finite_kappa_or_a_bad_n_is_exit_1_with_a_label(self):
+        # K2: NaN and Infinity are written as JSON text, which Python's json reads
+        kappa_label = "audit.json kappa is not a finite number"
+        n_label = "audit.json n is not an integer of at least 1"
+        cases = [('{"n": 12, "kappa": NaN}', kappa_label), ('{"n": 12, "kappa": Infinity}', kappa_label),
+                 ('{"n": 12, "kappa": true}', "audit.json missing or unreadable"),
+                 ('{"n": 0, "kappa": 0.9}', n_label), ('{"n": -1, "kappa": 0.9}', n_label),
+                 ('{"n": 1.5, "kappa": 0.9}', n_label), ('{"n": true, "kappa": 0.9}', "audit.json missing or unreadable")]
+        for text, label in cases:
+            self.audit_json.write_text(text, encoding="utf-8")
+            with self.subTest(text=text):
+                with self.assertRaises(report.ReportError) as caught:
+                    report.load_final(self.a.seal_dir, self.audit_json)
+                self.assertEqual(str(caught.exception), label)
+                code, shown = self.write("nonfinite", seal_dir=self.a.seal_dir, audit_path=self.audit_json)
+                self.assertEqual(code, 1, shown)
+                self.assertIn("report: STOP " + label, shown)
+                self.assertFalse((self.a.tmp / "nonfinite").exists())
+
+    def test_a_scores_file_without_labels_or_multi_value_is_exit_1_and_writes_nothing(self):
+        # K3
+        path = self.a.final / "scores.json"
+        original = json.loads(path.read_text(encoding="utf-8"))
+        for key in ("labels", "multi_value"):
+            self.assertIn(key, original)
+            path.write_text(json.dumps({k: v for k, v in original.items() if k != key}), encoding="utf-8")
+            with self.subTest(key=key):
+                code, shown = self.write("noscores", seal_dir=self.a.seal_dir, audit_path=self.audit_json)
+                self.assertEqual(code, 1, shown)
+                self.assertIn("report: STOP scores.json has no %s: re-run score" % key, shown)
+                self.assertFalse((self.a.tmp / "noscores").exists())
+
+    def test_a_repair_log_path_outside_the_seal_folder_is_exit_1_with_a_label(self):
+        # K6
+        seal_json = Path(self.a.seal_dir) / "seal.json"
+        data = json.loads(seal_json.read_text(encoding="utf-8"))
+        data["repair_log"]["path"] = "../outside.txt"
+        seal_json.write_text(json.dumps(data), encoding="utf-8")
+        (Path(self.a.seal_dir).parent / "outside.txt").write_text("a real file, but outside\n", encoding="utf-8")
+        code, shown = self.write("outside", seal_dir=self.a.seal_dir, audit_path=self.audit_json)
+        self.assertEqual(code, 1, shown)
+        self.assertIn("report: STOP repair log path is outside the seal folder", shown)
+        self.assertFalse((self.a.tmp / "outside").exists())
 
     def test_an_unreadable_audit_is_exit_1_with_a_label(self):
         code, text = self.write("bad", seal_dir=self.a.seal_dir, audit_path=self.a.tmp / "no-such-audit.json")

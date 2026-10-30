@@ -654,11 +654,13 @@ def control(environ=None, out=None, runner=None, config_path=None) -> int:
     """Run the five controls. Any unexpected exception becomes a one-line label and exit 1.
 
     The result is recorded in gates.json as the C1-5 entry (P:239), through seal.record_control, which has no token:
-    PASS when all five passed; FAIL when at least one live control run was launched and the command did not end in
-    PASS (an exception after the first launch included); nothing when it stopped before the first launch (no live
-    flag, no ledger, CLAUDE_CONFIG_DIR set, preflight FAIL, an unreadable spend file, a plugin-export error: setup
-    errors, not a failed control). A control is never re-run: with a C1-5 entry already in gates.json the command
-    refuses (exit 2, no launch), after the live-flag check.
+    PASS when all five passed; FAIL when at least one child process was spawned (the runner's on_launch call, at the
+    spawn point) and the command did not end in PASS (an exception after the first spawn included); nothing when it
+    stopped before the first spawn (no live flag, no ledger, CLAUDE_CONFIG_DIR set, preflight FAIL, an unreadable spend
+    file, a plugin-export error, a claude command that cannot be started: setup errors, not a failed control). A control
+    is never re-run: with a C1-5 entry already in gates.json the command refuses (exit 2, no launch), after the
+    live-flag check and the lock. The lock is control.lock in the eval root, created exclusively for the run and
+    removed when it ends; one that exists refuses (exit 2), whatever its content, and is never broken here.
     """
     import seal  # inside the function: seal imports claude_run
 
@@ -667,10 +669,13 @@ def control(environ=None, out=None, runner=None, config_path=None) -> int:
     runner = runner or run_claude
     launched = []  # one start time per launch; the first is the entry's started_utc
 
-    def counted(*args, **kwargs):
-        if not launched:
-            launched.append(seal.utc_now())
-        return runner(*args, **kwargs)
+    def counted(*args, on_launch=None, **kwargs):
+        def spawned():  # run_claude calls this at the spawn point: a child exists from here on
+            if not launched:
+                launched.append(seal.utc_now())
+            if on_launch is not None:
+                on_launch()
+        return runner(*args, on_launch=spawned, **kwargs)
 
     code = 1
     try:
@@ -703,6 +708,25 @@ def _control(environ, out, runner, config_path) -> int:
     if environ.get("CPR_EVAL_LIVE") != "1":
         print("live run refused: set CPR_EVAL_LIVE=1", file=out)
         return 2
+    import seal  # inside the function: seal imports claude_run
+
+    lock = eval_root(environ) / "control.lock"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError:
+        print(f"control: REFUSED {lock} exists: another control may be running; if none is, delete the file and "
+              "run control again", file=out)
+        return 2
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps({"pid": os.getpid(), "started_utc": seal.utc_now()}) + "\n")
+        return _control_locked(environ, out, runner, config_path)
+    finally:
+        lock.unlink(missing_ok=True)  # only a lock this run created gets here
+
+
+def _control_locked(environ, out, runner, config_path) -> int:
     import seal  # inside the function: seal imports claude_run
 
     gates, reason = seal.read_gates(environ, missing_ok=True)

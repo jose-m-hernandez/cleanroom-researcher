@@ -197,10 +197,11 @@ class ControlRecordTests(unittest.TestCase):
 
     def test_an_exception_from_the_first_launch_is_a_fail_too(self):
         def boom(*args, **kwargs):
+            kwargs["on_launch"]()  # the child was spawned, then the run raised
             raise RuntimeError("boom")
         code, _ = self.h.run_control(boom)
         self.assertEqual(code, 1)
-        self.assertEqual(self.gates()[KEY]["outcome"], "FAIL")  # the launch was attempted
+        self.assertEqual(self.gates()[KEY]["outcome"], "FAIL")  # the spawn happened
 
     def test_a_setup_stop_before_the_first_launch_records_nothing(self):
         cases = {
@@ -268,6 +269,175 @@ class ControlRecordTests(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertEqual(set(self.gates()), {KEY, "C6"})
         self.assertEqual(self.gates()["C6"]["outcome"], "PASS")
+
+
+class ControlSpawnAndLockTests(unittest.TestCase):
+    """G6 to G12: a launch counts at the spawn point, and `control` holds an exclusive lock in the eval root."""
+
+    def setUp(self):
+        self.h = iso.ControlTests("run_control")
+        self.h.setUp()
+        self.addCleanup(self.h.doCleanups)
+        self.environ = self.h.environ
+        self.path = claude_run.eval_root(self.environ) / "gates.json"
+        self.lock = claude_run.eval_root(self.environ) / "control.lock"
+
+    def gates(self):
+        return json.loads(self.path.read_text(encoding="utf-8"))
+
+    def runner(self, **kw):
+        return iso.ScriptedRunner(self.h.tmp, self.h.ledger, **kw)
+
+    def real_runner(self, spawn):
+        """The real run_claude; claude_run.subprocess.Popen is replaced by spawn only for the call (the sandbox's git
+        setup runs before the runner is called, through the same module)."""
+        def runner(*args, **kwargs):
+            with mock.patch.object(claude_run.subprocess, "Popen", spawn):
+                return claude_run.run_claude(*args, **kwargs)
+        return runner
+
+    def test_a_missing_claude_command_writes_nothing_and_the_experiment_stays_runnable(self):
+        # G6
+        spawn = mock.Mock(side_effect=FileNotFoundError("no such command"))
+        code, out = self.h.run_control(self.real_runner(spawn))
+        self.assertNotEqual(code, 0, out)
+        self.assertEqual(spawn.call_count, 1)  # the spawn was tried, and failed before any child existed
+        self.assertTrue(not self.path.exists() or KEY not in self.gates(), out)
+        self.assertFalse(self.lock.exists())
+        runner = self.runner()
+        code, out = self.h.run_control(runner)
+        self.assertEqual(code, 0, out)  # not refused by never-re-run
+        self.assertEqual(self.gates()[KEY]["outcome"], "PASS")
+
+    def test_a_spawn_error_before_on_launch_records_nothing_and_after_it_records_a_fail(self):
+        # G7
+        def before(*args, **kwargs):
+            raise claude_run.SpawnError("claude could not be started")
+        code, out = self.h.run_control(before)
+        self.assertEqual(code, 1)
+        self.assertEqual(out.strip(), "control: ERROR SpawnError")
+        self.assertFalse(self.path.exists())
+
+        def after(*args, **kwargs):
+            kwargs["on_launch"]()
+            raise claude_run.SpawnError("the child died")
+        code, out = self.h.run_control(after)
+        self.assertEqual(code, 1)
+        self.assertEqual(self.gates()[KEY]["outcome"], "FAIL")
+
+    def test_a_caller_on_launch_is_called_too(self):
+        seen = []
+
+        def fake(*args, on_launch=None, **kwargs):
+            on_launch()
+            raise RuntimeError("stop")
+        wrapped = {}
+        original = claude_run._control
+
+        def capture(environ, out, runner, config_path):
+            wrapped["runner"] = runner
+            return original(environ, out, runner, config_path)
+        with mock.patch.object(claude_run, "_control", capture):
+            self.h.run_control(fake)
+        with self.assertRaises(RuntimeError):
+            wrapped["runner"](on_launch=lambda: seen.append("caller"))
+        self.assertEqual(seen, ["caller"])
+
+    def test_an_existing_lock_refuses_with_exit_2_and_changes_nothing(self):
+        # G8
+        for with_gates in (False, True):
+            self.lock.parent.mkdir(parents=True, exist_ok=True)
+            self.lock.write_bytes(b'{"pid": 4242, "started_utc": "2026-10-30T10:00:00Z"}\n')
+            if with_gates:
+                put(self.environ, C6=st.entry("PASS"))
+            gates_before = self.path.read_bytes() if self.path.exists() else None
+            lock_before = self.lock.read_bytes()
+            runner = self.runner()
+            with self.subTest(with_gates=with_gates):
+                code, out = self.h.run_control(runner)
+                self.assertEqual((code, runner.calls), (2, []), out)
+                self.assertEqual(out.strip(), "control: REFUSED %s exists: another control may be running; if none is, "
+                                 "delete the file and run control again" % self.lock)
+                self.assertIn(str(self.lock), out)
+                self.assertEqual(self.lock.read_bytes(), lock_before)
+                self.assertEqual(self.path.read_bytes() if self.path.exists() else None, gates_before)
+            self.lock.unlink()
+
+    def test_a_stale_lock_refuses_too_and_is_not_broken(self):
+        # G9
+        for text in ('{"pid": 0, "started_utc": "2020-01-01T00:00:00Z"}\n', "not even json\n", ""):
+            self.lock.parent.mkdir(parents=True, exist_ok=True)
+            self.lock.write_text(text, encoding="utf-8")
+            runner = self.runner()
+            with self.subTest(text=text):
+                code, out = self.h.run_control(runner)
+                self.assertEqual((code, runner.calls), (2, []), out)
+                self.assertIn("control: REFUSED", out)
+                self.assertEqual(self.lock.read_text(encoding="utf-8"), text)
+                self.assertFalse(self.path.exists())
+            self.lock.unlink()
+
+    def test_the_lock_exists_during_the_run_and_is_gone_after_every_kind_of_end(self):
+        # G10
+        during = []
+
+        def watched(inner):
+            def run(*args, **kwargs):
+                during.append(self.lock.exists())
+                return inner(*args, **kwargs)
+            return run
+
+        def raises(exc):
+            def run(*args, **kwargs):
+                during.append(self.lock.exists())
+                kwargs["on_launch"]()
+                raise exc
+            return run
+        cases = {"pass": watched(self.runner()), "fail": watched(self.runner(c1_fires=False)),
+                 "exception after a spawn": raises(RuntimeError("boom")), "interrupt after a spawn": raises(KeyboardInterrupt())}
+        for name, runner in cases.items():
+            self.path.unlink(missing_ok=True)  # a control is never re-run
+            del during[:]
+            with self.subTest(name=name):
+                if name == "interrupt after a spawn":
+                    with self.assertRaises(KeyboardInterrupt):
+                        self.h.run_control(runner)
+                else:
+                    self.h.run_control(runner)
+                self.assertTrue(during and all(during), during)
+                self.assertFalse(self.lock.exists())
+
+    def test_the_lock_holds_this_pid_and_a_start_time(self):
+        seen = []
+
+        def look(*args, **kwargs):
+            seen.append(json.loads(self.lock.read_text(encoding="utf-8")))
+            raise RuntimeError("stop")
+        self.h.run_control(look)
+        self.assertEqual(sorted(seen[0]), ["pid", "started_utc"])
+        self.assertEqual(seen[0]["pid"], os.getpid())
+        self.assertRegex(seen[0]["started_utc"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+
+    def test_the_live_check_comes_before_the_lock(self):
+        # G11
+        self.lock.parent.mkdir(parents=True, exist_ok=True)
+        self.lock.write_bytes(b"held\n")
+        runner = self.runner()
+        code, out = self.h.run_control(runner, {k: v for k, v in self.environ.items() if k != "CPR_EVAL_LIVE"})
+        self.assertEqual((code, runner.calls), (2, []), out)
+        self.assertIn("live run refused", out)
+        self.assertNotIn("REFUSED", out)
+        self.assertEqual(self.lock.read_bytes(), b"held\n")
+
+    def test_an_interrupt_after_a_spawn_records_a_fail_re_raises_and_leaves_no_lock(self):
+        # G12
+        def interrupted(*args, **kwargs):
+            kwargs["on_launch"]()
+            raise KeyboardInterrupt()
+        with self.assertRaises(KeyboardInterrupt):
+            self.h.run_control(interrupted)
+        self.assertEqual(self.gates()[KEY]["outcome"], "FAIL")
+        self.assertFalse(self.lock.exists())
 
 
 class ScanTokenTests(unittest.TestCase):

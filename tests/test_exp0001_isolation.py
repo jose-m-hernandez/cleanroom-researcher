@@ -1139,7 +1139,9 @@ class ScriptedRunner:
         self.kwargs = {}
 
     def __call__(self, cfg, prompt, sandbox, *, label, kind="plain", session_id=None, resume=None,
-                 plugin=None, plain=False, probe=False, model=None, environ=None, prior=None, phase=None):
+                 plugin=None, plain=False, probe=False, model=None, environ=None, prior=None, phase=None, on_launch=None):
+        if on_launch is not None:
+            on_launch()  # a scripted run stands for a run whose child was spawned
         self.calls.append(label)
         self.kwargs[label] = {"plain": plain, "model": model, "plugin": plugin}
         sid = resume or session_id
