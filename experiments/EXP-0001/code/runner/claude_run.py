@@ -660,7 +660,8 @@ def control(environ=None, out=None, runner=None, config_path=None) -> int:
     file, a plugin-export error, a claude command that cannot be started: setup errors, not a failed control). A control
     is never re-run: with a C1-5 entry already in gates.json the command refuses (exit 2, no launch), after the
     live-flag check and the lock. The lock is control.lock in the eval root, created exclusively for the run and
-    removed when it ends; one that exists refuses (exit 2), whatever its content, and is never broken here.
+    removed after the result is recorded (or after it is decided that there is nothing to record), on every path,
+    an interrupt included; one that exists refuses (exit 2), whatever its content, and is never broken here.
     """
     import seal  # inside the function: seal imports claude_run
 
@@ -677,21 +678,26 @@ def control(environ=None, out=None, runner=None, config_path=None) -> int:
                 on_launch()
         return runner(*args, on_launch=spawned, **kwargs)
 
+    counted.held = []  # _control puts the lock it created here; it is removed below, after the record
     code = 1
     try:
-        code = _control(environ, out, counted, config_path)
-    except (SpendError, SpendCapReached, LiveRefused, ConfigError, MemoryDirError, PluginRepoError,
-            isolation.LedgerError) as exc:
-        print(f"control: STOP {exc}", file=out)
-    except Exception as exc:  # label only: exception text can carry argv and paths
-        print(f"control: ERROR {type(exc).__name__}", file=out)
-    except BaseException:  # a Ctrl-C after a launch is a failed control too
+        try:
+            code = _control(environ, out, counted, config_path)
+        except (SpendError, SpendCapReached, LiveRefused, ConfigError, MemoryDirError, PluginRepoError,
+                isolation.LedgerError) as exc:
+            print(f"control: STOP {exc}", file=out)
+        except Exception as exc:  # label only: exception text can carry argv and paths
+            print(f"control: ERROR {type(exc).__name__}", file=out)
+        except BaseException:  # a Ctrl-C after a launch is a failed control too
+            if launched:
+                _record_control("FAIL", launched[0], environ, out)
+            raise
         if launched:
-            _record_control("FAIL", launched[0], environ, out)
-        raise
-    if launched:
-        _record_control("PASS" if code == 0 else "FAIL", launched[0], environ, out)
-    return code
+            _record_control("PASS" if code == 0 else "FAIL", launched[0], environ, out)
+        return code
+    finally:
+        for held in counted.held:
+            held.unlink(missing_ok=True)  # only a lock this run created is in the list
 
 
 def _record_control(outcome, started, environ, out) -> None:
@@ -718,12 +724,16 @@ def _control(environ, out, runner, config_path) -> int:
         print(f"control: REFUSED {lock} exists: another control may be running; if none is, delete the file and "
               "run control again", file=out)
         return 2
+    held = getattr(runner, "held", None)  # control's list: it removes the lock after recording C1-5
+    if held is not None:
+        held.append(lock)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(json.dumps({"pid": os.getpid(), "started_utc": seal.utc_now()}) + "\n")
         return _control_locked(environ, out, runner, config_path)
     finally:
-        lock.unlink(missing_ok=True)  # only a lock this run created gets here
+        if held is None:  # called without control: no one else removes it
+            lock.unlink(missing_ok=True)  # only a lock this run created gets here
 
 
 def _control_locked(environ, out, runner, config_path) -> int:

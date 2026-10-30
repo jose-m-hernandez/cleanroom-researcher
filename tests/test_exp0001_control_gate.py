@@ -440,6 +440,74 @@ class ControlSpawnAndLockTests(unittest.TestCase):
         self.assertFalse(self.lock.exists())
 
 
+class ControlLockHeldUntilRecordedTests(unittest.TestCase):
+    """L1, L2: the lock is held until the C1-5 entry is written, and removed after it."""
+
+    def setUp(self):
+        self.h = iso.ControlTests("run_control")
+        self.h.setUp()
+        self.addCleanup(self.h.doCleanups)
+        self.environ = self.h.environ
+        self.path = claude_run.eval_root(self.environ) / "gates.json"
+        self.lock = claude_run.eval_root(self.environ) / "control.lock"
+
+    def gates(self):
+        return json.loads(self.path.read_text(encoding="utf-8"))
+
+    def runner(self, **kw):
+        return iso.ScriptedRunner(self.h.tmp, self.h.ledger, **kw)
+
+    def spy(self, during, hook=None):
+        real = seal.record_control
+
+        def record(entry, environ=None):
+            during.append(self.lock.exists())
+            if hook is not None:
+                hook()
+            return real(entry, environ)
+        return mock.patch.object(seal, "record_control", record)
+
+    def test_the_lock_exists_while_c1_5_is_written_and_is_gone_after(self):
+        # L1
+        def interrupted(*args, **kwargs):
+            kwargs["on_launch"]()
+            raise KeyboardInterrupt()
+        cases = {"pass": (self.runner(), "PASS"), "fail": (self.runner(c1_fires=False), "FAIL"),
+                 "interrupt": (interrupted, "FAIL")}
+        for name, (runner, outcome) in cases.items():
+            self.path.unlink(missing_ok=True)  # a control is never re-run
+            during = []
+            with self.subTest(name=name), self.spy(during):
+                if name == "interrupt":
+                    with self.assertRaises(KeyboardInterrupt):
+                        self.h.run_control(runner)
+                else:
+                    self.h.run_control(runner)
+                self.assertEqual(during, [True])
+                self.assertEqual(self.gates()[KEY]["outcome"], outcome)
+                self.assertFalse(self.lock.exists())
+
+    def test_a_second_control_started_during_the_record_is_refused(self):
+        # L2
+        second = {}
+
+        def overlap():
+            runner = self.runner()
+            out = io.StringIO()
+            second["code"] = claude_run.control(self.environ, out, runner, self.h.config)
+            second["out"], second["calls"] = out.getvalue(), runner.calls
+        during = []
+        with self.spy(during, overlap):
+            code, out = self.h.run_control(self.runner())
+        self.assertEqual(code, 0, out)
+        self.assertEqual((second["code"], second["calls"]), (2, []), second)
+        self.assertEqual(second["out"].strip(), "control: REFUSED %s exists: another control may be running; if none "
+                         "is, delete the file and run control again" % self.lock)
+        self.assertEqual(set(self.gates()), {KEY})
+        self.assertEqual(self.gates()[KEY]["outcome"], "PASS")
+        self.assertFalse(self.lock.exists())
+
+
 class ScanTokenTests(unittest.TestCase):
     """G5: the pre-seal scan reads the C6 and C7 tokens only."""
 
