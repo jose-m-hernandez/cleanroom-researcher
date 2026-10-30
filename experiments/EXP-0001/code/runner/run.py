@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Entry point for the evals harness: preflight, control, canary, judge-check, validate, gen-fixture, install-check, install-verify, spend-rebuild, seal, run, score, report, pilot, pilot-md."""
+"""Entry point for the evals harness: preflight, control, canary, judge-check, validate, gen-fixture, install-check, install-verify, spend-rebuild, lint, seal, run, score, report, pilot, pilot-md."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import claude_run
 import fixtures
 import judge
+import lint
 import pilot
 import arms
 import probes
@@ -49,10 +50,12 @@ def main(argv=None) -> int:
     gen.add_argument("fixture_id")
     inst = sub.add_parser("install-check", help="resume control for an installed fixture; needs CPR_EVAL_LIVE=1")
     inst.add_argument("fixture_id")
-    verify = sub.add_parser("install-verify", help="re-check an installed fixture offline (evidence gate and lint)")
+    verify = sub.add_parser("install-verify", help="re-check an installed fixture offline (evidence gate)")
     verify.add_argument("fixture_id")
     rebuild = sub.add_parser("spend-rebuild", help="recompute spend.json from the stored run records (per-invocation costs); dry run unless --write")
     rebuild.add_argument("--write", action="store_true", help="write spend.json atomically")
+    lnt = sub.add_parser("lint", help="clean-room lint of a fixture store (P:249): vocabulary rules V1-V4 and the barred-string scan; needs BARRED_STRINGS or BARRED_STRINGS_PATH")
+    lnt.add_argument("fixtures_root")
     batch = sub.add_parser("run", help="preserve runs and probe sessions for arms x fixtures x seeds; needs CPR_EVAL_LIVE=1")
     batch.add_argument("--split", default="dev", choices=fixtures.SPLITS)
     batch.add_argument("--fixtures", default="all", help="'all', or comma-separated fixture ids or id prefixes")
@@ -139,6 +142,8 @@ def main(argv=None) -> int:
         return fixtures.install_verify(args.fixture_id)
     if args.command == "spend-rebuild":
         return claude_run.spend_rebuild(write=args.write)
+    if args.command == "lint":
+        return lint.command_lint(args.fixtures_root)
     if args.command == "run":
         date = args.date or datetime.date.today().strftime("%Y%m%d")
         root = Path(args.fixtures_root) if args.fixtures_root else fixtures.FIXTURES_DIR / args.split

@@ -165,7 +165,8 @@ def write_run_json(out, cfg, split, fids, arm_names, seeds, date, judge_model=No
     """Create <out>/run.json, or extend an existing one. A changed pin refuses (a batch never mixes versions).
 
     A new run mints its run id and creates its raw folder (an existing folder refuses); a resumed run keeps the id
-    recorded in its own run.json, and so its raw folder.
+    recorded in its own run.json, and so its raw folder, but only when that folder's owner file names this results
+    folder: a copied results folder refuses (arms.RawError) and must be run into a new --out.
     """
     path = Path(out) / "run.json"
     meta = {"version": 1, "run_id": Path(out).name, "split": split, "date": date, "rng_seed": cfg.get("rng_seed", 0),
@@ -186,10 +187,11 @@ def write_run_json(out, cfg, split, fids, arm_names, seeds, date, judge_model=No
         for key in PROOF_LISTS:
             meta[key] = list(old.get(key, []))
     if old is not None and arms.RUN_ID_RE.match(str(old.get("raw_run_id"))):
+        arms.check_raw_owner(old["raw_run_id"], out, environ)
         meta["raw_run_id"] = old["raw_run_id"]
     else:
         meta["raw_run_id"] = arms.new_run_id()
-        arms.create_raw_folder(meta["raw_run_id"], environ)
+        arms.create_raw_folder(meta["raw_run_id"], environ, out)
     meta["proof_counts"] = proof_counts(meta)
     arms.write_json(path, meta)
     return meta
@@ -215,7 +217,7 @@ def log_denials(out, cell: dict, record: dict) -> None:
     arms.write_json(path, entries)
 
 
-def run_cell(out, cell: dict, once, environ) -> object:
+def run_cell(out, cell: dict, once, environ, before_retry=None) -> object:
     """Run one cell (a preserve run, or a probe session) under the proof rules of README "Exclusions".
 
     once() runs the unit and returns its result dict with "record". Every attempt's record is written to the raw
@@ -224,10 +226,14 @@ def run_cell(out, cell: dict, once, environ) -> object:
       an unfinished run that carries a rate-limit signal stops the batch as before (the pilot waits and resumes once);
       an isolation failure is re-run once, and a second one excludes the cell, which is listed and never run again;
       outcome checks alone never lead to a re-run: they are counted, and a denial goes to the isolation-review log.
+    before_retry, when given, is called before each attempt after the first (the batch passes its budget check, so a
+    re-run cannot start once the budget is used up; its BatchStop propagates).
     Returns the result, or None when the cell was excluded.
     """
     label = f"{cell['fixture']} seed {cell['seed']} {cell['arm']} {cell['kind']}"
     for attempt in (1, 2):
+        if attempt > 1 and before_retry is not None:
+            before_retry()
         res = once()
         record = res["record"]
         arms.write_raw(out, cell["kind"], cell["arm"], cell["fixture"], cell["seed"], record, environ)
@@ -284,6 +290,8 @@ def run_batch(fixtures_root, out, split, fids, arm_names, seeds, cfg, environ, r
     done = skipped = 0
 
     def check_budget():
+        if claude_run.spend_sum(environ) >= claude_run.spend_ceiling(cfg):
+            raise BatchStop("spend ceiling reached")
         if budget_usd is not None and claude_run.spend_total(environ, "evaluation") - start >= budget_usd:
             raise BatchStop("budget reached")
 
@@ -313,7 +321,7 @@ def run_batch(fixtures_root, out, split, fids, arm_names, seeds, cfg, environ, r
                 plugin = arms.plugin_for(arm, cfg, environ, plugins, arms_dir)
                 cell = {"kind": "preserve", "arm": arm, "fixture": fid, "seed": seed}
                 res = run_cell(out, cell, lambda: arms.preserve_run(spec, fdir, arm, cfg, environ, runner, plugin, markers),
-                               environ)
+                               environ, check_budget)
                 if res is None:
                     continue  # excluded: no CLAUDE.md for this arm, so no probe session either
                 claude_run.atomic_write(text_path, res["text"])
@@ -333,7 +341,8 @@ def run_batch(fixtures_root, out, split, fids, arm_names, seeds, cfg, environ, r
                 check_budget()
                 cell = {"kind": "probe", "arm": arm, "fixture": fid, "seed": seed}
                 res = run_cell(out, cell, lambda: run_probe_session(spec, texts[arm], cfg, environ, runner, markers,
-                                                                    seed, f"probe-{arm}"), environ)
+                                                                    seed, f"probe-{arm}"), environ,
+                               check_budget)
                 if res is None:
                     continue
                 res.pop("record")

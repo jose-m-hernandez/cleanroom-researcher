@@ -12,6 +12,7 @@ import datetime
 import hashlib
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -24,6 +25,24 @@ import claude_run
 import fixtures
 import isolation
 import score
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "tools"))
+import check_vocabulary  # noqa: E402  (the repository's vocabulary rules: V4 is the home-path shape)
+
+# The home-path shape of the seal's copied-text scan (SF1). It is V4 with its users-folder and home-folder pieces (the
+# second and third) replaced by a form that matches only when the slash before the folder name opens a first segment.
+# The rule is fail-closed: the slash opens a path unless the character before it is a path-segment character (an ASCII
+# letter, a digit, a dot, an underscore, a hyphen, a tilde, a percent sign or a closing brace), so any other character
+# opens a path, a quote, a backtick or a bracket among them. A web route such as /v2/<folder>/me therefore does not
+# match. A slash is not a segment character, so a folder name right after the double slash of any URL scheme is
+# refused, not only after the double slash of a file URL (a ruled widening). The repository's V4 rule and the lint are
+# unchanged.
+_FIRST_SEGMENT = r"(?<![A-Za-z0-9._~%}-])"
+HOME_SHAPE = re.compile("|".join(
+    check_vocabulary.V4_PIECES[:1] + check_vocabulary.V4_PIECES[3:]
+    + [_FIRST_SEGMENT + re.escape("/Us" + "ers/") + "[A-Za-z]", _FIRST_SEGMENT + re.escape("/ho" + "me/") + "[A-Za-z]"]),
+    re.IGNORECASE)
+_JSON_ESCAPE = re.compile(r"\\[nrtbf]")  # a backslash followed by n, r, t, b or f: a one-letter JSON escape
 
 GATES_NAME = "gates.json"
 CANARY_KEYS = {"preserve": "C6", "generation": "C7"}  # --type -> the canary's name in the protocol
@@ -157,23 +176,32 @@ def create_canary_file(config_dir, token: str) -> tuple:
     return path, (seen.st_ino, seen.st_dev, token)
 
 
-def remove_canary_file(path, ident) -> bool:
-    """Remove the canary file only if it is still the one create_canary_file made. Three checks: lstat gives the same
-    inode and device; it is a regular file (a symlink is never followed); its bytes are exactly the token and a newline.
-    Limits: a replacement holding the exact token passes (only someone who has read the canary could write it), and
-    the file can change between the checks and the unlink."""
+def canary_is_ours(path, ident) -> bool:
+    """True only if the file at path is still the one create_canary_file made. Three checks: lstat gives the same
+    inode and device; it is a regular file (a symlink is never followed, and the open never blocks on a FIFO); its
+    bytes are exactly the token and a newline. Any failure, including an unreadable file, is False."""
     try:
         seen = os.lstat(str(path))
         if (seen.st_ino, seen.st_dev) != (ident[0], ident[1]) or not stat.S_ISREG(seen.st_mode):
             return False
         want = (ident[2] + "\n").encode("utf-8")
-        fd = os.open(str(path), os.O_RDONLY | os.O_NOFOLLOW)
+        fd = os.open(str(path), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         try:
             got = os.read(fd, len(want) + 1)
         finally:
             os.close(fd)
-        if got != want:
-            return False
+    except OSError:
+        return False
+    return got == want
+
+
+def remove_canary_file(path, ident) -> bool:
+    """Remove the canary file only if canary_is_ours says it is still the one create_canary_file made.
+    Limits: a replacement holding the exact token passes (only someone who has read the canary could write it), and
+    the file can change between the checks and the unlink."""
+    if not canary_is_ours(path, ident):
+        return False
+    try:
         os.unlink(str(path))
     except OSError:
         return False
@@ -282,6 +310,10 @@ def judge_canary(record: dict, cfg: dict, markers: list, canary_path, canary_tok
 
 
 def _canary_run(canary_type, fixtures_root, cfg, environ, runner, out) -> int:
+    """Run one canary. A canary file that changed is left in place and reported (a line, and canary_left_behind in the
+    PASS or FAIL entry); the ERROR entry is recorded before the file is dealt with, so it gets the line only. The line
+    says why: "(changed)" when the file is no longer the one made, "(could not remove)" when it is still ours but the
+    unlink failed."""
     key = CANARY_KEYS[canary_type]
     allowed, contributors = None, []
     if canary_type == "generation":
@@ -315,10 +347,14 @@ def _canary_run(canary_type, fixtures_root, cfg, environ, runner, out) -> int:
                                   "type": canary_type}, environ)
         raise
     finally:
-        remove_canary_file(path, ident)
+        left_behind = not remove_canary_file(path, ident) and os.path.lexists(path)
+        if left_behind:
+            why = "could not remove" if canary_is_ours(path, ident) else "changed"
+            print(f"canary left behind ({why}): remove it by hand: {path}", file=out)
     result = judge_canary(record, cfg, markers, path, token, sandbox_token)
     record_gate(canary_type, {"outcome": result["outcome"], "started_utc": record.get("started_utc") or started,
-                              "run_id": record.get("run_id"), "token": token, "type": canary_type}, environ)
+                              "run_id": record.get("run_id"), "token": token, "type": canary_type,
+                              "canary_left_behind": left_behind}, environ)
     print(f"canary {canary_type} ({key}): {result['outcome']} run {record.get('run_id')}", file=out)
     if result["reasons"]:
         print("  reasons: " + "; ".join(result["reasons"]), file=out)
@@ -353,7 +389,9 @@ def command_canary(canary_type, fixtures_root=None, environ=None, out=None, runn
 def scan_transcripts(fixtures_root, environ=None) -> list:
     """[(fixture id, pattern)] for every normalized transcript under fixtures_root that holds a canary token or the
     account name (case-insensitive). The pattern is "C6 token", "C7 token" or "username"; the matched text is never
-    returned. Refuses (SealStop) unless both canaries are PASS, and when the account name is unknown."""
+    returned. Refuses (SealStop) unless both canaries are PASS, and when the account name is unknown.
+    The normalizer replaces the account name only as a whole word (any letter case), so a name glued to a letter, digit
+    or underscore in a transcript is a hit here and the seal refuses; that is a stated limit."""
     gates, reason = read_gates(environ)
     if gates is None:
         raise SealStop(reason)
@@ -427,6 +465,57 @@ def excluded_fixtures(fixtures_root) -> dict:
             mark = spec["excluded"]
             found[str(spec.get("id") or path.parent.name)] = mark if isinstance(mark, dict) else {"invalid": True}
     return dict(sorted(found.items()))
+
+
+def excluded_block_text(block) -> str:
+    """Every string in an excluded block (keys and values, nested), joined by newlines.
+
+    It gives the scan the parsed strings, because a JSON dump turns a newline into backslash-n and hides a path at the
+    start of a line from the scan.
+    """
+    found = []
+
+    def walk(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if isinstance(key, str):
+                    found.append(key)
+                walk(value)
+        elif isinstance(node, list):
+            for element in node:
+                walk(element)
+        elif isinstance(node, str):
+            found.append(node)
+
+    walk(block)
+    return "\n".join(found)
+
+
+def copied_text_hits(fields: dict) -> list:
+    """[(field name, kind)] for each text in fields (name -> text) that holds the account name (case-insensitive) or a
+    home path (rule V4, narrowed by HOME_SHAPE: a users or home folder counts only as the first segment of a path,
+    and fail-closed: any character before the slash other than a path-segment character opens a path, and a folder name
+    right after the double slash of any URL scheme is refused).
+    The kind is "account name" or "home path"; the matched text is never returned. The limit: an HTTP method word,
+    a space and a route whose first segment is a users folder is still refused (fail-closed). Refuses (SealStop)
+    when the account name is unknown, as the transcript scan does.
+    Each text is also scanned with the five one-letter JSON escapes (a backslash followed by n, r, t, b or f) turned
+    into a newline, so a path after a pasted JSON line break is caught. A kind is reported at most once per field.
+    The stated limit: other encodings of a home path or the account name are not decoded: unicode escapes,
+    double-escaped text, percent-encoding, base64, HTML entities and any other encoding. For those, the backstops are
+    the seal's pre-seal username scan of the transcripts and the repository's V4 rule."""
+    try:
+        user = fixtures._current_username().casefold()
+    except fixtures.UsernameError:
+        raise SealStop("the account name is unknown")
+    hits = []
+    for name, text in fields.items():
+        copies = (text, _JSON_ESCAPE.sub("\n", text))
+        if any(user in copy.casefold() for copy in copies):
+            hits.append((name, "account name"))
+        if any(HOME_SHAPE.search(copy) for copy in copies):
+            hits.append((name, "home path"))
+    return hits
 
 
 def git_head(root=None) -> str:
@@ -508,8 +597,16 @@ def command_seal(fixtures_root, source, repair_log, guide, count_rule, out, envi
         record = {"version": 1, "fixtures": record_of_scores(scores), "excluded_fixtures": excluded_fixtures(fixtures_root),
                   "count_rule": count_text}
         head = git_head(repo_root)
+        fields = {f"excluded block of {fid}": excluded_block_text(block)
+                  for fid, block in record["excluded_fixtures"].items()}
+        fields["count rule"] = count_text
+        fields["repair log"] = Path(repair_log).read_bytes().decode("utf-8", errors="replace")
+        text_hits = copied_text_hits(fields)
     except (SealStop, score.ScoreAbort, OSError, ValueError, KeyError, UnicodeDecodeError) as exc:
         return refuse(str(exc) if isinstance(exc, (SealStop, score.ScoreAbort)) else type(exc).__name__, 1)
+    if text_hits:
+        return refuse("a text copied into the seal holds " + "; ".join(f"{n}: {k}" for n, k in text_hits)
+                      + " (nothing written)")
     try:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.mkdir()  # exclusive: an existing folder raises
@@ -685,8 +782,7 @@ def carry_preseal(seal_dir, preseal, out) -> list:
 
 def is_final(run: dict) -> bool:
     """Final scoring and its report: held-out results that hold an arm other than floor and oracle."""
-    return isinstance(run, dict) and is_heldout(run.get("split"), run.get("fixtures") or []) and any(
-        a not in LOCKED_ARM_DIRS for a in (run.get("arms") or []))
+    return isinstance(run, dict) and needs_seal(run.get("split"), run.get("fixtures") or [], run.get("arms") or [])
 
 
 def final_record_diff(seal_dir, scores: dict) -> list:

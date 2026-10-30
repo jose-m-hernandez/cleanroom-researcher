@@ -33,6 +33,7 @@ STDLIB_ALLOWED = frozenset(
         "sys",
         "tarfile",
         "tempfile",
+        "threading",
         "typing",
         "unicodedata",
         "unittest",

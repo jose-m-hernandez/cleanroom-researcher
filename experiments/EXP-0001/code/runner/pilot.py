@@ -644,6 +644,11 @@ def write_pilot_md(out, fixtures_root=None, dest=None) -> str:
 def command_pilot_md(source, fixtures_root=None, out_dir=None, stdout=None) -> int:
     """Regenerate PILOT.md offline from a results directory; no model call."""
     stdout = stdout or sys.stdout
+    for refusal in (claude_run.from_refusal(None if source is None else str(source)),
+                    claude_run.out_refusal(str(out_dir)) if out_dir else ""):
+        if refusal:
+            print(f"pilot-md: REFUSED {refusal}", file=stdout)
+            return 2
     try:
         text = write_pilot_md(source, fixtures_root, out_dir)
     except (OSError, ValueError, KeyError):

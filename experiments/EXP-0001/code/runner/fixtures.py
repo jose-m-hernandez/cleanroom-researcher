@@ -530,7 +530,7 @@ PLACEHOLDER_USER = "user"
 GIT_ENV = {"GIT_AUTHOR_NAME": "eval", "GIT_AUTHOR_EMAIL": "eval@example.com",
            "GIT_COMMITTER_NAME": "eval", "GIT_COMMITTER_EMAIL": "eval@example.com",
            "GIT_AUTHOR_DATE": "2026-01-01T00:00:00Z", "GIT_COMMITTER_DATE": "2026-01-01T00:00:00Z"}
-MAX_ATTEMPTS = 2
+MAX_ATTEMPTS = 3
 
 
 class GenError(Exception):
@@ -598,7 +598,22 @@ def _placeholder_temp(text: str, environ=None) -> str:
 
 
 def _placeholder_identity(text: str) -> str:
-    """Home path to {{HOME}}, then the whole-word username to 'user'. The group name is not touched."""
+    """Home path to {{HOME}}, then the username, in any letter case and as a whole word, to 'user'. The group name is
+    not touched.
+
+    It expects one string, not a JSON dump: a dump hides a name at the start of a line behind backslash-n.
+    A name right after one of the five one-letter JSON escapes (a backslash followed by n, r, t, b or f) counts as a
+    whole word, because a string can itself show escaped text.
+    The stated limit: other encodings of the name are not decoded: unicode escapes, double-escaped text,
+    percent-encoding, base64, HTML entities and any other encoding. The backstop is the seal's pre-seal username
+    scan, which refuses.
+    The stated limit on the boundary: a name glued to a letter, digit or underscore (inside a longer word, or joined
+    by an underscore) is not replaced. The seal's pre-seal scan matches the name case-insensitively anywhere in the
+    text, so the seal refuses such a transcript (fail-closed).
+    A known over-replacement: in a Windows-style path, a folder name made of the letter n, r, t, b or f followed by
+    the account name (after a backslash) also has the name part replaced. It replaces more, never less, and only in
+    normalized transcripts.
+    """
     name = _current_username()
     if not name:
         return text
@@ -609,13 +624,44 @@ def _placeholder_identity(text: str) -> str:
         pass
     for home in sorted((h for h in homes if len(h) > 1), key=len, reverse=True):
         text = re.sub(_slash_pattern(home) + r"(?![A-Za-z0-9_.-])", PLACEHOLDER_HOME, text)
-    return re.sub(r"(?<![A-Za-z0-9_])" + re.escape(name) + r"(?![A-Za-z0-9_])", PLACEHOLDER_USER, text)
+    return re.sub(r"(?:(?<![A-Za-z0-9_])|(?<=\\[nrtbf]))(?i:" + re.escape(name) + r")(?![A-Za-z0-9_])",
+                  PLACEHOLDER_USER, text)
+
+
+def _map_strings(node, fn):
+    """A copy of node with fn applied to every string key and string value; other scalars are returned unchanged."""
+    if isinstance(node, dict):
+        new = {}
+        for key, value in node.items():
+            new_key = fn(key) if isinstance(key, str) else key
+            if new_key in new:
+                raise GenError("normalize: two keys are equal after the placeholders")
+            new[new_key] = _map_strings(value, fn)
+        return new
+    if isinstance(node, list):
+        return [_map_strings(element, fn) for element in node]
+    if isinstance(node, str):
+        return fn(node)
+    return node
+
+
+def _placeholder_row(row, aliases, slug, environ=None):
+    """Apply the sandbox, slug, temp-root, home and username placeholders to each string of one row."""
+    def one(text):
+        for alias in aliases:
+            text = text.replace(alias, PLACEHOLDER_SANDBOX)
+        if slug:
+            text = text.replace(slug, PLACEHOLDER_SLUG)
+        return _placeholder_identity(_placeholder_temp(text, environ))
+    return _map_strings(row, one)
 
 
 def normalize_transcript(rows: list, sandbox_aliases: list, slug: str, environ=None) -> list:
     """Keep user and assistant rows, strip identifying fields, relink parents, placeholder the sandbox.
 
-    Order matters: sandbox paths first, then the rest of the temp root, then the home path, then the username.
+    Order matters: sandbox paths first, then the rest of the temp root, then the home path, then the username. The
+    steps run on each key and string value, never on a JSON dump (a dump hides a name at the start of a line behind
+    backslash-n).
     """
     parent_of = {r.get("uuid"): r.get("parentUuid") for r in rows if isinstance(r, dict) and r.get("uuid")}
     kept = []
@@ -637,13 +683,7 @@ def normalize_transcript(rows: list, sandbox_aliases: list, slug: str, environ=N
     aliases = sorted({a for a in sandbox_aliases if a}, key=len, reverse=True)
     out = []
     for row in kept:
-        text = json.dumps(row, ensure_ascii=False)
-        for alias in aliases:
-            text = text.replace(alias, PLACEHOLDER_SANDBOX)
-        if slug:
-            text = text.replace(slug, PLACEHOLDER_SLUG)
-        text = _placeholder_identity(_placeholder_temp(text, environ))
-        out.append(json.loads(text))
+        out.append(_placeholder_row(row, aliases, slug, environ))
     return out
 
 

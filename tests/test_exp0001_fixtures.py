@@ -822,6 +822,103 @@ class NormalizeTests(unittest.TestCase):
         got = self.norm_text(row.format("zed") + "; zedge zed_x " + self.home_of("zed") + "/work")
         self.assertEqual(got, row.format("user") + "; zedge zed_x {{HOME}}/work")
 
+    def test_a_name_after_any_line_break_is_replaced(self):
+        for sep in ("\n", "\t", "\r\n"):
+            with self.subTest(sep=repr(sep)):
+                self.assertEqual(self.norm_text("log" + sep + "zed ran it"), "log" + sep + "user ran it")
+
+    def test_a_name_after_a_json_escape_is_replaced_as_a_whole_word(self):
+        for esc in ("\\n", "\\t", "\\r\\n"):  # the two-character JSON forms
+            with self.subTest(esc=esc):
+                self.assertEqual(self.norm_text("log" + esc + "zed ran it"), "log" + esc + "user ran it")
+
+    def test_a_name_inside_a_longer_word_after_a_json_escape_is_kept(self):
+        self.assertEqual(self.norm_text("log" + "\\n" + "zedge ran"), "log" + "\\n" + "zedge ran")
+
+    def test_the_username_is_replaced_in_any_letter_case(self):
+        self.assertEqual(self.norm_text("Hi Zed, ran it"), "Hi user, ran it")
+        self.assertEqual(self.norm_text("ZED ran"), "user ran")
+        self.assertEqual(self.norm_text("log" + "\\n" + "Zed ran"), "log" + "\\n" + "user ran")
+
+    def test_a_name_glued_to_a_letter_digit_or_underscore_is_kept_in_any_case(self):
+        text = "Zedge Zed_x ZEDx xZed"
+        self.assertEqual(self.norm_text(text), text)
+
+    def test_the_lower_case_name_is_still_replaced(self):
+        self.assertEqual(self.norm_text("zed ran"), "user ran")
+
+    def test_the_escape_set_stays_lower_case(self):
+        for esc in ("\\N", "\\R", "\\T", "\\B", "\\F"):
+            with self.subTest(esc=esc):
+                text = "log" + esc + "zed ran"
+                self.assertEqual(self.norm_text(text), text)
+
+    def test_a_name_after_the_other_three_json_escapes_is_replaced(self):
+        for esc in ("\\r", "\\b", "\\f"):
+            with self.subTest(esc=esc):
+                self.assertEqual(self.norm_text("log" + esc + "zed ran"), "log" + esc + "user ran")
+
+    def test_a_letter_without_its_backslash_is_not_an_escape(self):
+        for letter in "nrtbf":
+            with self.subTest(letter=letter):
+                text = "x" + letter + "zed ran"
+                self.assertEqual(self.norm_text(text), text)
+
+    def test_the_realpath_and_path_alias_pair_as_keys_is_an_error(self):
+        row = {"type": "assistant", "uuid": "a3", "parentUuid": None,
+               "message": {"content": [{"type": "tool_use", "id": "t1", "name": "Read",
+                                        "input": {"/private/opt/sb/x": 1, "/opt/sb/x": 2}}]}}
+        with self.assertRaises(fixtures.GenError):
+            fixtures.normalize_transcript([row], ["/private/opt/sb", "/opt/sb"], "")
+
+    def test_a_home_path_after_a_newline_is_replaced(self):
+        self.assertEqual(self.norm_text("log\n" + self.home_of("zed") + "/work"), "log\n{{HOME}}/work")
+
+    def test_two_keys_equal_after_the_placeholders_are_an_error_that_names_no_key(self):
+        row = {"type": "assistant", "uuid": "a2", "parentUuid": None,
+               "message": {"content": [{"type": "tool_use", "id": "t1", "name": "Read",
+                                        "input": {"someuser": 1, "user": 2}}]}}
+        with self.assertRaises(fixtures.GenError) as ctx:
+            fixtures.normalize_transcript([row], [], "")
+        self.assertNotIn("someuser", str(ctx.exception))
+
+    def test_an_alias_holding_a_double_quote_is_replaced(self):
+        self.assertEqual(self.norm_text('see /opt/sb"q/app.py', aliases=['/opt/sb"q']), "see {{SANDBOX}}/app.py")
+
+    def test_a_row_without_escapes_normalizes_byte_identically_to_the_old_dump_path(self):
+        with tempfile.TemporaryDirectory() as t:
+            sandbox = Path(t) / "sb"
+            sandbox.mkdir()
+            aliases = fixtures.sandbox_aliases(sandbox)
+            slug = claude_run.project_slug(Path(os.path.realpath(sandbox)))
+            environ = {"TMPDIR": t}
+            rows, _real, _slug = self.synthetic(sandbox)
+            extra = {"type": "user", "uuid": "u3", "parentUuid": "u2", "message": {"role": "user", "content": [
+                {"type": "text", "text": "someuser asked; then someuser said " + self.home_of("someuser") + "/w and "
+                 + t + "/elsewhere/f.txt in " + slug},
+                {"type": "tool_use", "id": "t9", "name": "Read",
+                 "input": {"n": 3, "f": 1.5, "b": True, "z": None, "l": ["a", ["b", "c"]]}}]}}
+            rows.append(extra)
+            self.assertNotIn("\\", json.dumps(rows))  # no quote, backslash or control character in any string
+            with mock.patch.object(Path, "home", return_value=Path(self.home_of("someuser"))):
+                new = fixtures.normalize_transcript(rows, aliases, slug, environ=environ)
+                with mock.patch.object(fixtures, "_placeholder_row",
+                                       side_effect=lambda row, aliases, slug, environ=None: row):
+                    kept = fixtures.normalize_transcript(rows, [], "", environ=environ)
+                old = []
+                for row in kept:
+                    text = json.dumps(row, ensure_ascii=False)
+                    for alias in sorted({a for a in aliases if a}, key=len, reverse=True):
+                        text = text.replace(alias, fixtures.PLACEHOLDER_SANDBOX)
+                    text = text.replace(slug, fixtures.PLACEHOLDER_SLUG)
+                    text = fixtures._placeholder_identity(fixtures._placeholder_temp(text, environ))
+                    old.append(json.loads(text))
+        self.assertEqual(json.dumps(new, ensure_ascii=False), json.dumps(old, ensure_ascii=False))
+        dumped = json.dumps(new, ensure_ascii=False)
+        for marker in ("{{SANDBOX}}", "{{SANDBOX_SLUG}}", "{{TMP}}", "{{HOME}}"):
+            self.assertIn(marker, dumped)
+        self.assertNotIn("someuser", dumped)
+
     def test_a_row_that_held_only_thinking_is_dropped(self):
         rows = [{"type": "assistant", "uuid": "a", "parentUuid": None,
                  "message": {"content": [{"type": "thinking", "thinking": "t"}]}}]
@@ -976,7 +1073,7 @@ class GenerateTests(GenTestBase):
         code, out = self.generate(runner)
         self.assertEqual(code, 1)
         self.assertIn("tool_evidence_missing:k1", out)
-        self.assertEqual(len(runner.calls), 14)  # two attempts, no install-check reached
+        self.assertEqual(len(runner.calls), 21)  # three attempts, no install-check reached
         self.assertFalse((self.fdir / "transcript.jsonl").exists())
 
     def test_every_run_goes_through_the_runner_in_the_generate_phase(self):
@@ -1006,8 +1103,15 @@ class GenerateTests(GenTestBase):
         self.assertEqual(runner.attempt, 2)
         self.assertEqual(len(runner.calls), 7 + 7 + 2)
 
-    def test_two_floor_edits_fail_and_nothing_is_installed(self):
-        code, out = self.generate(GenRunner(self.tmp, floor_edit_attempts=(1, 2)))
+    def test_floor_edits_on_two_attempts_then_the_third_installs(self):
+        runner = GenRunner(self.tmp, floor_edit_attempts=(1, 2))
+        code, out = self.generate(runner)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(runner.attempt, 3)
+        self.assertTrue((self.fdir / "transcript.jsonl").exists())
+
+    def test_three_floor_edits_fail_and_nothing_is_installed(self):
+        code, out = self.generate(GenRunner(self.tmp, floor_edit_attempts=(1, 2, 3)))
         self.assertEqual(code, 1)
         self.assertIn("claude_md_changed", out)
         self.assertFalse((self.fdir / "transcript.jsonl").exists())
@@ -1019,7 +1123,7 @@ class GenerateTests(GenTestBase):
         self.assertEqual(code, 1)
         self.assertIn("turn 3 proof: markers_found", out)
         self.assertNotIn(HOST_MARKER, out)
-        self.assertEqual(len(runner.calls), 6)  # two attempts, stopped at turn 3
+        self.assertEqual(len(runner.calls), 9)  # three attempts, stopped at turn 3
         self.assertFalse((self.fdir / "transcript.jsonl").exists())
 
     def test_the_token_check_gates_the_install(self):

@@ -268,6 +268,11 @@ def build_markdown(run: dict, scores: dict) -> str:
 def write_report(results_dir, out_dir=None, stdout=None) -> int:
     """Write REPORT.md into out_dir (default: results_dir). Exit 0, or 1 with a label."""
     stdout = stdout or sys.stdout
+    for refusal in (claude_run.from_refusal(None if results_dir is None else str(results_dir)),
+                    claude_run.out_refusal(str(out_dir)) if out_dir else ""):
+        if refusal:
+            print(f"report: REFUSED {refusal}", file=stdout)
+            return 2
     try:
         run, scores = load(results_dir)
         md = build_markdown(run, scores)

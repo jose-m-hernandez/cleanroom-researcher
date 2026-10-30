@@ -27,6 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "runner"))
 import arms  # noqa: E402
+import claude_run  # noqa: E402
 import fixtures  # noqa: E402
 import judge  # noqa: E402
 import stats  # noqa: E402
@@ -571,6 +572,10 @@ def command_score(out, fixtures_root, environ=None, stdout=None, label_probe=Non
     labels-final.json; and the final scorable record must equal the sealed record.json, or scoring stops.
     """
     stdout = stdout or sys.stdout
+    refusal = claude_run.from_refusal(None if out is None else str(out))
+    if refusal:
+        print(f"score: REFUSED {refusal}", file=stdout)
+        return 2
 
     def work(config, env, o):
         try:
