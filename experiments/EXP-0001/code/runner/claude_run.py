@@ -651,21 +651,64 @@ C5_TURN1 = ("Context for later: we decided the dev server runs on port 8081 beca
 
 
 def control(environ=None, out=None, runner=None, config_path=None) -> int:
-    """Run the five controls. Any unexpected exception becomes a one-line label and exit 1."""
+    """Run the five controls. Any unexpected exception becomes a one-line label and exit 1.
+
+    The result is recorded in gates.json as the C1-5 entry (P:239), through seal.record_control, which has no token:
+    PASS when all five passed; FAIL when at least one live control run was launched and the command did not end in
+    PASS (an exception after the first launch included); nothing when it stopped before the first launch (no live
+    flag, no ledger, CLAUDE_CONFIG_DIR set, preflight FAIL, an unreadable spend file, a plugin-export error: setup
+    errors, not a failed control). A control is never re-run: with a C1-5 entry already in gates.json the command
+    refuses (exit 2, no launch), after the live-flag check.
+    """
+    import seal  # inside the function: seal imports claude_run
+
     out = out or sys.stdout
+    environ = environ if environ is not None else os.environ
+    runner = runner or run_claude
+    launched = []  # one start time per launch; the first is the entry's started_utc
+
+    def counted(*args, **kwargs):
+        if not launched:
+            launched.append(seal.utc_now())
+        return runner(*args, **kwargs)
+
+    code = 1
     try:
-        return _control(environ if environ is not None else os.environ, out, runner or run_claude, config_path)
+        code = _control(environ, out, counted, config_path)
     except (SpendError, SpendCapReached, LiveRefused, ConfigError, MemoryDirError, PluginRepoError,
             isolation.LedgerError) as exc:
         print(f"control: STOP {exc}", file=out)
     except Exception as exc:  # label only: exception text can carry argv and paths
         print(f"control: ERROR {type(exc).__name__}", file=out)
-    return 1
+    except BaseException:  # a Ctrl-C after a launch is a failed control too
+        if launched:
+            _record_control("FAIL", launched[0], environ, out)
+        raise
+    if launched:
+        _record_control("PASS" if code == 0 else "FAIL", launched[0], environ, out)
+    return code
+
+
+def _record_control(outcome, started, environ, out) -> None:
+    import seal  # inside the function: seal imports claude_run
+
+    entry = {"outcome": outcome, "started_utc": started, "run_id": f"control-{uuid.uuid4().hex[:8]}"}
+    try:
+        seal.record_control(entry, environ)
+    except Exception:  # label only; the run's own exit code stands
+        print("control: STOP could not record C1-5 in gates.json", file=out)
 
 
 def _control(environ, out, runner, config_path) -> int:
     if environ.get("CPR_EVAL_LIVE") != "1":
         print("live run refused: set CPR_EVAL_LIVE=1", file=out)
+        return 2
+    import seal  # inside the function: seal imports claude_run
+
+    gates, reason = seal.read_gates(environ, missing_ok=True)
+    if gates is None or seal.CONTROL_KEY in gates:  # an unreadable gate file cannot be recorded into: fail closed
+        print("control: REFUSED " + (reason + "; it is not overwritten" if gates is None else
+                                     "C1-5 already has an entry; a control is never re-run"), file=out)
         return 2
     ledger_value = environ.get("CPR_EVAL_HOST_LEDGERS")
     if not ledger_value:

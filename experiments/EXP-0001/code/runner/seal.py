@@ -46,6 +46,7 @@ _JSON_ESCAPE = re.compile(r"\\[nrtbf]")  # a backslash followed by n, r, t, b or
 
 GATES_NAME = "gates.json"
 CANARY_KEYS = {"preserve": "C6", "generation": "C7"}  # --type -> the canary's name in the protocol
+CONTROL_KEY = "C1-5"  # the five isolation controls of `control`, recorded as one entry with no token (P:239)
 OUTCOMES = ("PASS", "FAIL", "ERROR")
 # Every command that reaches claude_run.run_claude, except `control` and `canary --type preserve` (P:239, P:243).
 GATED_COMMANDS = ("judge-check", "gen-fixture", "install-check", "run", "score", "pilot", "canary-generation")
@@ -84,15 +85,20 @@ def gates_path(environ=None) -> Path:
     return claude_run.eval_root(environ) / GATES_NAME
 
 
-def _entry_ok(entry) -> bool:
-    return (isinstance(entry, dict) and entry.get("outcome") in OUTCOMES and isinstance(entry.get("token"), str)
-            and isinstance(entry.get("started_utc"), str))
+def _entry_ok(entry, key=None) -> bool:
+    """A canary entry carries a token; the C1-5 control entry carries none and its outcome is PASS or FAIL only."""
+    if not (isinstance(entry, dict) and isinstance(entry.get("started_utc"), str)):
+        return False
+    if key == CONTROL_KEY:
+        return entry.get("outcome") in ("PASS", "FAIL") and isinstance(entry.get("run_id"), str)
+    return entry.get("outcome") in OUTCOMES and isinstance(entry.get("token"), str)
 
 
 def read_gates(environ=None, missing_ok=False) -> tuple:
     """(gates, "") or (None, reason). A missing, unreadable or malformed file is None: every caller fails closed.
 
     With missing_ok a missing file is {} (the first canary creates it); an unreadable or malformed one still is not.
+    The keys are C6, C7 and C1-5 (CONTROL_KEY): the first two carry a token, C1-5 carries none.
     """
     path = gates_path(environ)
     if not path.exists():
@@ -101,7 +107,8 @@ def read_gates(environ=None, missing_ok=False) -> tuple:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None, "gates.json is unreadable"
-    if not isinstance(data, dict) or set(data) - set(CANARY_KEYS.values()) or not all(_entry_ok(e) for e in data.values()):
+    allowed = set(CANARY_KEYS.values()) | {CONTROL_KEY}
+    if not isinstance(data, dict) or set(data) - allowed or not all(_entry_ok(e, k) for k, e in data.items()):
         return None, "gates.json is malformed"
     return data, ""
 
@@ -118,11 +125,23 @@ def record_gate(canary_type: str, entry: dict, environ=None) -> None:
     claude_run.atomic_write(gates_path(environ), _dump(gates))
 
 
+def record_control(entry: dict, environ=None) -> None:
+    """Add the C1-5 entry of `control`. An existing entry is never replaced (P:239: a control is never re-run)."""
+    gates, reason = read_gates(environ, missing_ok=True)
+    if gates is None:
+        raise SealStop(reason)
+    if CONTROL_KEY in gates:
+        raise SealStop(f"{CONTROL_KEY} already has an entry")
+    gates[CONTROL_KEY] = entry
+    claude_run.atomic_write(gates_path(environ), _dump(gates))
+
+
 def command_gate(command: str, environ=None) -> str:
     """"" when command may launch, else the refusal naming the missing gate (exit 2, before any launch).
 
-    GATED_COMMANDS need C6 PASS, and gen-fixture needs C7 PASS as well. A FAIL or ERROR entry for either canary
-    stops them all. `control` and `canary --type preserve` are not in the list.
+    GATED_COMMANDS need C1-5 PASS (checked first: `control` passed all five isolation controls) and then C6 PASS, and
+    gen-fixture needs C7 PASS as well. A FAIL or ERROR entry for C1-5 or either canary stops them all. `control`
+    and `canary --type preserve` are not in the list (`canary --type preserve` has its own C1-5 check in canary_refusal).
     """
     if command not in GATED_COMMANDS:
         return ""
@@ -131,7 +150,10 @@ def command_gate(command: str, environ=None) -> str:
         return f"{reason}: run the C6 canary first (a gated command fails closed)"
     stopped = sorted(k for k, e in gates.items() if e["outcome"] != "PASS")
     if stopped:
-        return f"canary {', '.join(stopped)} did not pass: the experiment has stopped, outcome not determined"
+        return (f"control or canary {', '.join(stopped)} did not pass: the experiment has stopped, "
+                "outcome not determined")
+    if CONTROL_KEY not in gates:
+        return "the C1-C5 controls have not passed: run `control` first"
     if "C6" not in gates:
         return "the C6 canary has not passed: run `canary --type preserve` first"
     if command == "gen-fixture" and "C7" not in gates:
@@ -140,11 +162,19 @@ def command_gate(command: str, environ=None) -> str:
 
 
 def canary_refusal(canary_type: str, environ=None) -> str:
-    """"" when this canary may run: it has no entry yet (a canary is never re-run), and C7 also needs the C6 gate."""
+    """"" when this canary may run: it has no entry yet (a canary is never re-run). C7 also needs the C6 gate (through
+    command_gate, which checks C1-5 first), and C6 needs C1-5 PASS."""
     gates, reason = read_gates(environ, missing_ok=True)
     if gates is None:
         return f"{reason}: it is not overwritten"
     stopped = command_gate("canary-generation", environ) if canary_type == "generation" else ""
+    if canary_type == "preserve":
+        control = gates.get(CONTROL_KEY)
+        if control is not None and control["outcome"] != "PASS":
+            stopped = (f"control or canary {CONTROL_KEY} did not pass: the experiment has stopped, "
+                       "outcome not determined")
+        elif control is None:
+            stopped = "the C1-C5 controls have not passed: run `control` first"
     key = CANARY_KEYS[canary_type]
     if stopped:
         return stopped

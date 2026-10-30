@@ -78,6 +78,7 @@ def main(argv=None) -> int:
     rep.add_argument("--out", help="directory to write into (default: the --from directory)")
     rep.add_argument("--seal", help="seal folder; required for held-out results that hold baseline cells")
     rep.add_argument("--fixtures-root", help="directory holding <id>/spec.json, for verifying the seal (default <code>/fixtures/<split of the run>)")
+    rep.add_argument("--audit", help="the audit's audit.json; required for a held-out final report (P:105, P:146)")
     sl = sub.add_parser("seal", help="seal the held-out fixtures and the floor and oracle results; no model call")
     sl.add_argument("--fixtures-root", help="the held-out fixtures store (<id>/spec.json)")
     sl.add_argument("--from", dest="source", help="floor and oracle results (run.json, labels.json, probes/)")
@@ -188,6 +189,8 @@ def main(argv=None) -> int:
             stop = seal_stop("report", final, args.seal, root, Path(args.source))
             if stop is not None:
                 return stop
+        if final:
+            return report.write_report(args.source, args.out, seal_dir=args.seal, audit_path=args.audit)
         return report.write_report(args.source, args.out)
     if args.command == "pilot":
         date = args.date or datetime.date.today().strftime("%Y%m%d")

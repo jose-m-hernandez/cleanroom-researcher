@@ -1206,7 +1206,8 @@ class GenerateTests(GenTestBase):
         self.addCleanup(shutil.rmtree, gated, True)
         (gated / "cpr-eval").mkdir()
         (gated / "cpr-eval" / "gates.json").write_text(json.dumps(
-            {k: {"outcome": "PASS", "token": "0" * 64, "started_utc": "2026-10-23T00:00:00Z"} for k in ("C6", "C7")}),
+            {**{k: {"outcome": "PASS", "token": "0" * 64, "started_utc": "2026-10-23T00:00:00Z"} for k in ("C6", "C7")},
+             "C1-5": {"outcome": "PASS", "started_utc": "2026-10-23T00:00:00Z", "run_id": "r-1"}}),
             encoding="utf-8")
         env["TMPDIR"] = str(gated)
         for command in ("gen-fixture", "install-check"):

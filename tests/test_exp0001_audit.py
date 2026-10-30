@@ -186,6 +186,12 @@ class FrameTests(unittest.TestCase):
         self.scores["labels"]["baseline"][self.FID]["1"]["p1"] = "maybe"
         self.assertNotIn(f"{self.FID}/1/p1", [i["id"] for i in self.frame()])
 
+    def test_a_seed_with_labels_but_no_session_file_adds_nothing(self):  # A4
+        before = self.frame()
+        self.assertFalse((self.tmp / "probes" / "baseline" / self.FID / "s4.json").exists())
+        self.scores["labels"]["baseline"][self.FID]["4"] = dict(self.scores["labels"]["baseline"][self.FID]["1"])
+        self.assertEqual(self.frame(), before)
+
     def test_a_type_outside_the_three_raises(self):
         self.spec["probes"][0]["type"] = "other"
         with self.assertRaises(ValueError) as caught:
@@ -203,6 +209,12 @@ class RuleTests(unittest.TestCase):
         self.assertIs(audit.names_more_than_one("oldest first", "newest first", stale), False)
         self.assertIsNone(audit.names_more_than_one("anything", "x", []))
         self.assertIsNone(audit.names_more_than_one("anything", "x", [""]))
+
+    def test_any_stale_answer_is_enough_not_all(self):  # A3
+        stale = ["oldest first", "random order"]
+        self.assertIs(audit.names_more_than_one("newest first, not oldest first", "newest first", stale), True)
+        self.assertIs(audit.names_more_than_one("newest first, not random order", "newest first", stale), True)
+        self.assertIs(audit.names_more_than_one("newest first, and nothing else", "newest first", stale), False)
 
     def test_the_rule_in_words_is_the_docstring_sentence(self):
         sentence = ("An answer names more than one value when its probe has at least one stale answer and the answer "
@@ -287,8 +299,36 @@ def minus_case(extra=False):
     return build(rows, {"correct": cells(60, 0, 0), "incorrect": cells(30, 0, 0), "abstained": cells(10, 0, 0)})
 
 
+def ordered_case():
+    """A1 and A2: six scorable fixtures listed as F-c, F-a, F-d, F-b, F-f, F-e (not in sorted order). The frame totals
+    equal the sample, so every weight is 1. Per fixture: items, judged correct, owner correct, difference (by hand):
+    F-a 3, 0, 1: -1/3; F-b 4, 3, 1: 1/2; F-c 2, 0, 2: -1; F-d 5, 0, 1: -1/5; F-e 4, 2, 3: -1/4; F-f 5, 1, 0: 1/5.
+    The first judged-correct and owner-correct items of each fixture carry those counts."""
+    table = {"F-c": (2, 0, 2), "F-a": (3, 0, 1), "F-d": (5, 0, 1), "F-b": (4, 3, 1), "F-f": (5, 1, 0), "F-e": (4, 2, 3)}
+    rows = []
+    for fid, (n, judged_correct, owner_correct) in table.items():
+        for k in range(n):
+            rows.append((fid, "single-fact", "correct" if k < judged_correct else "incorrect",
+                         "correct" if k < owner_correct else "incorrect", True))
+    return build(rows, {"correct": cells(6, 0, 0), "incorrect": cells(17, 0, 0), "abstained": cells(0, 0, 0)})
+
+
 class SummariseMinusTests(unittest.TestCase):
     """T7: judge-minus-person."""
+
+    def test_the_interval_pins_the_seed_b_and_the_sorted_fixture_order(self):  # A1 and A2
+        key, owner = ordered_case()
+        self.assertEqual(key["bootstrap_seed"], 20261017)
+        listed = [info["fixture"] for _, info in sorted(key["items"].items(), key=lambda kv: int(kv[0]))]
+        self.assertEqual(list(dict.fromkeys(listed)), ["F-c", "F-a", "F-d", "F-b", "F-f", "F-e"])  # not sorted
+        out = audit.summarise(key, owner)["judge_minus_person"]
+        diffs = [-1 / 3, 1 / 2, -1.0, -1 / 5, -1 / 4, 1 / 5]  # F-a to F-f, by hand
+        want = stats.bootstrap_ci(diffs, b=10000, alpha=0.05, rng_seed=20261017)
+        self.assertEqual(out["ci"], list(want))
+        self.assertEqual(out["fixtures"], 6)
+        self.assertNotEqual(out["ci"], list(stats.bootstrap_ci(diffs, b=10000, alpha=0.05, rng_seed=0)))
+        self.assertNotEqual(out["ci"], list(stats.bootstrap_ci(diffs, b=100, alpha=0.05, rng_seed=20261017)))
+        self.assertNotEqual(out["ci"], list(stats.bootstrap_ci(diffs[::-1], b=10000, alpha=0.05, rng_seed=20261017)))
 
     def test_the_hand_worked_value(self):
         key, owner = minus_case()
@@ -353,6 +393,12 @@ class SummariseRefusalTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             audit.summarise(self.key, {"labels": []})
 
+    def test_a_key_with_no_items_raises_no_items(self):  # A6
+        key, owner = build([], {"correct": cells(0, 0, 0), "incorrect": cells(0, 0, 0), "abstained": cells(0, 0, 0)})
+        with self.assertRaises(ValueError) as caught:
+            audit.summarise(key, owner)
+        self.assertEqual(str(caught.exception), "no items")
+
 
 class SealSeedTests(unittest.TestCase):
     """T9: the audit seed in the seal."""
@@ -413,6 +459,20 @@ class ExportTests(unittest.TestCase):
 
     def read(self, name):
         return json.loads((self.out / name).read_text(encoding="utf-8"))
+
+    def test_the_labels_block_follows_the_specs_probe_order(self):  # A5
+        self.finish()
+        a = self.a
+        scored = score.score_run(a.final, st.HSPECS, a.cfg, a.environ, a.judge.label_probe, a.judge.label_items)
+        # scores.json is written with sorted keys, so the order is read from the scores dict itself
+        spec_order = {fid: [p["id"] for p in spec["probes"]] for fid, spec in st.HSPECS.items()}
+        self.assertNotEqual(spec_order[st.HIDS[0]], sorted(spec_order[st.HIDS[0]]))  # p10 sorts before p2
+        seen = 0
+        for fid, by_seed in scored["labels"]["baseline"].items():
+            for seed, by_probe in by_seed.items():
+                self.assertEqual(list(by_probe), spec_order[fid], (fid, seed))
+                seen += 1
+        self.assertGreater(seen, 0)
 
     def test_end_to_end(self):
         self.finish()

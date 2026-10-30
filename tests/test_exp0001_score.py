@@ -1431,6 +1431,10 @@ class PilotReplayTests(unittest.TestCase):
             for by_seed in by_fixture.values():
                 for by_probe in by_seed.values():
                     self.assertTrue(set(by_probe.values()) <= {"correct", "incorrect", "abstained", None})
+        multi = scores.pop("multi_value")  # nor did it carry the multi-value count (P:160)
+        self.assertIsInstance(multi, dict)
+        self.assertEqual(sorted(multi), ["applicable", "count"])
+        self.assertTrue(all(type(v) is int for v in multi.values()))
         self.assertEqual(sorted(scores), sorted(committed))
         for key in committed:
             if key not in ("judge", "calls"):
@@ -1449,7 +1453,8 @@ class CliTests(unittest.TestCase):
         self.addCleanup(shutil.rmtree, gated, True)
         os.makedirs(os.path.join(gated, "cpr-eval"))
         with open(os.path.join(gated, "cpr-eval", "gates.json"), "w", encoding="utf-8") as fh:
-            json.dump({"C6": {"outcome": "PASS", "token": "0" * 64, "started_utc": "2026-10-23T00:00:00Z"}}, fh)
+            json.dump({"C6": {"outcome": "PASS", "token": "0" * 64, "started_utc": "2026-10-23T00:00:00Z"},
+                       "C1-5": {"outcome": "PASS", "started_utc": "2026-10-23T00:00:00Z", "run_id": "r-1"}}, fh)
         e["TMPDIR"] = gated
         e.update(env or {})
         return subprocess.run([sys.executable, exp0001_paths.RUN, *args], capture_output=True, text=True,

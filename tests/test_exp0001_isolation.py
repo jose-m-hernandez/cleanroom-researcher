@@ -1301,6 +1301,7 @@ class ControlTests(unittest.TestCase):
     def test_c4_and_c5_ledger_rows_fail_the_control(self):
         for label in ("c4", "c5b"):
             with self.subTest(label=label):
+                (claude_run.eval_root(self.environ) / "gates.json").unlink(missing_ok=True)  # a control is never re-run
                 runner = ScriptedRunner(self.tmp, self.ledger, ledger_labels=(label,))
                 code, out = self.run_control(runner)
                 self.assertEqual(code, 1)
