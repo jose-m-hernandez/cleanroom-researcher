@@ -4,7 +4,7 @@ A synthesis is a set of findings, each with a grade, a falsifier and the pinned 
 
 ## 1. The aim
 
-Your notes are not copied into this repository. They are rebuilt here as a synthesis, `syntheses/SYN-NNNN.md`, from pinned sources. Only a finding that a pinned source supports comes across.
+Your notes are not copied into this repository. They are rebuilt here as a synthesis, `syntheses/SYN-NNNN.md`, from pinned sources. Only a finding that a pinned source supports comes across. The repository has no `syntheses/` folder until its first synthesis, so create the folder along with the file.
 
 ## 2. Make the sources
 

@@ -10,6 +10,8 @@ Each experiment is a folder under `experiments/` whose `README.md` follows `docs
 
 `python3 tools/reproduce.py EXP-NNNN` rebuilds the generated files of that experiment on your machine, offline, and says for each whether it is identical to the committed copy. `python3 tools/reproduce.py --all` does every experiment.
 
+EXP-0001, the only experiment so far, is preregistered and has not been run yet. Until its first recorded run, `python3 tools/reproduce.py EXP-0001` (and `--all`) prints `reproduce: EXP-0001 has no generated files` and exits 0. That is the expected result, not a failure.
+
 ## Replicate an experiment
 
 Each experiment's `README.md` has a How to replicate section: what to run on your own account, what counts as agreement with the recorded results, and the expected cost and time.
