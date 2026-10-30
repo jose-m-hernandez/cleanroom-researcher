@@ -28,6 +28,8 @@ from tests import test_exp0001_seal as st  # noqa: E402
 KEY = "C1-5"
 NOT_PASSED = "the C1-C5 controls have not passed: run `control` first"
 STOPPED = "the experiment has stopped, outcome not determined"
+KEPT = ("control: STOP could not record C1-5 in gates.json; the lock %s is kept: a child process was started and a "
+        "control is never re-run (P:239), so control refuses until a person checks gates.json")
 
 
 def control_entry(outcome="PASS"):
@@ -356,8 +358,9 @@ class ControlSpawnAndLockTests(unittest.TestCase):
             with self.subTest(with_gates=with_gates):
                 code, out = self.h.run_control(runner)
                 self.assertEqual((code, runner.calls), (2, []), out)
-                self.assertEqual(out.strip(), "control: REFUSED %s exists: another control may be running; if none is, "
-                                 "delete the file and run control again" % self.lock)
+                self.assertEqual(out.strip(),
+                         ("control: REFUSED %s exists: another control may be running; if none is, check gates.json for a C1-5 entry first, "
+         "and a control that already launched is never re-run (P:239); what to record is the repository owner's call") % self.lock)
                 self.assertIn(str(self.lock), out)
                 self.assertEqual(self.lock.read_bytes(), lock_before)
                 self.assertEqual(self.path.read_bytes() if self.path.exists() else None, gates_before)
@@ -501,11 +504,109 @@ class ControlLockHeldUntilRecordedTests(unittest.TestCase):
             code, out = self.h.run_control(self.runner())
         self.assertEqual(code, 0, out)
         self.assertEqual((second["code"], second["calls"]), (2, []), second)
-        self.assertEqual(second["out"].strip(), "control: REFUSED %s exists: another control may be running; if none "
-                         "is, delete the file and run control again" % self.lock)
+        self.assertEqual(second["out"].strip(),
+                         ("control: REFUSED %s exists: another control may be running; if none is, check gates.json for a C1-5 entry first, "
+         "and a control that already launched is never re-run (P:239); what to record is the repository owner's call") % self.lock)
         self.assertEqual(set(self.gates()), {KEY})
         self.assertEqual(self.gates()[KEY]["outcome"], "PASS")
         self.assertFalse(self.lock.exists())
+
+
+class ControlFailedRecordKeepsLockTests(unittest.TestCase):
+    """F1 to F3: a control that started a child but could not record C1-5 keeps its lock and exits 2; a control that
+    started nothing still leaves no lock."""
+
+    def setUp(self):
+        self.h = iso.ControlTests("run_control")
+        self.h.setUp()
+        self.addCleanup(self.h.doCleanups)
+        self.environ = self.h.environ
+        self.path = claude_run.eval_root(self.environ) / "gates.json"
+        self.lock = claude_run.eval_root(self.environ) / "control.lock"
+        self.saved = []
+
+    def runner(self, **kw):
+        return iso.ScriptedRunner(self.h.tmp, self.h.ledger, **kw)
+
+    def failing(self, exc):
+        def record(entry, environ=None):
+            self.saved.append(self.lock.read_bytes())  # the lock exists while the entry is written
+            raise exc
+        return mock.patch.object(seal, "record_control", record)
+
+    def no_c1_5(self):
+        self.assertTrue(not self.path.exists() or KEY not in json.loads(self.path.read_text(encoding="utf-8")))
+
+    def run_direct(self, runner):
+        out = io.StringIO()
+        try:
+            return claude_run.control(self.environ, out, runner, self.h.config), out.getvalue(), None
+        except BaseException as exc:
+            return None, out.getvalue(), exc
+
+    def test_a_failed_record_after_a_spawn_keeps_the_lock(self):
+        # F1
+        def interrupted(*args, **kwargs):
+            kwargs["on_launch"]()
+            raise KeyboardInterrupt()
+        cases = [("pass, disk full", self.runner, OSError("disk full"), 2, None),
+                 ("fail, unreadable", lambda: self.runner(c1_fires=False), seal.SealStop("gates.json is unreadable"),
+                  2, None),
+                 ("interrupt, disk full", lambda: interrupted, OSError("disk full"), None, KeyboardInterrupt),
+                 ("pass, interrupt in record", self.runner, KeyboardInterrupt(), None, KeyboardInterrupt)]
+        for name, make, exc, want_code, want_exc in cases:
+            self.path.unlink(missing_ok=True)
+            self.lock.unlink(missing_ok=True)
+            self.saved.clear()
+            with self.subTest(name=name), self.failing(exc):
+                code, out, raised = self.run_direct(make())
+                if want_exc is None:
+                    self.assertIsNone(raised)
+                    self.assertEqual(code, want_code, out)
+                else:
+                    self.assertIsInstance(raised, want_exc)
+                self.assertEqual(len(self.saved), 1)
+                self.assertTrue(self.lock.exists())
+                self.assertEqual(self.lock.read_bytes(), self.saved[0])
+                self.no_c1_5()
+                self.assertEqual([line for line in out.splitlines() if "STOP could not record" in line],
+                                 [KEPT % self.lock])
+                self.assertEqual(out.count("STOP could not record"), 1)
+
+    def test_the_next_control_refuses_after_a_kept_lock(self):
+        # F2
+        with self.failing(OSError("disk full")):
+            code, out, raised = self.run_direct(self.runner())
+        self.assertEqual((code, raised), (2, None), out)
+        lock_before = self.lock.read_bytes()
+        again = self.runner()
+        code, out, raised = self.run_direct(again)  # the real seal.record_control
+        self.assertIsNone(raised)
+        self.assertEqual((code, again.calls), (2, []), out)
+        self.assertEqual(out.strip(),
+                         ("control: REFUSED %s exists: another control may be running; if none is, check gates.json for a C1-5 entry first, "
+         "and a control that already launched is never re-run (P:239); what to record is the repository owner's call") % self.lock)
+        self.assertEqual(self.lock.read_bytes(), lock_before)
+        self.no_c1_5()
+
+    def test_nothing_launched_still_leaves_no_lock(self):
+        # F3
+        def real_runner():
+            spawn = mock.Mock(side_effect=FileNotFoundError("no such command"))
+
+            def runner(*args, **kwargs):
+                with mock.patch.object(claude_run.subprocess, "Popen", spawn):
+                    return claude_run.run_claude(*args, **kwargs)
+            return runner
+        plain = self.h.run_control(real_runner())[0]
+        self.assertFalse(self.lock.exists())
+        record = mock.Mock(side_effect=OSError("disk full"))
+        with mock.patch.object(seal, "record_control", record):
+            code, out = self.h.run_control(real_runner())
+        self.assertEqual(record.call_count, 0)
+        self.assertFalse(self.lock.exists())
+        self.assertNotIn("STOP could not record", out)
+        self.assertEqual(code, plain)
 
 
 class ScanTokenTests(unittest.TestCase):

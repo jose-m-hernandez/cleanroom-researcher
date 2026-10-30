@@ -661,7 +661,9 @@ def control(environ=None, out=None, runner=None, config_path=None) -> int:
     is never re-run: with a C1-5 entry already in gates.json the command refuses (exit 2, no launch), after the
     live-flag check and the lock. The lock is control.lock in the eval root, created exclusively for the run and
     removed after the result is recorded (or after it is decided that there is nothing to record), on every path,
-    an interrupt included; one that exists refuses (exit 2), whatever its content, and is never broken here.
+    an interrupt included; one that exists refuses (exit 2), whatever its content, and is never broken here. The one
+    exception: when a child process was started and the result could not be recorded (the record raised, an interrupt
+    included), the lock is kept, the STOP line says so, and the command exits 2 (an interrupt is re-raised instead).
     """
     import seal  # inside the function: seal imports claude_run
 
@@ -680,6 +682,7 @@ def control(environ=None, out=None, runner=None, config_path=None) -> int:
 
     counted.held = []  # _control puts the lock it created here; it is removed below, after the record
     code = 1
+    keep = False  # True from the first record attempt until it returns normally: then the lock stays
     try:
         try:
             code = _control(environ, out, counted, config_path)
@@ -690,24 +693,38 @@ def control(environ=None, out=None, runner=None, config_path=None) -> int:
             print(f"control: ERROR {type(exc).__name__}", file=out)
         except BaseException:  # a Ctrl-C after a launch is a failed control too
             if launched:
-                _record_control("FAIL", launched[0], environ, out)
+                keep = True
+                keep = not _record_control("FAIL", launched[0], environ, out)
             raise
         if launched:
-            _record_control("PASS" if code == 0 else "FAIL", launched[0], environ, out)
+            keep = True
+            keep = not _record_control("PASS" if code == 0 else "FAIL", launched[0], environ, out)
+            if keep:
+                return 2  # the result was not written: a failed run, whatever the command's own code was
         return code
     finally:
-        for held in counted.held:
-            held.unlink(missing_ok=True)  # only a lock this run created is in the list
+        if not keep:
+            for held in counted.held:
+                held.unlink(missing_ok=True)  # only a lock this run created is in the list
 
 
-def _record_control(outcome, started, environ, out) -> None:
+def _record_control(outcome, started, environ, out) -> bool:
+    """True when the C1-5 entry was written. Otherwise print the STOP line (the lock is kept) and return False; a
+    BaseException from the record is re-raised after the line."""
     import seal  # inside the function: seal imports claude_run
 
     entry = {"outcome": outcome, "started_utc": started, "run_id": f"control-{uuid.uuid4().hex[:8]}"}
     try:
         seal.record_control(entry, environ)
-    except Exception:  # label only; the run's own exit code stands
-        print("control: STOP could not record C1-5 in gates.json", file=out)
+        return True
+    except BaseException as exc:  # label only: exception text can carry paths
+        lock = eval_root(environ) / "control.lock"
+        print(f"control: STOP could not record C1-5 in gates.json; the lock {lock} is kept: a child process was "
+              "started and a control is never re-run (P:239), so control refuses until a person checks gates.json",
+              file=out)
+        if not isinstance(exc, Exception):
+            raise
+        return False
 
 
 def _control(environ, out, runner, config_path) -> int:
@@ -721,8 +738,9 @@ def _control(environ, out, runner, config_path) -> int:
     try:
         fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     except FileExistsError:
-        print(f"control: REFUSED {lock} exists: another control may be running; if none is, delete the file and "
-              "run control again", file=out)
+        print(f"control: REFUSED {lock} exists: another control may be running; if none is, check gates.json for a "
+              "C1-5 entry first, and a control that already launched is never re-run (P:239); what to record is the "
+              "repository owner's call", file=out)
         return 2
     held = getattr(runner, "held", None)  # control's list: it removes the lock after recording C1-5
     if held is not None:
