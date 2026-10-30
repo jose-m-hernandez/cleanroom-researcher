@@ -1425,6 +1425,12 @@ class PilotReplayTests(unittest.TestCase):
                     del cell["primary_code"], cell["primary_nocode"]
         self.assertEqual(scores.pop("excluded"), {f: [] for f in scores["fixtures"]})  # the pilot predates the key
         self.assertEqual(scores.pop("judge_model"), self.cfg["judge"]["model"])  # nor did it record the judge
+        labels = scores.pop("labels")  # nor did it carry the labels block the human audit draws from
+        self.assertEqual(sorted(labels), sorted(scores["arms"]))
+        for by_fixture in labels.values():
+            for by_seed in by_fixture.values():
+                for by_probe in by_seed.values():
+                    self.assertTrue(set(by_probe.values()) <= {"correct", "incorrect", "abstained", None})
         self.assertEqual(sorted(scores), sorted(committed))
         for key in committed:
             if key not in ("judge", "calls"):

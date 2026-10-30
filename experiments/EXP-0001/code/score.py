@@ -384,7 +384,11 @@ def score_run(out, specs: dict, cfg: dict, environ, label_probe=None, label_item
               mode="normal") -> dict:
     """Score a results directory. Returns the scores dict (also written to <out>/scores.json by write_scores).
 
-    mode is the Labeller's ("normal", "final" after the seal, "replay" for the seal's own record)."""
+    mode is the Labeller's ("normal", "final" after the seal, "replay" for the seal's own record).
+
+    The dict carries a "labels" block, {arm: {fixture: {seed: {probe id: label}}}}: every probe of every session on disk,
+    in spec order, with the label the judge gave it (None for a missing answer or label). The human audit draws from it.
+    """
     out = Path(out)
     run = arms.read_json(out / "run.json")
     fids = [f for f in run["fixtures"] if f in specs]
@@ -503,6 +507,8 @@ def score_run(out, specs: dict, cfg: dict, environ, label_probe=None, label_item
         "invalid": {"probe_answers_missing": invalid_answers, "judge_labels_invalid": labeller.invalid},
         "judge": {"calls_made": labeller.calls, "cached_hits": labeller.cached},
         "gallery": _gallery(specs, fids, labels, sessions, per_seed, filters),
+        "labels": {a: {f: {str(seed): {p["id"]: labels[f].get((a, seed, p["id"])) for p in specs[f]["probes"]}
+                           for seed in sorted(sessions[(a, f)])} for f in fids} for a in arm_names},
     }
     for by_fixture in per_seed.values():
         for by_seed in by_fixture.values():

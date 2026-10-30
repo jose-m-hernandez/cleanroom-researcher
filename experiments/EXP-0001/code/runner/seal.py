@@ -53,6 +53,7 @@ SANDBOX_NOTE = "canary-note.txt"
 PATTERNS = ("C6 token", "C7 token", "username")
 MANIFEST_NAME, RECORD_NAME, SEAL_NAME, REPAIR_DIR = "manifest.txt", "record.json", "seal.json", "repair-log"
 LOCKED_ARM_DIRS = ("floor", "oracle")
+AUDIT_SEED = 20261022  # the human audit's draw and blind-order seed, written into the seal before the draw (README P:299)
 
 
 class SealStop(Exception):
@@ -620,7 +621,7 @@ def command_seal(fixtures_root, source, repair_log, guide, count_rule, out, envi
         seal = {"version": 1, "started_utc": utc_now(), "code_head": head,
                 "labels": _ref(Path(source) / "labels.json", "labels.json"),
                 "sessions": {rel: sha256_file(Path(source) / rel) for rel in sessions},
-                "guide": _ref(guide), "count_rule": _ref(count_rule),
+                "guide": _ref(guide), "count_rule": _ref(count_rule), "audit_seed": AUDIT_SEED,
                 "manifest": _ref(out / MANIFEST_NAME, MANIFEST_NAME), "record": _ref(out / RECORD_NAME, RECORD_NAME),
                 "repair_log": _ref(out / REPAIR_DIR / Path(repair_log).name, f"{REPAIR_DIR}/{Path(repair_log).name}")}
         (out / SEAL_NAME).write_text(_dump(seal), encoding="utf-8")
@@ -660,7 +661,8 @@ def _check_file(path, want, label, found: list) -> None:
 def verify(seal_dir, fixtures_root, results_dir) -> list:
     """Re-hash every file the manifest and seal.json name. Returns the mismatches, sorted, as "missing:<path>",
     "changed:<path>" and "extra:<path>" (a held-out fixture file the manifest does not list). Paths are relative:
-    to the fixtures root, to results_dir for the labels and session files, to the seal folder for its own files."""
+    to the fixtures root, to results_dir for the labels and session files, to the seal folder for its own files.
+    "changed:audit_seed" names a seal.json whose audit_seed is missing or is not exactly the integer AUDIT_SEED."""
     seal_dir, found = Path(seal_dir), []
     try:
         seal = _load_seal(seal_dir)
@@ -694,6 +696,9 @@ def verify(seal_dir, fixtures_root, results_dir) -> list:
             found.append("changed:count_rule")
     except (OSError, ValueError, KeyError, AttributeError):
         found.append("unreadable:count_rule")
+    seed = seal.get("audit_seed")
+    if type(seed) is not int or seed != AUDIT_SEED:
+        found.append("changed:audit_seed")
     return sorted(set(found))
 
 

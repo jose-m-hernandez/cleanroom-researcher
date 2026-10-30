@@ -102,6 +102,7 @@ This is the ledger. Every file in the repository has exactly one row below sayin
 | tests/data/exp0001-synthetic/REPORT.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; port of the evaluation harness at 08ef45f |
 | tests/data/exp0001-synthetic/run.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; port of the evaluation harness at 08ef45f |
 | tests/data/exp0001-synthetic/scores.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; port of the evaluation harness at 08ef45f |
+| tests/data/exp0001-audit-vector/vector.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-29; synthetic test data |
 | tests/exp0001_legacy_labels.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; port of the evaluation harness at 08ef45f |
 | tests/exp0001_paths.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; port of the evaluation harness at 08ef45f |
 | sources/SRC-0002/source.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22 |
@@ -129,6 +130,7 @@ This is the ledger. Every file in the repository has exactly one row below sayin
 | tests/test_exp0001_seal_home_shape.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-25 |
 | tests/test_exp0001_canary_gone.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-25 |
 | tests/test_exp0001_stats.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; port of the evaluation harness at 08ef45f |
+| tests/test_exp0001_audit.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-29 |
 | tests/test_check_vocabulary.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | tests/test_checks_page.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22 |
 | tests/test_gate.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
@@ -158,6 +160,7 @@ This is the ledger. Every file in the repository has exactly one row below sayin
 | experiments/EXP-0001/code/prompts/probe-answer.schema.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; port of the evaluation harness at 08ef45f |
 | experiments/EXP-0001/code/report.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; port of the evaluation harness at 08ef45f |
 | experiments/EXP-0001/code/runner/arms.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; port of the evaluation harness at 08ef45f |
+| experiments/EXP-0001/code/runner/audit.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-29 |
 | experiments/EXP-0001/code/runner/claude_run.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; port of the evaluation harness at 08ef45f |
 | experiments/EXP-0001/code/runner/fixtures.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; port of the evaluation harness at 08ef45f |
 | experiments/EXP-0001/code/runner/isolation.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22; port of the evaluation harness at 08ef45f |

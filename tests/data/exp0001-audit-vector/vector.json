@@ -1,0 +1,886 @@
+{
+ "seed": 20261022,
+ "frame": [
+  {
+   "id": "heldout-001-vector/1/cs00",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-002-vector/2/cs01",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-003-vector/3/cs02",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-004-vector/1/cs03",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-005-vector/2/cs04",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-006-vector/3/cs05",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-007-vector/1/cs06",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-008-vector/2/cs07",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-009-vector/3/cs08",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-010-vector/1/cs09",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-011-vector/2/cs10",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-012-vector/3/cs11",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-013-vector/1/cs12",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-014-vector/2/cs13",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-015-vector/3/cs14",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-016-vector/1/cs15",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-017-vector/2/cs16",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-018-vector/3/cs17",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-019-vector/1/cs18",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-020-vector/2/cs19",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-021-vector/3/cs20",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-022-vector/1/cs21",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-023-vector/2/cs22",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-024-vector/3/cs23",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-025-vector/1/cs24",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-001-vector/2/cs25",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-002-vector/3/cs26",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-003-vector/1/cs27",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-004-vector/2/cs28",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-005-vector/3/cs29",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-006-vector/1/cs30",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-007-vector/2/cs31",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-008-vector/3/cs32",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-009-vector/1/cs33",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-010-vector/2/cs34",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-011-vector/3/cs35",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-012-vector/1/cs36",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-013-vector/2/cs37",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-014-vector/3/cs38",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-015-vector/1/cs39",
+   "label": "correct",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-001-vector/1/ck00",
+   "label": "correct",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-002-vector/2/ck01",
+   "label": "correct",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-003-vector/3/ck02",
+   "label": "correct",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-004-vector/1/ck03",
+   "label": "correct",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-005-vector/2/ck04",
+   "label": "correct",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-006-vector/3/ck05",
+   "label": "correct",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-007-vector/1/ck06",
+   "label": "correct",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-008-vector/2/ck07",
+   "label": "correct",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-009-vector/3/ck08",
+   "label": "correct",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-010-vector/1/ck09",
+   "label": "correct",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-011-vector/2/ck10",
+   "label": "correct",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-012-vector/3/ck11",
+   "label": "correct",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-001-vector/1/ct00",
+   "label": "correct",
+   "type": "temporal"
+  },
+  {
+   "id": "heldout-002-vector/2/ct01",
+   "label": "correct",
+   "type": "temporal"
+  },
+  {
+   "id": "heldout-003-vector/3/ct02",
+   "label": "correct",
+   "type": "temporal"
+  },
+  {
+   "id": "heldout-001-vector/1/is00",
+   "label": "incorrect",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-002-vector/2/is01",
+   "label": "incorrect",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-003-vector/3/is02",
+   "label": "incorrect",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-004-vector/1/is03",
+   "label": "incorrect",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-005-vector/2/is04",
+   "label": "incorrect",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-006-vector/3/is05",
+   "label": "incorrect",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-007-vector/1/is06",
+   "label": "incorrect",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-008-vector/2/is07",
+   "label": "incorrect",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-009-vector/3/is08",
+   "label": "incorrect",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-010-vector/1/is09",
+   "label": "incorrect",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-011-vector/2/is10",
+   "label": "incorrect",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-012-vector/3/is11",
+   "label": "incorrect",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-013-vector/1/is12",
+   "label": "incorrect",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-014-vector/2/is13",
+   "label": "incorrect",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-015-vector/3/is14",
+   "label": "incorrect",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-016-vector/1/is15",
+   "label": "incorrect",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-017-vector/2/is16",
+   "label": "incorrect",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-018-vector/3/is17",
+   "label": "incorrect",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-019-vector/1/is18",
+   "label": "incorrect",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-020-vector/2/is19",
+   "label": "incorrect",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-001-vector/1/ik00",
+   "label": "incorrect",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-002-vector/2/ik01",
+   "label": "incorrect",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-003-vector/3/ik02",
+   "label": "incorrect",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-004-vector/1/ik03",
+   "label": "incorrect",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-005-vector/2/ik04",
+   "label": "incorrect",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-006-vector/3/ik05",
+   "label": "incorrect",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-007-vector/1/ik06",
+   "label": "incorrect",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-008-vector/2/ik07",
+   "label": "incorrect",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-009-vector/3/ik08",
+   "label": "incorrect",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-010-vector/1/ik09",
+   "label": "incorrect",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-011-vector/2/ik10",
+   "label": "incorrect",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-012-vector/3/ik11",
+   "label": "incorrect",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-013-vector/1/ik12",
+   "label": "incorrect",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-014-vector/2/ik13",
+   "label": "incorrect",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-015-vector/3/ik14",
+   "label": "incorrect",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-016-vector/1/ik15",
+   "label": "incorrect",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-017-vector/2/ik16",
+   "label": "incorrect",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-018-vector/3/ik17",
+   "label": "incorrect",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-019-vector/1/ik18",
+   "label": "incorrect",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-020-vector/2/ik19",
+   "label": "incorrect",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-001-vector/1/it00",
+   "label": "incorrect",
+   "type": "temporal"
+  },
+  {
+   "id": "heldout-002-vector/2/it01",
+   "label": "incorrect",
+   "type": "temporal"
+  },
+  {
+   "id": "heldout-003-vector/3/it02",
+   "label": "incorrect",
+   "type": "temporal"
+  },
+  {
+   "id": "heldout-004-vector/1/it03",
+   "label": "incorrect",
+   "type": "temporal"
+  },
+  {
+   "id": "heldout-005-vector/2/it04",
+   "label": "incorrect",
+   "type": "temporal"
+  },
+  {
+   "id": "heldout-006-vector/3/it05",
+   "label": "incorrect",
+   "type": "temporal"
+  },
+  {
+   "id": "heldout-007-vector/1/it06",
+   "label": "incorrect",
+   "type": "temporal"
+  },
+  {
+   "id": "heldout-008-vector/2/it07",
+   "label": "incorrect",
+   "type": "temporal"
+  },
+  {
+   "id": "heldout-009-vector/3/it08",
+   "label": "incorrect",
+   "type": "temporal"
+  },
+  {
+   "id": "heldout-010-vector/1/it09",
+   "label": "incorrect",
+   "type": "temporal"
+  },
+  {
+   "id": "heldout-011-vector/2/it10",
+   "label": "incorrect",
+   "type": "temporal"
+  },
+  {
+   "id": "heldout-012-vector/3/it11",
+   "label": "incorrect",
+   "type": "temporal"
+  },
+  {
+   "id": "heldout-013-vector/1/it12",
+   "label": "incorrect",
+   "type": "temporal"
+  },
+  {
+   "id": "heldout-014-vector/2/it13",
+   "label": "incorrect",
+   "type": "temporal"
+  },
+  {
+   "id": "heldout-015-vector/3/it14",
+   "label": "incorrect",
+   "type": "temporal"
+  },
+  {
+   "id": "heldout-016-vector/1/it15",
+   "label": "incorrect",
+   "type": "temporal"
+  },
+  {
+   "id": "heldout-017-vector/2/it16",
+   "label": "incorrect",
+   "type": "temporal"
+  },
+  {
+   "id": "heldout-018-vector/3/it17",
+   "label": "incorrect",
+   "type": "temporal"
+  },
+  {
+   "id": "heldout-019-vector/1/it18",
+   "label": "incorrect",
+   "type": "temporal"
+  },
+  {
+   "id": "heldout-020-vector/2/it19",
+   "label": "incorrect",
+   "type": "temporal"
+  },
+  {
+   "id": "heldout-001-vector/1/as00",
+   "label": "abstained",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-002-vector/2/as01",
+   "label": "abstained",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-003-vector/3/as02",
+   "label": "abstained",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-004-vector/1/as03",
+   "label": "abstained",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-005-vector/2/as04",
+   "label": "abstained",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-006-vector/3/as05",
+   "label": "abstained",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-007-vector/1/as06",
+   "label": "abstained",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-008-vector/2/as07",
+   "label": "abstained",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-009-vector/3/as08",
+   "label": "abstained",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-010-vector/1/as09",
+   "label": "abstained",
+   "type": "single-fact"
+  },
+  {
+   "id": "heldout-001-vector/1/ak00",
+   "label": "abstained",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-002-vector/2/ak01",
+   "label": "abstained",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-003-vector/3/ak02",
+   "label": "abstained",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-004-vector/1/ak03",
+   "label": "abstained",
+   "type": "knowledge-update"
+  },
+  {
+   "id": "heldout-001-vector/1/at00",
+   "label": "abstained",
+   "type": "temporal"
+  },
+  {
+   "id": "heldout-002-vector/2/at01",
+   "label": "abstained",
+   "type": "temporal"
+  }
+ ],
+ "shares": {
+  "correct": 41,
+  "incorrect": 43,
+  "abstained": 16
+ },
+ "allocation": {
+  "correct": {
+   "single-fact": 27,
+   "knowledge-update": 11,
+   "temporal": 3
+  },
+  "incorrect": {
+   "single-fact": 15,
+   "knowledge-update": 14,
+   "temporal": 14
+  },
+  "abstained": {
+   "single-fact": 10,
+   "knowledge-update": 4,
+   "temporal": 2
+  }
+ },
+ "drawn": [
+  "heldout-012-vector/1/cs36",
+  "heldout-023-vector/2/cs22",
+  "heldout-010-vector/1/cs09",
+  "heldout-006-vector/3/cs05",
+  "heldout-002-vector/3/cs26",
+  "heldout-008-vector/3/cs32",
+  "heldout-008-vector/2/cs07",
+  "heldout-020-vector/2/cs19",
+  "heldout-001-vector/1/cs00",
+  "heldout-025-vector/1/cs24",
+  "heldout-014-vector/2/cs13",
+  "heldout-009-vector/3/cs08",
+  "heldout-003-vector/1/cs27",
+  "heldout-001-vector/2/cs25",
+  "heldout-004-vector/1/cs03",
+  "heldout-013-vector/2/cs37",
+  "heldout-005-vector/3/cs29",
+  "heldout-011-vector/2/cs10",
+  "heldout-011-vector/3/cs35",
+  "heldout-010-vector/2/cs34",
+  "heldout-021-vector/3/cs20",
+  "heldout-013-vector/1/cs12",
+  "heldout-014-vector/3/cs38",
+  "heldout-009-vector/1/cs33",
+  "heldout-016-vector/1/cs15",
+  "heldout-018-vector/3/cs17",
+  "heldout-012-vector/3/cs11",
+  "heldout-011-vector/2/ck10",
+  "heldout-006-vector/3/ck05",
+  "heldout-010-vector/1/ck09",
+  "heldout-005-vector/2/ck04",
+  "heldout-003-vector/3/ck02",
+  "heldout-001-vector/1/ck00",
+  "heldout-002-vector/2/ck01",
+  "heldout-012-vector/3/ck11",
+  "heldout-009-vector/3/ck08",
+  "heldout-007-vector/1/ck06",
+  "heldout-008-vector/2/ck07",
+  "heldout-003-vector/3/ct02",
+  "heldout-002-vector/2/ct01",
+  "heldout-001-vector/1/ct00",
+  "heldout-012-vector/3/is11",
+  "heldout-019-vector/1/is18",
+  "heldout-010-vector/1/is09",
+  "heldout-006-vector/3/is05",
+  "heldout-002-vector/2/is01",
+  "heldout-014-vector/2/is13",
+  "heldout-004-vector/1/is03",
+  "heldout-015-vector/3/is14",
+  "heldout-013-vector/1/is12",
+  "heldout-001-vector/1/is00",
+  "heldout-009-vector/3/is08",
+  "heldout-003-vector/3/is02",
+  "heldout-011-vector/2/is10",
+  "heldout-016-vector/1/is15",
+  "heldout-007-vector/1/is06",
+  "heldout-012-vector/3/ik11",
+  "heldout-019-vector/1/ik18",
+  "heldout-010-vector/1/ik09",
+  "heldout-006-vector/3/ik05",
+  "heldout-002-vector/2/ik01",
+  "heldout-014-vector/2/ik13",
+  "heldout-004-vector/1/ik03",
+  "heldout-015-vector/3/ik14",
+  "heldout-013-vector/1/ik12",
+  "heldout-001-vector/1/ik00",
+  "heldout-009-vector/3/ik08",
+  "heldout-003-vector/3/ik02",
+  "heldout-011-vector/2/ik10",
+  "heldout-016-vector/1/ik15",
+  "heldout-012-vector/3/it11",
+  "heldout-019-vector/1/it18",
+  "heldout-010-vector/1/it09",
+  "heldout-006-vector/3/it05",
+  "heldout-002-vector/2/it01",
+  "heldout-014-vector/2/it13",
+  "heldout-004-vector/1/it03",
+  "heldout-015-vector/3/it14",
+  "heldout-013-vector/1/it12",
+  "heldout-001-vector/1/it00",
+  "heldout-009-vector/3/it08",
+  "heldout-003-vector/3/it02",
+  "heldout-011-vector/2/it10",
+  "heldout-016-vector/1/it15",
+  "heldout-006-vector/3/as05",
+  "heldout-005-vector/2/as04",
+  "heldout-003-vector/3/as02",
+  "heldout-001-vector/1/as00",
+  "heldout-002-vector/2/as01",
+  "heldout-010-vector/1/as09",
+  "heldout-009-vector/3/as08",
+  "heldout-007-vector/1/as06",
+  "heldout-008-vector/2/as07",
+  "heldout-004-vector/1/as03",
+  "heldout-003-vector/3/ak02",
+  "heldout-004-vector/1/ak03",
+  "heldout-002-vector/2/ak01",
+  "heldout-001-vector/1/ak00",
+  "heldout-002-vector/2/at01",
+  "heldout-001-vector/1/at00"
+ ],
+ "blind_order": [
+  "heldout-009-vector/3/ck08",
+  "heldout-025-vector/1/cs24",
+  "heldout-003-vector/3/ck02",
+  "heldout-001-vector/1/ct00",
+  "heldout-014-vector/2/cs13",
+  "heldout-004-vector/1/ak03",
+  "heldout-006-vector/3/ck05",
+  "heldout-019-vector/1/it18",
+  "heldout-010-vector/1/is09",
+  "heldout-003-vector/3/ct02",
+  "heldout-008-vector/2/ck07",
+  "heldout-019-vector/1/is18",
+  "heldout-014-vector/2/ik13",
+  "heldout-001-vector/1/is00",
+  "heldout-002-vector/2/as01",
+  "heldout-003-vector/3/as02",
+  "heldout-012-vector/3/ck11",
+  "heldout-002-vector/2/at01",
+  "heldout-014-vector/2/is13",
+  "heldout-007-vector/1/is06",
+  "heldout-003-vector/3/is02",
+  "heldout-023-vector/2/cs22",
+  "heldout-011-vector/2/cs10",
+  "heldout-007-vector/1/as06",
+  "heldout-021-vector/3/cs20",
+  "heldout-013-vector/1/is12",
+  "heldout-013-vector/2/cs37",
+  "heldout-013-vector/1/ik12",
+  "heldout-009-vector/3/ik08",
+  "heldout-012-vector/3/is11",
+  "heldout-010-vector/1/as09",
+  "heldout-006-vector/3/ik05",
+  "heldout-006-vector/3/it05",
+  "heldout-003-vector/1/cs27",
+  "heldout-012-vector/3/ik11",
+  "heldout-011-vector/2/it10",
+  "heldout-016-vector/1/is15",
+  "heldout-009-vector/1/cs33",
+  "heldout-004-vector/1/ik03",
+  "heldout-006-vector/3/cs05",
+  "heldout-016-vector/1/it15",
+  "heldout-002-vector/2/ck01",
+  "heldout-009-vector/3/it08",
+  "heldout-001-vector/1/cs00",
+  "heldout-010-vector/1/cs09",
+  "heldout-008-vector/2/as07",
+  "heldout-009-vector/3/is08",
+  "heldout-008-vector/3/cs32",
+  "heldout-012-vector/3/cs11",
+  "heldout-015-vector/3/is14",
+  "heldout-006-vector/3/as05",
+  "heldout-004-vector/1/it03",
+  "heldout-009-vector/3/cs08",
+  "heldout-011-vector/2/is10",
+  "heldout-011-vector/2/ik10",
+  "heldout-013-vector/1/cs12",
+  "heldout-001-vector/1/ak00",
+  "heldout-001-vector/1/ck00",
+  "heldout-010-vector/1/it09",
+  "heldout-002-vector/2/ak01",
+  "heldout-003-vector/3/ak02",
+  "heldout-015-vector/3/ik14",
+  "heldout-002-vector/3/cs26",
+  "heldout-010-vector/1/ik09",
+  "heldout-013-vector/1/it12",
+  "heldout-012-vector/3/it11",
+  "heldout-003-vector/3/ik02",
+  "heldout-001-vector/1/at00",
+  "heldout-002-vector/2/ik01",
+  "heldout-006-vector/3/is05",
+  "heldout-011-vector/3/cs35",
+  "heldout-004-vector/1/is03",
+  "heldout-015-vector/3/it14",
+  "heldout-009-vector/3/as08",
+  "heldout-019-vector/1/ik18",
+  "heldout-014-vector/2/it13",
+  "heldout-011-vector/2/ck10",
+  "heldout-004-vector/1/cs03",
+  "heldout-001-vector/1/ik00",
+  "heldout-010-vector/2/cs34",
+  "heldout-005-vector/2/as04",
+  "heldout-001-vector/2/cs25",
+  "heldout-001-vector/1/it00",
+  "heldout-003-vector/3/it02",
+  "heldout-002-vector/2/ct01",
+  "heldout-016-vector/1/cs15",
+  "heldout-018-vector/3/cs17",
+  "heldout-020-vector/2/cs19",
+  "heldout-005-vector/3/cs29",
+  "heldout-016-vector/1/ik15",
+  "heldout-012-vector/1/cs36",
+  "heldout-004-vector/1/as03",
+  "heldout-010-vector/1/ck09",
+  "heldout-005-vector/2/ck04",
+  "heldout-008-vector/2/cs07",
+  "heldout-014-vector/3/cs38",
+  "heldout-007-vector/1/ck06",
+  "heldout-002-vector/2/it01",
+  "heldout-002-vector/2/is01",
+  "heldout-001-vector/1/as00"
+ ]
+}
