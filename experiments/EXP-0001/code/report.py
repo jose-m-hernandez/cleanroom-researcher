@@ -158,14 +158,21 @@ def final_sections(run: dict, scores: dict, final: dict, seed) -> list:
     caveat = " (audit n < 100: %d answers)" % n_audit if n_audit < audit.SAMPLE_SIZE else ""
     out = ["## The primary question", "",
            "Fixtures with a baseline primary: %d of %d." % (len(valued), len(scores["fixtures"])),
+           "",
            "Baseline primary, mean over fixtures with its 95%% interval: %s." % cell(base, seed),
+           "",
            "Interval bounds as decided, at full precision with no rounding: lower %s, upper %s." % (
                "n/a" if lo is None else repr(lo), "n/a" if hi is None else repr(hi)),
+           "",
            "Threshold T = %s." % fmt(THRESHOLD),
+           "",
            "The audit's kappa is %s against the bar %s%s." % (repr(kappa), fmt(audit.KAPPA_BAR, 1), caveat),
+           "",
            "Fixtures sealed: %d. Fixtures left out of the primary: %d (the planned %d less those sealed, as dropped "
            "and not replaced, plus the sealed fixtures with no baseline value)." % (who["sealed"], who["left"], PLANNED_FIXTURES),
+           "",
            "Sealed fixtures with no baseline value: %s." % (", ".join(who["no_value"]) or "none"),
+           "",
            ]
     if who["excluded"]:  # a reason is free text: an indented block keeps it from making a heading
         out += ["Excluded fixtures:", ""] + indented("\n".join("%s: %s" % (f, r) for f, r in who["excluded"].items()))

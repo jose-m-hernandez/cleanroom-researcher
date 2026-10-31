@@ -12,6 +12,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -607,6 +608,190 @@ class ControlFailedRecordKeepsLockTests(unittest.TestCase):
         self.assertFalse(self.lock.exists())
         self.assertNotIn("STOP could not record", out)
         self.assertEqual(code, plain)
+
+
+class InterruptAfterLaunchTests(unittest.TestCase):
+    """F4 to F6: after a launch, an interrupt anywhere in control ends with the C1-5 entry written or the lock kept,
+    never neither; the record is attempted once."""
+
+    def setUp(self):
+        self.fresh()
+
+    def fresh(self):
+        """A new control world (its own eval root, ledger and spend file): a repeated control in one world stops early."""
+        self.h = iso.ControlTests("run_control")
+        self.h.setUp()
+        self.addCleanup(self.h.doCleanups)
+        self.environ = self.h.environ
+        self.path = claude_run.eval_root(self.environ) / "gates.json"
+        self.lock = claude_run.eval_root(self.environ) / "control.lock"
+
+    def runner(self, **kw):
+        return iso.ScriptedRunner(self.h.tmp, self.h.ledger, **kw)
+
+    def reset(self):
+        self.fresh()
+
+    def entries(self):
+        return json.loads(self.path.read_text(encoding="utf-8")) if self.path.exists() else {}
+
+    def run_direct(self, runner, out=None):
+        out = out if out is not None else io.StringIO()
+        try:
+            return claude_run.control(self.environ, out, runner, self.h.config), None
+        except BaseException as exc:
+            return None, exc
+
+    @staticmethod
+    def raising_after_launch(exc):
+        def runner(*args, **kwargs):
+            kwargs["on_launch"]()
+            raise exc
+        return runner
+
+    @staticmethod
+    def interrupting_out(prefix):
+        class Out:
+            def __init__(self):
+                self.texts, self.fired = [], False
+
+            def write(self, text):
+                if not self.fired and text.startswith(prefix):
+                    self.fired = True
+                    raise KeyboardInterrupt()
+                self.texts.append(text)
+                return len(text)
+
+            def flush(self):
+                pass
+        return Out()
+
+    def test_an_interrupt_in_a_handler_print_after_a_launch_fails_closed(self):
+        # F4
+        cases = [("ERROR handler", RuntimeError("boom"), "control: ERROR"),
+                 ("STOP handler", claude_run.SpendCapReached("cap"), "control: STOP")]
+        for name, exc, prefix in cases:
+            self.reset()
+            with self.subTest(name=name, record="written"):
+                out = self.interrupting_out(prefix)
+                code, raised = self.run_direct(self.raising_after_launch(exc), out)
+                self.assertTrue(out.fired)
+                self.assertIsInstance(raised, KeyboardInterrupt)
+                self.assertEqual(self.entries()[KEY]["outcome"], "FAIL")
+                self.assertFalse(self.lock.exists())
+            self.reset()
+            with self.subTest(name=name, record="disk full"), \
+                    mock.patch.object(seal, "record_control", mock.Mock(side_effect=OSError("disk full"))):
+                out = self.interrupting_out(prefix)
+                code, raised = self.run_direct(self.raising_after_launch(exc), out)
+                self.assertTrue(out.fired)
+                self.assertIsInstance(raised, KeyboardInterrupt)
+                self.assertNotIn(KEY, self.entries())
+                self.assertTrue(self.lock.exists())
+
+    def trace_run(self, target=None, seen=None):
+        """One five-pass control under sys.settrace. With seen (a list): record the line numbers of control's own frame
+        that run after the first spawn. With target: raise one KeyboardInterrupt at the first line event on that line
+        after the spawn. Returns (code, raised)."""
+        control_code = claude_run.control.__code__
+        state = {"spawned": False, "fired": False}
+        inner = self.runner()
+
+        def runner(*args, **kwargs):
+            real = kwargs["on_launch"]
+
+            def on_launch():
+                real()
+                state["spawned"] = True
+            kwargs["on_launch"] = on_launch
+            return inner(*args, **kwargs)
+
+        def local(frame, event, arg):
+            if event == "line" and state["spawned"]:
+                if seen is not None:
+                    seen.append(frame.f_lineno)
+                elif not state["fired"] and frame.f_lineno == target:
+                    state["fired"] = True
+                    raise KeyboardInterrupt()
+            return local
+
+        def tracer(frame, event, arg):
+            if event == "call" and frame.f_code is control_code:
+                return local
+            return None
+
+        sys.settrace(tracer)
+        try:
+            code, raised = self.run_direct(runner)
+        finally:
+            sys.settrace(None)
+        return code, raised, state["fired"]
+
+    def test_an_interrupt_at_any_line_after_a_launch_fails_closed(self):
+        # F5
+        seen = []
+        code, raised, _ = self.trace_run(seen=seen)
+        self.assertEqual((code, raised), (0, None))
+        self.assertEqual(self.entries()[KEY]["outcome"], "PASS")
+        lines = sorted(set(seen))
+        self.assertGreater(len(lines), 5, lines)
+        written = 0
+        for line in lines:
+            self.reset()
+            code, raised, fired = self.trace_run(target=line)
+            with self.subTest(line=line, of=len(lines)):
+                self.assertTrue(fired, "the injection at line %d did not fire (%d lines)" % (line, len(lines)))
+                self.assertTrue(raised is None or isinstance(raised, KeyboardInterrupt), repr(raised))
+                has_entry = KEY in self.entries()
+                self.assertTrue(has_entry or self.lock.exists(),
+                                "neither a C1-5 entry nor a lock after an interrupt at line %d (%d lines)" % (line, len(lines)))
+                written += has_entry
+        self.assertGreaterEqual(written, 1, "no injection point gave a written C1-5 (%d lines)" % len(lines))
+
+    def test_the_record_is_attempted_once(self):
+        # F6
+        record = mock.Mock(side_effect=KeyboardInterrupt())
+        with mock.patch.object(seal, "record_control", record):
+            code, raised = self.run_direct(self.raising_after_launch(RuntimeError("boom")))
+        self.assertIsInstance(raised, KeyboardInterrupt)
+        self.assertEqual(record.call_count, 1)
+        self.assertTrue(self.lock.exists())
+
+    def test_a_second_interrupt_at_the_outer_handler_still_keeps_the_lock(self):
+        # F7: the lock counts as kept from the spawn point itself
+        control_code = claude_run.control.__code__
+        first_line = control_code.co_firstlineno
+        source = Path(claude_run.__file__).read_text(encoding="utf-8").splitlines()[first_line - 1:]
+        handlers = [first_line + i for i, text in enumerate(source) if text.strip().startswith("except BaseException:")]
+        self.assertEqual(len(handlers), 1, handlers)
+        state = {"first": False, "second": False}
+
+        def runner(*args, **kwargs):
+            kwargs["on_launch"]()
+            state["first"] = True
+            raise KeyboardInterrupt()
+
+        def local(frame, event, arg):
+            # the first line event at or after the outer handler (the inner except clauses come before it)
+            if event == "line" and state["first"] and not state["second"] and frame.f_lineno >= handlers[0]:
+                state["second"] = True
+                raise KeyboardInterrupt()
+            return local
+
+        def tracer(frame, event, arg):
+            if event == "call" and frame.f_code is control_code:
+                return local
+            return None
+
+        sys.settrace(tracer)
+        try:
+            code, raised = self.run_direct(runner)
+        finally:
+            sys.settrace(None)
+        self.assertTrue(state["second"], "the second interrupt did not fire")
+        self.assertIsInstance(raised, KeyboardInterrupt)
+        self.assertTrue(KEY in self.entries() or self.lock.exists(),
+                        "neither a C1-5 entry nor a lock after a second interrupt")
 
 
 class ScanTokenTests(unittest.TestCase):

@@ -612,7 +612,7 @@ class BarredWorkflowTests(unittest.TestCase):
         steps = steps_of("barred")
         first = "\n".join(steps[0])
         self.assertIn("        if: " + FORK, steps[0])
-        self.assertIn("barred: skipped on a fork pull request (no secrets)", first)
+        self.assertIn("barred: not run on a fork pull request (no secrets)", first)
         self.assertNotIn("uses:", first)
         uses_at = [i for i, s in enumerate(steps) if "uses: actions/checkout@" in s[0]]
         self.assertEqual(uses_at, [1])
@@ -673,10 +673,45 @@ class RecordedGuardWorkflowTests(unittest.TestCase):
     def test_w7_the_barred_fork_guard_points_at_the_maintainer_steps(self):
         first = steps_of("barred")[0]
         text = (
-            "        run: 'echo \"barred: skipped on a fork pull request (no secrets); "
-            "a maintainer runs it before merging (MAINTAINING.md)\"'"
+            "        run: 'echo \"barred: not run on a fork pull request (no secrets); "
+            "a maintainer scans it on a branch in this repository before merging (MAINTAINING.md)\"; exit 1'"
         )
         self.assertIn(text, first)
+
+
+class BarredForkGuardFailsTests(unittest.TestCase):
+    """The barred job ends red on a fork pull request. The instrument: a parsed-workflow check plus a /bin/sh run of
+    the extracted step (no act, no GitHub event)."""
+
+    def test_g_f1_the_guard_selects_exactly_a_fork_pull_request(self):
+        guard = steps_of("barred")[0]
+        ifs = [l for l in guard if l.startswith("        if:")]
+        self.assertEqual(ifs, ["        if: " + FORK])
+
+    def test_g_f2_every_other_step_is_its_negation(self):
+        for step in steps_of("barred")[1:]:
+            with self.subTest(step=step[0]):
+                ifs = [l for l in step if l.startswith("        if:")]
+                self.assertEqual(ifs, ["        if: " + NOT_FORK])
+
+    def test_g_f3_no_job_level_condition_can_skip_the_job(self):
+        self.assertEqual([l for l in job_block("barred") if re.match(r"^    if:", l)], [])
+
+    def test_g_f4_the_guards_command_exits_1_with_its_message(self):
+        guard = steps_of("barred")[0]
+        runs = [l for l in guard if l.startswith("        run: '")]
+        self.assertEqual(len(runs), 1, runs)
+        line = runs[0]
+        self.assertTrue(line.endswith("'"))
+        script = line[len("        run: '"):-1]
+        self.assertNotIn("''", script)
+        done = subprocess.run(["/bin/sh", "-c", script], capture_output=True, text=True, timeout=10)
+        self.assertEqual(done.returncode, 1)
+        self.assertEqual(
+            done.stdout,
+            "barred: not run on a fork pull request (no secrets); a maintainer scans it on a branch in this "
+            "repository before merging (MAINTAINING.md)\n",
+        )
 
 
 class StageOrderTests(unittest.TestCase):
