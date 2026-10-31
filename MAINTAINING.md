@@ -8,7 +8,7 @@ A pull request from a fork runs CI without this repository's secrets, so CI cann
 
 1. Fetch the pull request's head: `git fetch origin pull/<number>/head:pr-<number>`.
 2. Check out `pr-<number>`, set `BARRED_STRINGS_PATH` to the private list file, and run `python3 tools/barred_scan.py`. It scans every commit on the branch, not only the current files.
-3. If the scan passes, push `pr-<number>` to a branch in this repository and open a pull request from that branch (as in step 4 below), so that CI runs the scan with the secrets; merge that pull request, and close the fork's with a comment linking it. If the scan fails, ask the contributor to change the file it names. Never quote the list in a comment, issue or commit message.
+3. If the scan passes, push `pr-<number>` to a branch in this repository and open a pull request from that branch (as in step 4 of the section "Re-admitting recorded data and workflow changes" below), so that CI runs the scan with the secrets; merge that pull request, and close the fork's with a comment linking it. If the scan fails, ask the contributor to change the file it names. Never quote the list in a comment, issue or commit message.
 
 ## Re-admitting recorded data and workflow changes
 
