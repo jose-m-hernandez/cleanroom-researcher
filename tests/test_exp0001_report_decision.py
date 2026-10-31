@@ -299,6 +299,16 @@ class ExcludedFixtureTextTests(unittest.TestCase):
         md = report.build_markdown(run, scores, final_input())
         self.assertIn("\nExcluded fixtures: none.\n", md)
 
+    def test_each_primary_question_statement_is_its_own_paragraph(self):
+        run, scores = final_world()
+        lines = report.build_markdown(run, scores, final_input()).splitlines()
+        start = lines.index("## The primary question")
+        end = next(i for i, ln in enumerate(lines) if i > start and ln.startswith("Excluded fixtures"))
+        section = lines[start:end]
+        self.assertGreater(len([ln for ln in section if ln]), 7, section)
+        for a, b in zip(section, section[1:]):
+            self.assertFalse(a and b, "two statements share a paragraph: %r / %r" % (a, b))
+
 
 class FinalReportTests(unittest.TestCase):
     """D5: the held-out final report end to end, on the seal world of tests/test_exp0001_seal.py."""

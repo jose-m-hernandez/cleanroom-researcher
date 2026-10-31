@@ -664,6 +664,10 @@ def control(environ=None, out=None, runner=None, config_path=None) -> int:
     an interrupt included; one that exists refuses (exit 2), whatever its content, and is never broken here. The one
     exception: when a child process was started and the result could not be recorded (the record raised, an interrupt
     included), the lock is kept, the STOP line says so, and the command exits 2 (an interrupt is re-raised instead).
+    After a launch the lock is kept until the result is written, whatever interrupts the run: it counts as kept from
+    the spawn point itself, any BaseException before the record was attempted (one inside a handler's print or between
+    _control and the record included) makes one FAIL record attempt and is re-raised, and the record is attempted at
+    most once per run.
     """
     import seal  # inside the function: seal imports claude_run
 
@@ -674,15 +678,18 @@ def control(environ=None, out=None, runner=None, config_path=None) -> int:
 
     def counted(*args, on_launch=None, **kwargs):
         def spawned():  # run_claude calls this at the spawn point: a child exists from here on
+            nonlocal keep
             if not launched:
                 launched.append(seal.utc_now())
+            keep = True  # from the spawn on, the lock stays until the C1-5 entry is written
             if on_launch is not None:
                 on_launch()
         return runner(*args, on_launch=spawned, **kwargs)
 
     counted.held = []  # _control puts the lock it created here; it is removed below, after the record
     code = 1
-    keep = False  # True from the first record attempt until it returns normally: then the lock stays
+    keep = False  # True from the spawn until the C1-5 entry is written: then the lock stays
+    attempted = False  # the record is attempted at most once per run
     try:
         try:
             code = _control(environ, out, counted, config_path)
@@ -691,17 +698,19 @@ def control(environ=None, out=None, runner=None, config_path=None) -> int:
             print(f"control: STOP {exc}", file=out)
         except Exception as exc:  # label only: exception text can carry argv and paths
             print(f"control: ERROR {type(exc).__name__}", file=out)
-        except BaseException:  # a Ctrl-C after a launch is a failed control too
-            if launched:
-                keep = True
-                keep = not _record_control("FAIL", launched[0], environ, out)
-            raise
         if launched:
             keep = True
+            attempted = True
             keep = not _record_control("PASS" if code == 0 else "FAIL", launched[0], environ, out)
             if keep:
                 return 2  # the result was not written: a failed run, whatever the command's own code was
         return code
+    except BaseException:  # a Ctrl-C after a launch is a failed control too, wherever it lands
+        if launched and not attempted:
+            keep = True
+            attempted = True
+            keep = not _record_control("FAIL", launched[0], environ, out)
+        raise
     finally:
         if not keep:
             for held in counted.held:
