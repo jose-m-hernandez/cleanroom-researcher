@@ -757,6 +757,42 @@ class InterruptAfterLaunchTests(unittest.TestCase):
         self.assertEqual(record.call_count, 1)
         self.assertTrue(self.lock.exists())
 
+    def test_a_second_interrupt_at_the_outer_handler_still_keeps_the_lock(self):
+        # F7: the lock counts as kept from the spawn point itself
+        control_code = claude_run.control.__code__
+        first_line = control_code.co_firstlineno
+        source = Path(claude_run.__file__).read_text(encoding="utf-8").splitlines()[first_line - 1:]
+        handlers = [first_line + i for i, text in enumerate(source) if text.strip().startswith("except BaseException:")]
+        self.assertEqual(len(handlers), 1, handlers)
+        state = {"first": False, "second": False}
+
+        def runner(*args, **kwargs):
+            kwargs["on_launch"]()
+            state["first"] = True
+            raise KeyboardInterrupt()
+
+        def local(frame, event, arg):
+            # the first line event at or after the outer handler (the inner except clauses come before it)
+            if event == "line" and state["first"] and not state["second"] and frame.f_lineno >= handlers[0]:
+                state["second"] = True
+                raise KeyboardInterrupt()
+            return local
+
+        def tracer(frame, event, arg):
+            if event == "call" and frame.f_code is control_code:
+                return local
+            return None
+
+        sys.settrace(tracer)
+        try:
+            code, raised = self.run_direct(runner)
+        finally:
+            sys.settrace(None)
+        self.assertTrue(state["second"], "the second interrupt did not fire")
+        self.assertIsInstance(raised, KeyboardInterrupt)
+        self.assertTrue(KEY in self.entries() or self.lock.exists(),
+                        "neither a C1-5 entry nor a lock after a second interrupt")
+
 
 class ScanTokenTests(unittest.TestCase):
     """G5: the pre-seal scan reads the C6 and C7 tokens only."""
