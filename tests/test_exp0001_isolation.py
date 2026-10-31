@@ -1139,7 +1139,9 @@ class ScriptedRunner:
         self.kwargs = {}
 
     def __call__(self, cfg, prompt, sandbox, *, label, kind="plain", session_id=None, resume=None,
-                 plugin=None, plain=False, probe=False, model=None, environ=None, prior=None, phase=None):
+                 plugin=None, plain=False, probe=False, model=None, environ=None, prior=None, phase=None, on_launch=None):
+        if on_launch is not None:
+            on_launch()  # a scripted run stands for a run whose child was spawned
         self.calls.append(label)
         self.kwargs[label] = {"plain": plain, "model": model, "plugin": plugin}
         sid = resume or session_id
@@ -1301,6 +1303,7 @@ class ControlTests(unittest.TestCase):
     def test_c4_and_c5_ledger_rows_fail_the_control(self):
         for label in ("c4", "c5b"):
             with self.subTest(label=label):
+                (claude_run.eval_root(self.environ) / "gates.json").unlink(missing_ok=True)  # a control is never re-run
                 runner = ScriptedRunner(self.tmp, self.ledger, ledger_labels=(label,))
                 code, out = self.run_control(runner)
                 self.assertEqual(code, 1)

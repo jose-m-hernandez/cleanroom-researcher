@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Entry point for the evals harness: preflight, control, canary, judge-check, validate, gen-fixture, install-check, install-verify, spend-rebuild, lint, seal, run, score, report, pilot, pilot-md."""
+"""Entry point for the evals harness: preflight, control, canary, judge-check, validate, gen-fixture, install-check, install-verify, spend-rebuild, lint, seal, audit-export, audit-score, run, score, report, pilot, pilot-md."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ import judge
 import lint
 import pilot
 import arms
+import audit
 import probes
 import seal
 import report  # noqa: E402
@@ -77,6 +78,7 @@ def main(argv=None) -> int:
     rep.add_argument("--out", help="directory to write into (default: the --from directory)")
     rep.add_argument("--seal", help="seal folder; required for held-out results that hold baseline cells")
     rep.add_argument("--fixtures-root", help="directory holding <id>/spec.json, for verifying the seal (default <code>/fixtures/<split of the run>)")
+    rep.add_argument("--audit", help="the audit's audit.json; required for a held-out final report (P:105, P:146)")
     sl = sub.add_parser("seal", help="seal the held-out fixtures and the floor and oracle results; no model call")
     sl.add_argument("--fixtures-root", help="the held-out fixtures store (<id>/spec.json)")
     sl.add_argument("--from", dest="source", help="floor and oracle results (run.json, labels.json, probes/)")
@@ -84,6 +86,15 @@ def main(argv=None) -> int:
     sl.add_argument("--guide", help="the guide, hashed into the seal")
     sl.add_argument("--count-rule", help="the rule for counting answers that name more than one value, recorded in the seal")
     sl.add_argument("--out", help="seal folder to create (must not exist; outside the clone, or under experiments/EXP-0001/recorded/)")
+    aex = sub.add_parser("audit-export", help="the human audit's blinded sample, owner labels file and key (P:293-306); no model call")
+    aex.add_argument("--from", dest="source", required=True, help="the final results directory (run.json, scores.json, probes/)")
+    aex.add_argument("--seal", required=True, help="the seal folder")
+    aex.add_argument("--fixtures-root", required=True, help="the held-out fixtures store (<id>/spec.json)")
+    aex.add_argument("--out", required=True, help="folder to create (must not exist; outside the clone, or under experiments/EXP-0001/recorded/)")
+    asc = sub.add_parser("audit-score", help="kappa, agreement by type and the judge-minus-person difference from the owner's labels (P:306, P:159); no model call")
+    asc.add_argument("--key", required=True, help="key.json from audit-export")
+    asc.add_argument("--labels", required=True, help="the owner's filled-in owner-labels.json")
+    asc.add_argument("--out", required=True, help="folder to create for audit.json (must not exist)")
     pil = sub.add_parser("pilot", help="the dev pilot: run, score, report and PILOT.md; needs CPR_EVAL_LIVE=1")
     pil.add_argument("--fixtures", default="dev-001..dev-005", help="a range 'dev-001..dev-005', or comma-separated ids or prefixes")
     pil.add_argument("--fixtures-root", help="directory holding <id>/spec.json (default <code>/fixtures/dev)")
@@ -130,6 +141,10 @@ def main(argv=None) -> int:
         return seal.command_canary(args.type, args.fixtures_root)
     if args.command == "seal":
         return seal.command_seal(args.fixtures_root, args.source, args.repair_log, args.guide, args.count_rule, args.out)
+    if args.command == "audit-export":
+        return audit.export(args.source, args.seal, args.fixtures_root, args.out)
+    if args.command == "audit-score":
+        return audit.score_audit(args.key, args.labels, args.out)
     if args.command == "judge-check":
         return judge.judge_check()
     if args.command == "validate":
@@ -174,6 +189,8 @@ def main(argv=None) -> int:
             stop = seal_stop("report", final, args.seal, root, Path(args.source))
             if stop is not None:
                 return stop
+        if final:
+            return report.write_report(args.source, args.out, seal_dir=args.seal, audit_path=args.audit)
         return report.write_report(args.source, args.out)
     if args.command == "pilot":
         date = args.date or datetime.date.today().strftime("%Y%m%d")

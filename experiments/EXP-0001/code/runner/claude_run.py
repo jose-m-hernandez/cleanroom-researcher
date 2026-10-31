@@ -651,21 +651,116 @@ C5_TURN1 = ("Context for later: we decided the dev server runs on port 8081 beca
 
 
 def control(environ=None, out=None, runner=None, config_path=None) -> int:
-    """Run the five controls. Any unexpected exception becomes a one-line label and exit 1."""
+    """Run the five controls. Any unexpected exception becomes a one-line label and exit 1.
+
+    The result is recorded in gates.json as the C1-5 entry (P:239), through seal.record_control, which has no token:
+    PASS when all five passed; FAIL when at least one child process was spawned (the runner's on_launch call, at the
+    spawn point) and the command did not end in PASS (an exception after the first spawn included); nothing when it
+    stopped before the first spawn (no live flag, no ledger, CLAUDE_CONFIG_DIR set, preflight FAIL, an unreadable spend
+    file, a plugin-export error, a claude command that cannot be started: setup errors, not a failed control). A control
+    is never re-run: with a C1-5 entry already in gates.json the command refuses (exit 2, no launch), after the
+    live-flag check and the lock. The lock is control.lock in the eval root, created exclusively for the run and
+    removed after the result is recorded (or after it is decided that there is nothing to record), on every path,
+    an interrupt included; one that exists refuses (exit 2), whatever its content, and is never broken here. The one
+    exception: when a child process was started and the result could not be recorded (the record raised, an interrupt
+    included), the lock is kept, the STOP line says so, and the command exits 2 (an interrupt is re-raised instead).
+    """
+    import seal  # inside the function: seal imports claude_run
+
     out = out or sys.stdout
+    environ = environ if environ is not None else os.environ
+    runner = runner or run_claude
+    launched = []  # one start time per launch; the first is the entry's started_utc
+
+    def counted(*args, on_launch=None, **kwargs):
+        def spawned():  # run_claude calls this at the spawn point: a child exists from here on
+            if not launched:
+                launched.append(seal.utc_now())
+            if on_launch is not None:
+                on_launch()
+        return runner(*args, on_launch=spawned, **kwargs)
+
+    counted.held = []  # _control puts the lock it created here; it is removed below, after the record
+    code = 1
+    keep = False  # True from the first record attempt until it returns normally: then the lock stays
     try:
-        return _control(environ if environ is not None else os.environ, out, runner or run_claude, config_path)
-    except (SpendError, SpendCapReached, LiveRefused, ConfigError, MemoryDirError, PluginRepoError,
-            isolation.LedgerError) as exc:
-        print(f"control: STOP {exc}", file=out)
-    except Exception as exc:  # label only: exception text can carry argv and paths
-        print(f"control: ERROR {type(exc).__name__}", file=out)
-    return 1
+        try:
+            code = _control(environ, out, counted, config_path)
+        except (SpendError, SpendCapReached, LiveRefused, ConfigError, MemoryDirError, PluginRepoError,
+                isolation.LedgerError) as exc:
+            print(f"control: STOP {exc}", file=out)
+        except Exception as exc:  # label only: exception text can carry argv and paths
+            print(f"control: ERROR {type(exc).__name__}", file=out)
+        except BaseException:  # a Ctrl-C after a launch is a failed control too
+            if launched:
+                keep = True
+                keep = not _record_control("FAIL", launched[0], environ, out)
+            raise
+        if launched:
+            keep = True
+            keep = not _record_control("PASS" if code == 0 else "FAIL", launched[0], environ, out)
+            if keep:
+                return 2  # the result was not written: a failed run, whatever the command's own code was
+        return code
+    finally:
+        if not keep:
+            for held in counted.held:
+                held.unlink(missing_ok=True)  # only a lock this run created is in the list
+
+
+def _record_control(outcome, started, environ, out) -> bool:
+    """True when the C1-5 entry was written. Otherwise print the STOP line (the lock is kept) and return False; a
+    BaseException from the record is re-raised after the line."""
+    import seal  # inside the function: seal imports claude_run
+
+    entry = {"outcome": outcome, "started_utc": started, "run_id": f"control-{uuid.uuid4().hex[:8]}"}
+    try:
+        seal.record_control(entry, environ)
+        return True
+    except BaseException as exc:  # label only: exception text can carry paths
+        lock = eval_root(environ) / "control.lock"
+        print(f"control: STOP could not record C1-5 in gates.json; the lock {lock} is kept: a child process was "
+              "started and a control is never re-run (P:239), so control refuses until a person checks gates.json",
+              file=out)
+        if not isinstance(exc, Exception):
+            raise
+        return False
 
 
 def _control(environ, out, runner, config_path) -> int:
     if environ.get("CPR_EVAL_LIVE") != "1":
         print("live run refused: set CPR_EVAL_LIVE=1", file=out)
+        return 2
+    import seal  # inside the function: seal imports claude_run
+
+    lock = eval_root(environ) / "control.lock"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError:
+        print(f"control: REFUSED {lock} exists: another control may be running; if none is, check gates.json for a "
+              "C1-5 entry first, and a control that already launched is never re-run (P:239); what to record is the "
+              "repository owner's call", file=out)
+        return 2
+    held = getattr(runner, "held", None)  # control's list: it removes the lock after recording C1-5
+    if held is not None:
+        held.append(lock)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps({"pid": os.getpid(), "started_utc": seal.utc_now()}) + "\n")
+        return _control_locked(environ, out, runner, config_path)
+    finally:
+        if held is None:  # called without control: no one else removes it
+            lock.unlink(missing_ok=True)  # only a lock this run created gets here
+
+
+def _control_locked(environ, out, runner, config_path) -> int:
+    import seal  # inside the function: seal imports claude_run
+
+    gates, reason = seal.read_gates(environ, missing_ok=True)
+    if gates is None or seal.CONTROL_KEY in gates:  # an unreadable gate file cannot be recorded into: fail closed
+        print("control: REFUSED " + (reason + "; it is not overwritten" if gates is None else
+                                     "C1-5 already has an entry; a control is never re-run"), file=out)
         return 2
     ledger_value = environ.get("CPR_EVAL_HOST_LEDGERS")
     if not ledger_value:

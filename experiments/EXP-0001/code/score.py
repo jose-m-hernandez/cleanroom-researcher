@@ -384,7 +384,17 @@ def score_run(out, specs: dict, cfg: dict, environ, label_probe=None, label_item
               mode="normal") -> dict:
     """Score a results directory. Returns the scores dict (also written to <out>/scores.json by write_scores).
 
-    mode is the Labeller's ("normal", "final" after the seal, "replay" for the seal's own record)."""
+    mode is the Labeller's ("normal", "final" after the seal, "replay" for the seal's own record).
+
+    The dict carries a "labels" block, {arm: {fixture: {seed: {probe id: label}}}}: every probe of every session on disk,
+    in spec order, with the label the judge gave it (None for a missing answer or label). The human audit draws from it.
+
+    The dict also carries "multi_value", {"applicable": a, "count": k} (README P:160), over the baseline arm only: every
+    seed with a session, every active probe whose type is not abstention. An answer is applicable when it is present,
+    does not parse as UNKNOWN and audit.names_more_than_one is not None for it (its probe has a stale answer); count is
+    how many applicable answers name more than one value. Both are 0 without a baseline arm.
+    """
+    import audit  # inside the function: audit imports score
     out = Path(out)
     run = arms.read_json(out / "run.json")
     fids = [f for f in run["fixtures"] if f in specs]
@@ -492,6 +502,18 @@ def score_run(out, specs: dict, cfg: dict, environ, label_probe=None, label_item
     scorable_counts = {f: len(filters[f]["scorable"]) for f in fids}
     dropped = {f: filters[f]["dropped"] for f in fids}
     dropped_total = sum(len(d) for d in dropped.values())
+    applicable = count = 0
+    for f in fids:
+        for session in sessions.get(("baseline", f), {}).values():
+            for p in fixtures.active_probes(specs[f]):
+                answer = (session.get("answers") or {}).get(p["id"])
+                if p["type"] == "abstention" or not isinstance(answer, str) or _is_unknown(answer):
+                    continue
+                case = probe_case(p, answer)
+                multi = audit.names_more_than_one(answer, case["gold"], case["stale"])
+                if multi is not None:
+                    applicable += 1
+                    count += 1 if multi else 0
     scores = {
         "version": 1, "fixtures": fids, "arms": arm_names, "seeds": seeds_n, "judge_model": labeller.judge_model,
         "sanity": sanity, "scorable": {f: filters[f]["scorable"] for f in fids}, "scorable_counts": scorable_counts,
@@ -503,6 +525,9 @@ def score_run(out, specs: dict, cfg: dict, environ, label_probe=None, label_item
         "invalid": {"probe_answers_missing": invalid_answers, "judge_labels_invalid": labeller.invalid},
         "judge": {"calls_made": labeller.calls, "cached_hits": labeller.cached},
         "gallery": _gallery(specs, fids, labels, sessions, per_seed, filters),
+        "labels": {a: {f: {str(seed): {p["id"]: labels[f].get((a, seed, p["id"])) for p in specs[f]["probes"]}
+                           for seed in sorted(sessions[(a, f)])} for f in fids} for a in arm_names},
+        "multi_value": {"applicable": applicable, "count": count},
     }
     for by_fixture in per_seed.values():
         for by_seed in by_fixture.values():

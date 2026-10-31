@@ -388,7 +388,8 @@ class HelperTests(unittest.TestCase):
         self.addCleanup(shutil.rmtree, gated, True)
         os.makedirs(os.path.join(gated, "cpr-eval"))
         with open(os.path.join(gated, "cpr-eval", "gates.json"), "w", encoding="utf-8") as fh:
-            json.dump({"C6": {"outcome": "PASS", "token": "0" * 64, "started_utc": "2026-10-23T00:00:00Z"}}, fh)
+            json.dump({"C6": {"outcome": "PASS", "token": "0" * 64, "started_utc": "2026-10-23T00:00:00Z"},
+                       "C1-5": {"outcome": "PASS", "started_utc": "2026-10-23T00:00:00Z", "run_id": "r-1"}}, fh)
         env = {"PATH": "/usr/bin:/bin", "TMPDIR": gated}
         run = lambda *a: subprocess.run([sys.executable, exp0001_paths.RUN, "pilot", *a], capture_output=True,
                                         text=True, encoding="utf-8", env=env)

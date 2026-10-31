@@ -11,7 +11,7 @@ import unittest
 
 from tests import exp0001_paths  # noqa: F401
 
-from tests import test_exp0001_seal as st  # noqa: E402
+from tests import test_exp0001_seal_canary as st  # noqa: E402
 
 
 class CanaryLeftBehindTests(unittest.TestCase):
