@@ -26,6 +26,7 @@ TARGET = ROOT / "experiments" / "EXP-0002" / "target" / "whole-values"
 A_LINE_36 = 'Leave out implementation detail, full file contents, timestamps, and anything the code or git history already records. Point to files instead of copying them. Keep exact values for paths, flags and identifiers.'
 B_LINE_36 = 'Leave out implementation detail, full file contents, timestamps, and anything the code or git history already records. Point to files instead of copying them. Keep exact values for paths, flags, identifiers and numbers, keep every item when the session gave a list, and when the session changed a value, record only the latest one.'
 A_SKILL_SHA256 = "d0c1cd8c5dfe939a8e2c61ec8eb2e04212e0388bafe872432343b03f0c38a9c6"
+UPSTREAM_LICENSE_SHA256 = "f01636164a0e17b1557652587a0f179ac1d7fbf837fdbe0021c252af6e94507b"
 PROVENANCE = ("SKILL.md in this folder is skills/preserve/SKILL.md of the CPR plugin at commit "
               "cfd1e77e07d2b3698591688e7e151d83d3ef51c3, with line 36 changed for EXP-0002.")
 
@@ -199,6 +200,23 @@ class LicenceNotice(unittest.TestCase):
         self.assertTrue(text.startswith("MIT License"))
         self.assertTrue(any(ln.startswith("Copyright (c)") for ln in lines))
         self.assertEqual(lines[-1], PROVENANCE)
+
+    def test_first_21_lines_are_the_upstream_notice(self):
+        """The first 21 lines are the upstream MIT text, byte for byte."""
+        text = (TARGET / "LICENSE").read_text(encoding="utf-8")
+        head = "".join(text.splitlines(keepends=True)[:21])
+        self.assertEqual(hashlib.sha256(head.encode("utf-8")).hexdigest(), UPSTREAM_LICENSE_SHA256)
+
+
+class TargetSkillFilesCarryALicence(unittest.TestCase):
+    """Every target skill file in the repository has the MIT notice beside it."""
+
+    def test_every_target_skill_has_a_licence(self):
+        """An empty glob fails (positive control); each SKILL.md has a LICENSE file."""
+        skills = sorted((ROOT / "experiments").glob("*/target/*/SKILL.md"))
+        self.assertTrue(skills, "no target skill files found")
+        for skill in skills:
+            self.assertTrue((skill.parent / "LICENSE").is_file(), f"no LICENSE beside {skill}")
 
 
 class VariantsAreFoundUnderTarget(unittest.TestCase):

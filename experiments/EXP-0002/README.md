@@ -96,6 +96,7 @@ There is one primary question, so no correction for multiple comparisons applies
   - the 19 run development fixtures of the CPR evaluation harness, `dev-001` to `dev-020` without the excluded `dev-014`, as they stand in its `evals/fixtures/dev/` at commit `f83fee132ee5700effa694ec6138c2672d99dd29`;
   - this includes the probes excluded in development run r1;
   - they are used as they are: no probe is repaired, excluded or reworded for this experiment.
+  - that commit sits on a branch of the repository owner's fork of the plugin that has not been published, so it cannot be fetched. The fixtures are read from it at run time and are not copied into this repository. While that branch is unpublished, a reader can check the protocol, the method code and the variant here, but cannot re-run this experiment or read the development error analysis cited under Provenance.
 - **Method code:** `code/`, a copy of `experiments/EXP-0001/code/` that differs in exactly five places:
   1. `config.json`: the ceiling and the phase caps;
   2. the folder skill variants are read from: `target/` of this experiment, in place of `code/arms/`;
