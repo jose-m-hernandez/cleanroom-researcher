@@ -9,7 +9,7 @@ launched_by: who runs the experiment and pays for it; it may be set before any r
 
 ## Abstract
 
-Write one paragraph that says what was asked, what was done and what was found. If the claim is exploratory (the `Experiment claims` table in `docs/vocabulary.md`), the paragraph must say so. If the read log is reconstructed, it must say that too. State the finding with its scope: the target at its pinned version, the models, and the number of recorded runs. Claim nothing here that the Analysis section does not support.
+Put one plain sentence first, so the index can quote it. Write one paragraph that says what was asked, what was done and what was found. If the claim is exploratory (the `Experiment claims` table in `docs/vocabulary.md`), the paragraph must say so. If the read log is reconstructed, it must say that too. State the finding with its scope: the target at its pinned version, the models, and the number of recorded runs. Claim nothing here that the Analysis section does not support.
 
 **Under test:** <the target, its pinned version, and a link to its source record, such as [SRC-NNNN](../../sources/SRC-NNNN/source.md); or "this repository's own method; no outside tool">
 

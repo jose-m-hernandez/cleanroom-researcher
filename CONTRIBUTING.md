@@ -1,12 +1,12 @@
 # Contributing
 
-You can help in three ways. Read the one that fits, then the checklist.
+The experiments table in `README.md` is the list of what exists. You can help in three ways. Read the one that fits, then the checklist.
 
 ## Ways to contribute
 
-- **Report a problem with an experiment.** Open an issue. Say which experiment, what you expected, and what you saw.
-- **Propose a new experiment.** Open a pull request. Copy `docs/experiment-template.md`, start the records with `tools/new_target.py`, and follow `docs/adding-a-target.md`.
-- **Turn notes into a synthesis.** Follow `docs/writing-a-synthesis.md`.
+- **Report a problem with an experiment.** Open an issue. Say which experiment, what you expected, and what you saw. You need an issue, and no code.
+- **Propose a new experiment.** Open a pull request. Copy `docs/experiment-template.md`, start the records with `tools/new_target.py`, and follow `docs/adding-a-target.md`. You need a protocol and a pinned tool.
+- **Turn notes into a synthesis.** Follow `docs/writing-a-synthesis.md`. You need a clone of this repository.
 
 ## Before you open a pull request
 
@@ -20,7 +20,7 @@ env -i PATH=/usr/bin:/bin HOME="$(mktemp -d)" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_C
 
 The command clears the environment so the gate sees nothing from your home directory or git settings. If `python3` or `git` is not in `/usr/bin` or `/bin`, add its directory to `PATH` in the command. The command is written for a Unix shell, such as the one on macOS or Linux.
 
-The whole gate runs about 1430 tests and takes several minutes on a laptop, and it prints nothing until the end. To run the checks without the tests, run `python3 tools/gate.py --checks-only`. It takes a few seconds and ends with `gate: PASS (checks only)`.
+The whole gate takes several minutes on a laptop, and it prints nothing until the end. To run the checks without the tests, run `python3 tools/gate.py --checks-only`. It takes a few seconds and ends with `gate: PASS (checks only)`.
 
 Then rebuild every experiment's generated files:
 
