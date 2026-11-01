@@ -11,7 +11,7 @@ If you think an experiment is wrong, or want to add one, start with `CONTRIBUTIN
 | [EXP-0001](experiments/EXP-0001/README.md) | Does the development accuracy of `/cpr:preserve` hold on fresh, blind fixtures? | preregistered | exploratory | not run | - |
 | [EXP-0002](experiments/EXP-0002/README.md) | Does a one-line change to `/cpr:preserve` keep more of a session's facts? | preregistered | exploratory | not run | - |
 
-Both are exploratory: their method was written after its authors read the tool, so neither can confirm anything. Words are in `docs/vocabulary.md`: `not run` means the protocol is committed and no live call has been made; `running` means the first live call has been made; `finished` means scoring is complete or the experiment has ended, and the Outcome is one of supports the prediction, counts against it, inconclusive, or not determined. `-` means none yet.
+Both are exploratory: their method was written after its authors read the tool, so neither can confirm anything. Words are in `docs/vocabulary.md`: `not run` means the protocol is committed and no live call has been made; `running` means the first live call has been made; `finished` means scoring is complete or the experiment has ended, and the Outcome is one of the outcomes that experiment's own protocol defines, listed by experiment under Experiment outcomes in `docs/vocabulary.md`. `-` means none yet.
 
 ## How an experiment is written
 
