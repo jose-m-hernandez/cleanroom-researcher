@@ -4,6 +4,8 @@ Does a tool that saves a session's notes keep the facts a later session needs? D
 
 If you think an experiment is wrong, or want to add one, start with `CONTRIBUTING.md`.
 
+Designed and run by José Miguel Hernandez, who directed Claude Code to write its code and documents (see docs/admissions.md).
+
 ## Experiments
 
 | ID | Question | Protocol | Claim | Status | Outcome |
@@ -47,3 +49,5 @@ EXP-0002 cannot be replicated while its fixtures are unpublished (`experiments/E
 ## Licences
 
 Code is under the MIT licence (`LICENSE`). Write-ups, syntheses, protocols and recorded data are under CC-BY-4.0 (`LICENSE-CC-BY-4.0`). Text copied from a target keeps its authors' licence; this repository does not relicense it.
+
+Maintainer: José Miguel Hernandez (@jose-m-hernandez) · https://jose.io
