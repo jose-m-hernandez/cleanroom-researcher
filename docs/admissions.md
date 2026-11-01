@@ -181,3 +181,32 @@ This is the ledger. Every file in the repository has exactly one row below sayin
 | tests/test_exp0001_seal_canary.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-30 |
 | tests/test_exp0001_report_decision.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-30 |
 | tests/test_exp0001_control_gate.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-30 |
+| experiments/EXP-0002/README.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31 |
+| experiments/EXP-0002/code/FIXTURES.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
+| experiments/EXP-0002/code/README.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
+| experiments/EXP-0002/code/config.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
+| experiments/EXP-0002/code/prompts/judge-items.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
+| experiments/EXP-0002/code/prompts/judge-items.schema.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
+| experiments/EXP-0002/code/prompts/judge-probe.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
+| experiments/EXP-0002/code/prompts/judge-probe.schema.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
+| experiments/EXP-0002/code/prompts/probe-answer.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
+| experiments/EXP-0002/code/prompts/probe-answer.schema.json | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
+| experiments/EXP-0002/code/report.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
+| experiments/EXP-0002/code/runner/arms.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
+| experiments/EXP-0002/code/runner/audit.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
+| experiments/EXP-0002/code/runner/claude_run.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
+| experiments/EXP-0002/code/runner/fixtures.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
+| experiments/EXP-0002/code/runner/isolation.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
+| experiments/EXP-0002/code/runner/judge.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
+| experiments/EXP-0002/code/runner/lint.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
+| experiments/EXP-0002/code/runner/normalize.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
+| experiments/EXP-0002/code/runner/pilot.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
+| experiments/EXP-0002/code/runner/probes.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
+| experiments/EXP-0002/code/runner/run.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
+| experiments/EXP-0002/code/runner/seal.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
+| experiments/EXP-0002/code/runner/stats.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
+| experiments/EXP-0002/code/score.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
+| experiments/EXP-0002/read-log.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31 |
+| experiments/EXP-0002/target/whole-values/LICENSE | sourced | SRC-0003 | Claude Code (claude-sonnet-5-5), 2026-10-31; the target's licence notice |
+| experiments/EXP-0002/target/whole-values/SKILL.md | sourced | SRC-0003 | Claude Code (claude-sonnet-5-5), 2026-10-31; the target's skill file with line 36 changed |
+| tests/test_exp0002_copy.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31 |
