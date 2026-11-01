@@ -7,13 +7,13 @@ This page says what each check code means. The words this repository uses on pur
 | A0 | Every file the repository lists is a regular file. A link, a socket or anything else that cannot be read as a file is refused. | `tools/check_admission.py` |
 | A1 | Every file has exactly one row in `docs/admissions.md`. A file with no row, or with two, fails, and so does a ledger that is missing or is not one well-formed table. | `tools/check_admission.py` |
 | A2 | Every path in the ledger is a normal path inside the repository, and the file it names exists. | `tools/check_admission.py` |
-| A3 | Every row has one of the four known classes (`original`, `sourced`, `fixture`, `recorded`), and its provenance holds an ISO date. | `tools/check_admission.py` |
-| A4 | A row's basis fits its class. A `sourced` row names source records that exist. A `fixture` row names a generator that has an `original` row, and running the generator with the seed gives the committed bytes. An `original` row has the basis `-`. A `recorded` row names a file under an experiment's `recorded/` folder, and its basis is `sha256=` followed by the 64-character lowercase hash of the file's bytes. Every file under a `recorded/` folder has a `recorded` row. | `tools/check_admission.py` |
+| A3 | Every row has one of the four known classes (`original`, `sourced`, `generated`, `recorded`), and its provenance holds an ISO date. | `tools/check_admission.py` |
+| A4 | A row's basis fits its class. A `sourced` row names source records that exist. A `generated` row names a generator that has an `original` row, and running the generator with the seed gives the committed bytes. An `original` row has the basis `-`. A `recorded` row names a file under an experiment's `recorded/` folder, and its basis is `sha256=` followed by the 64-character lowercase hash of the file's bytes. Every file under a `recorded/` folder has a `recorded` row. | `tools/check_admission.py` |
 | A5 | A source id written anywhere in the repository has a source record. | `tools/check_admission.py` |
 | A6 | A web address written anywhere, except in a recorded file, is either the address of a source record or a reserved example host. | `tools/check_admission.py` |
-| A7 | Every file is valid UTF-8, except a fixture or a recorded file. | `tools/check_admission.py` |
+| A7 | Every file is valid UTF-8, except a generated file or a recorded file. | `tools/check_admission.py` |
 | A8 | Every source record has a clean header: the exact keys for its type, an id equal to its folder, an `https` address with a real host, a known source type, an ISO fetch date, a 64-character lowercase hash, and a snapshot of `yes` or `no`. | `tools/check_admission.py` |
-| A9 | No file is over 100000 bytes, except a fixture or a recorded file. | `tools/check_admission.py` |
+| A9 | No file is over 100000 bytes, except a generated file or a recorded file. | `tools/check_admission.py` |
 | A10 | No path anywhere has a part named `_raw`, in any commit or on disk, even one that git ignores. | `tools/check_admission.py` |
 | V1 | No file or commit message holds an id shaped like the ones the three reserved prefixes make. | `tools/check_vocabulary.py` |
 | V2 | The reserved word is not joined to a letter or a digit by a hyphen or an underscore. | `tools/check_vocabulary.py` |

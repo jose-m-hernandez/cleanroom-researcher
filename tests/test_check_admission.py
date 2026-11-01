@@ -254,6 +254,16 @@ class A3Tests(RepoCase):
         self.build(rows=rows)
         self.assertFinding("A3 unknown class")
 
+    def test_the_old_class_name_is_refused(self):
+        """The retired class name is refused, not kept as an alias."""
+        rows = [r if r[0] != "notes.txt" else ("notes.txt", "fixture", "-", PROV) for r in auto_rows(base_files())]
+        self.build(rows=rows)
+        self.assertFinding("A3 unknown class 'fixture'")
+
+    def test_the_four_classes(self):
+        """The ledger knows exactly four classes."""
+        self.assertEqual(check_admission.CLASSES, ("sourced", "generated", "original", "recorded"))
+
     def test_provenance_must_not_be_empty(self):
         rows = [r if r[0] != "notes.txt" else ("notes.txt", "original", "-", "") for r in auto_rows(base_files())]
         self.build(rows=rows)
@@ -275,14 +285,14 @@ class A3Tests(RepoCase):
 
 
 class A4Tests(RepoCase):
-    def fixture_files(self, content):
+    def generated_files(self, content):
         files = base_files()
         files["gen.py"] = generator_md("data/f.txt", "b'seed=7\\n'")
         files["data/f.txt"] = content
         return files
 
-    def fixture_overrides(self):
-        return {"data/f.txt": ("fixture", "generator=gen.py seed=7")}
+    def generated_overrides(self):
+        return {"data/f.txt": ("generated", "generator=gen.py seed=7")}
 
     def test_sourced_with_a_real_source_passes(self):
         files = base_files()
@@ -293,43 +303,43 @@ class A4Tests(RepoCase):
         self.build(overrides={"notes.txt": ("sourced", MISSING_ID)})
         self.assertFinding("A4 no sources/" + MISSING_ID + "/source.md")
 
-    def test_fixture_identical_passes(self):
-        self.build(self.fixture_files("seed=7\n"), overrides=self.fixture_overrides())
+    def test_generated_identical_passes(self):
+        self.build(self.generated_files("seed=7\n"), overrides=self.generated_overrides())
         self.assertClean()
 
-    def test_fixture_drifted_fails(self):
-        self.build(self.fixture_files("seed=8\n"), overrides=self.fixture_overrides())
+    def test_generated_drifted_fails(self):
+        self.build(self.generated_files("seed=8\n"), overrides=self.generated_overrides())
         self.assertFinding("A4 committed file differs")
 
-    def test_fixture_generator_must_be_original(self):
-        overrides = self.fixture_overrides()
+    def test_generated_generator_must_be_original(self):
+        overrides = self.generated_overrides()
         overrides["gen.py"] = ("sourced", "SRC-0001")
-        self.build(self.fixture_files("seed=7\n"), overrides=overrides)
+        self.build(self.generated_files("seed=7\n"), overrides=overrides)
         self.assertFinding("A4 generator gen.py has no original row")
 
-    def test_fixture_generator_failure_fails(self):
-        files = self.fixture_files("seed=7\n")
+    def test_generated_generator_failure_fails(self):
+        files = self.generated_files("seed=7\n")
         files["gen.py"] = "import sys\nsys.exit(3)\n"
-        self.build(files, overrides=self.fixture_overrides())
+        self.build(files, overrides=self.generated_overrides())
         self.assertFinding("A4 generator exited 3")
 
-    def test_fixture_generator_exiting_two_fails(self):
-        files = self.fixture_files("seed=7\n")
+    def test_generated_generator_exiting_two_fails(self):
+        files = self.generated_files("seed=7\n")
         files["gen.py"] = "import sys\nsys.exit(2)\n"
-        self.build(files, overrides=self.fixture_overrides())
+        self.build(files, overrides=self.generated_overrides())
         self.assertFinding("A4 generator exited 2")
 
-    def test_fixture_generator_timeout_fails(self):
-        files = self.fixture_files("seed=7\n")
+    def test_generated_generator_timeout_fails(self):
+        files = self.generated_files("seed=7\n")
         files["gen.py"] = "import time\ntime.sleep(30)\n"
-        self.build(files, overrides=self.fixture_overrides())
+        self.build(files, overrides=self.generated_overrides())
         with mock.patch.object(check_admission, "GENERATOR_TIMEOUT", 1):
             self.assertFinding("A4 generator timed out after 1 s")
 
-    def test_fixture_basis_shape(self):
-        overrides = {"data/f.txt": ("fixture", "gen.py")}
-        self.build(self.fixture_files("seed=7\n"), overrides=overrides)
-        self.assertFinding("A4 fixture basis must be")
+    def test_generated_basis_shape(self):
+        overrides = {"data/f.txt": ("generated", "gen.py")}
+        self.build(self.generated_files("seed=7\n"), overrides=overrides)
+        self.assertFinding("A4 generated basis must be")
 
     def test_original_with_a_basis_fails(self):
         self.build(overrides={"notes.txt": ("original", "SRC-0001")})
@@ -567,7 +577,7 @@ class RecordedClassTests(RepoCase):
         files["data/f.txt"] = "seed=7\n"
         overrides = {
             rec_path("gen.py"): ("recorded", sha_basis("print(1)\n")),
-            "data/f.txt": ("fixture", "generator=%s seed=7" % rec_path("gen.py")),
+            "data/f.txt": ("generated", "generator=%s seed=7" % rec_path("gen.py")),
         }
         self.build(files, overrides=overrides)
         self.assertFinding("A4 generator %s has no original row" % rec_path("gen.py"))
@@ -653,11 +663,11 @@ class A7Tests(RepoCase):
         self.build(files)
         self.assertFinding("A7 not valid UTF-8", "blob.bin")
 
-    def test_fixture_is_exempt(self):
+    def test_generated_is_exempt(self):
         files = base_files()
         files["gen.py"] = generator_md("blob.bin", "b'\\xff\\xfe\\x00'")
         files["blob.bin"] = b"\xff\xfe\x00"
-        self.build(files, overrides={"blob.bin": ("fixture", "generator=gen.py seed=1")})
+        self.build(files, overrides={"blob.bin": ("generated", "generator=gen.py seed=1")})
         self.assertClean()
 
 
@@ -742,11 +752,11 @@ class A9Tests(RepoCase):
         self.build(files)
         self.assertClean()
 
-    def test_fixture_is_exempt(self):
+    def test_generated_is_exempt(self):
         files = base_files()
         files["gen.py"] = generator_md("big.txt", "b'x' * 100001")
         files["big.txt"] = "x" * 100001
-        self.build(files, overrides={"big.txt": ("fixture", "generator=gen.py seed=1")})
+        self.build(files, overrides={"big.txt": ("generated", "generator=gen.py seed=1")})
         self.assertClean()
 
 

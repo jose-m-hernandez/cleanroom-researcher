@@ -42,12 +42,12 @@ def ledger_text(rows):
     return "\n".join(lines) + "\n"
 
 
-def fixture_path(experiment):
+def generated_path(experiment):
     return "experiments/%s/data/f.txt" % experiment
 
 
-def fixture_row(experiment, basis="generator=gen.py seed=7"):
-    return (fixture_path(experiment), "fixture", basis)
+def generated_row(experiment, basis="generator=gen.py seed=7"):
+    return (generated_path(experiment), "generated", basis)
 
 
 def snapshot(root):
@@ -76,15 +76,15 @@ class ReproduceCase(unittest.TestCase):
             handle.write(data)
 
     def build(self, experiments=(FIRST,), committed=None, rows=None, generator=None):
-        """One generator for every experiment's fixture; committed maps id to bytes."""
+        """One generator for every experiment's generated file; committed maps id to bytes."""
         committed = committed or {}
         for name in experiments:
-            self.write(fixture_path(name), committed.get(name, GOOD))
+            self.write(generated_path(name), committed.get(name, GOOD))
         if generator is None:
-            generator = generator_text("b'seed=7\\n'", fixture_path(FIRST))
+            generator = generator_text("b'seed=7\\n'", generated_path(FIRST))
         self.write("gen.py", generator)
         if rows is None:
-            rows = [("gen.py", "original", "-")] + [fixture_row(name) for name in experiments]
+            rows = [("gen.py", "original", "-")] + [generated_row(name) for name in experiments]
         self.write(LEDGER, ledger_text(rows))
 
     def run_main(self, *args):
@@ -118,21 +118,21 @@ class SingleExperimentTests(ReproduceCase):
         self.assertIn("differs (generator exited 3", out)
 
     def test_unparsable_basis_differs_not_dead(self):
-        self.build(rows=[fixture_row(FIRST, basis="gen.py")])
+        self.build(rows=[generated_row(FIRST, basis="gen.py")])
         code, out = self.run_main(FIRST)
         self.assertEqual(code, 1)
-        self.assertIn("%s: differs (" % fixture_path(FIRST), out)
+        self.assertIn("%s: differs (" % generated_path(FIRST), out)
         self.assertNotIn("DEAD", out)
 
     def test_missing_committed_file_differs_not_dead(self):
         self.build()
-        os.remove(os.path.join(self.root, *fixture_path(FIRST).split("/")))
+        os.remove(os.path.join(self.root, *generated_path(FIRST).split("/")))
         code, out = self.run_main(FIRST)
         self.assertEqual(code, 1)
         self.assertIn("differs (the committed file is missing", out)
         self.assertNotIn("DEAD", out)
 
-    def test_no_fixture_rows(self):
+    def test_no_generated_rows(self):
         self.build(rows=[])
         code, out = self.run_main(FIRST)
         self.assertEqual(code, 0)
@@ -187,8 +187,8 @@ class AllTests(ReproduceCase):
 
     def test_second_differs_both_processed(self):
         generator = (
-            generator_text("b'seed=7\\n'", fixture_path(FIRST))
-            + "target = os.path.join(args.out, %r)\n" % fixture_path(SECOND)
+            generator_text("b'seed=7\\n'", generated_path(FIRST))
+            + "target = os.path.join(args.out, %r)\n" % generated_path(SECOND)
             + "os.makedirs(os.path.dirname(target), exist_ok=True)\n"
             + "with open(target, 'wb') as handle:\n"
             + "    handle.write(b'seed=7\\n')\n"
@@ -274,7 +274,7 @@ class RefusalCase(unittest.TestCase):
 
     def generator(self, relpath=None):
         """A generator that writes the right bytes and also a marker when it runs."""
-        body = generator_text("b'seed=7\\n'", relpath or fixture_path(FIRST))
+        body = generator_text("b'seed=7\\n'", relpath or generated_path(FIRST))
         return "open(%r, 'w').close()\n" % self.marker + body
 
     def ledger(self, rows):
@@ -289,18 +289,18 @@ class RefusalCase(unittest.TestCase):
     def assertRefused(self, args, reason, path=None):
         code, out = self.run_main(*args)
         self.assertEqual(code, 1, out)
-        self.assertIn("%s: differs (%s)" % (path or fixture_path(FIRST), reason), out)
+        self.assertIn("%s: differs (%s)" % (path or generated_path(FIRST), reason), out)
         self.assertFalse(os.path.exists(self.marker), "the generator ran")
         return out
 
     def plain(self):
-        """The good layout: gen.py with an original row, one fixture."""
+        """The good layout: gen.py with an original row, one generated file."""
         self.write("gen.py", self.generator())
-        self.write(fixture_path(FIRST), GOOD)
-        self.ledger([("gen.py", "original", "-"), fixture_row(FIRST)])
+        self.write(generated_path(FIRST), GOOD)
+        self.ledger([("gen.py", "original", "-"), generated_row(FIRST)])
 
 
-NOT_NORMAL = "generator or fixture path is not a normal path inside the repository"
+NOT_NORMAL = "generator or generated file path is not a normal path inside the repository"
 
 
 class RefusedRowTests(RefusalCase):
@@ -312,49 +312,49 @@ class RefusedRowTests(RefusalCase):
 
     def test_dot_slash_generator(self):
         self.write("gen.py", self.generator())
-        self.write(fixture_path(FIRST), GOOD)
-        self.ledger([("gen.py", "original", "-"), fixture_row(FIRST, "generator=./gen.py seed=7")])
+        self.write(generated_path(FIRST), GOOD)
+        self.ledger([("gen.py", "original", "-"), generated_row(FIRST, "generator=./gen.py seed=7")])
         self.assertRefused([FIRST], NOT_NORMAL)
 
     def test_parent_directory_generator(self):
         self.write("outside.py", self.generator(), base=self.parent)
-        self.write(fixture_path(FIRST), GOOD)
-        self.ledger([fixture_row(FIRST, "generator=../outside.py seed=7")])
+        self.write(generated_path(FIRST), GOOD)
+        self.ledger([generated_row(FIRST, "generator=../outside.py seed=7")])
         self.assertRefused([FIRST], NOT_NORMAL)
 
     def test_absolute_generator(self):
         full = self.write("outside.py", self.generator(), base=self.parent)
-        self.write(fixture_path(FIRST), GOOD)
-        self.ledger([fixture_row(FIRST, "generator=%s seed=7" % full)])
+        self.write(generated_path(FIRST), GOOD)
+        self.ledger([generated_row(FIRST, "generator=%s seed=7" % full)])
         self.assertRefused([FIRST], NOT_NORMAL)
 
     def test_symlinked_generator(self):
         self.write("real.py", self.generator())
         os.symlink("real.py", os.path.join(self.root, "gen.py"))
-        self.write(fixture_path(FIRST), GOOD)
+        self.write(generated_path(FIRST), GOOD)
         self.ledger(
-            [("real.py", "original", "-"), ("gen.py", "original", "-"), fixture_row(FIRST)]
+            [("real.py", "original", "-"), ("gen.py", "original", "-"), generated_row(FIRST)]
         )
         self.assertRefused([FIRST], "gen.py is a symlink or not a regular file")
 
     def test_generator_that_is_not_a_regular_file(self):
         os.makedirs(os.path.join(self.root, "gen.py"))
-        self.write(fixture_path(FIRST), GOOD)
-        self.ledger([("gen.py", "original", "-"), fixture_row(FIRST)])
+        self.write(generated_path(FIRST), GOOD)
+        self.ledger([("gen.py", "original", "-"), generated_row(FIRST)])
         self.assertRefused([FIRST], "gen.py is a symlink or not a regular file")
 
-    def test_symlinked_fixture(self):
+    def test_symlinked_generated(self):
         self.write("gen.py", self.generator())
         self.write("elsewhere.txt", GOOD)
         os.makedirs(os.path.join(self.root, "experiments", FIRST, "data"))
         os.symlink(
             os.path.join(self.root, "elsewhere.txt"),
-            os.path.join(self.root, *fixture_path(FIRST).split("/")),
+            os.path.join(self.root, *generated_path(FIRST).split("/")),
         )
-        self.ledger([("gen.py", "original", "-"), fixture_row(FIRST)])
-        self.assertRefused([FIRST], "%s is a symlink or not a regular file" % fixture_path(FIRST))
+        self.ledger([("gen.py", "original", "-"), generated_row(FIRST)])
+        self.assertRefused([FIRST], "%s is a symlink or not a regular file" % generated_path(FIRST))
 
-    def test_fixture_under_a_symlinked_folder(self):
+    def test_generated_under_a_symlinked_folder(self):
         self.write("gen.py", self.generator())
         self.write("realdata/f.txt", GOOD)
         os.makedirs(os.path.join(self.root, "experiments", FIRST))
@@ -362,44 +362,44 @@ class RefusedRowTests(RefusalCase):
             os.path.join(self.root, "realdata"),
             os.path.join(self.root, "experiments", FIRST, "data"),
         )
-        self.ledger([("gen.py", "original", "-"), fixture_row(FIRST)])
-        self.assertRefused([FIRST], "%s is a symlink or not a regular file" % fixture_path(FIRST))
+        self.ledger([("gen.py", "original", "-"), generated_row(FIRST)])
+        self.assertRefused([FIRST], "%s is a symlink or not a regular file" % generated_path(FIRST))
 
     def test_generator_under_a_symlinked_folder(self):
         self.write("realtools/gen.py", self.generator())
         os.symlink(os.path.join(self.root, "realtools"), os.path.join(self.root, "tools"))
-        self.write(fixture_path(FIRST), GOOD)
+        self.write(generated_path(FIRST), GOOD)
         self.ledger(
-            [("tools/gen.py", "original", "-"), fixture_row(FIRST, "generator=tools/gen.py seed=7")]
+            [("tools/gen.py", "original", "-"), generated_row(FIRST, "generator=tools/gen.py seed=7")]
         )
         self.assertRefused([FIRST], "tools/gen.py is a symlink or not a regular file")
 
-    def test_fixture_path_that_leaves_its_experiment(self):
+    def test_generated_path_that_leaves_its_experiment(self):
         escaping = "experiments/%s/../../escape.txt" % FIRST
         self.write("gen.py", self.generator())
         self.write("escape.txt", GOOD)
         os.makedirs(os.path.join(self.root, "experiments", FIRST))
-        self.ledger([("gen.py", "original", "-"), (escaping, "fixture", "generator=gen.py seed=7")])
+        self.ledger([("gen.py", "original", "-"), (escaping, "generated", "generator=gen.py seed=7")])
         self.assertRefused([FIRST], NOT_NORMAL, path=escaping)
 
-    def test_fixture_outside_its_experiment_by_name(self):
+    def test_generated_outside_its_experiment_by_name(self):
         self.plain()
-        row = {"path": fixture_path(SECOND), "class": "fixture", "basis": "generator=gen.py seed=7"}
+        row = {"path": generated_path(SECOND), "class": "generated", "basis": "generator=gen.py seed=7"}
         rows = [{"path": "gen.py", "class": "original"}, row]
         reason = reproduce.rebuild_row(self.root, row, FIRST, rows)
-        self.assertEqual(reason, "fixture path is outside experiments/%s/" % FIRST)
+        self.assertEqual(reason, "generated file path is outside experiments/%s/" % FIRST)
         self.assertFalse(os.path.exists(self.marker))
 
     def test_generator_with_no_original_row(self):
         self.write("gen.py", self.generator())
-        self.write(fixture_path(FIRST), GOOD)
-        self.ledger([fixture_row(FIRST)])
+        self.write(generated_path(FIRST), GOOD)
+        self.ledger([generated_row(FIRST)])
         self.assertRefused([FIRST], "generator gen.py has no original row")
 
     def test_generator_whose_first_row_is_not_original(self):
         self.write("gen.py", self.generator())
-        self.write(fixture_path(FIRST), GOOD)
-        self.ledger([("gen.py", "sourced", "SRC-0001"), ("gen.py", "original", "-"), fixture_row(FIRST)])
+        self.write(generated_path(FIRST), GOOD)
+        self.ledger([("gen.py", "sourced", "SRC-0001"), ("gen.py", "original", "-"), generated_row(FIRST)])
         self.assertRefused([FIRST], "generator gen.py has no original row")
 
     def test_symlinked_experiment_folder_single(self):
@@ -409,7 +409,7 @@ class RefusedRowTests(RefusalCase):
             os.path.join(self.root, "realexp"), os.path.join(self.root, "experiments", FIRST)
         )
         self.write("gen.py", self.generator())
-        self.ledger([("gen.py", "original", "-"), fixture_row(FIRST)])
+        self.ledger([("gen.py", "original", "-"), generated_row(FIRST)])
         code, out = self.run_main(FIRST)
         self.assertEqual(code, 1)
         self.assertIn(
@@ -426,7 +426,7 @@ class RefusedRowTests(RefusalCase):
             os.path.join(self.root, "realexp"), os.path.join(self.root, "experiments", FIRST)
         )
         self.write("gen.py", self.generator())
-        self.ledger([("gen.py", "original", "-"), fixture_row(FIRST)])
+        self.ledger([("gen.py", "original", "-"), generated_row(FIRST)])
         code, out = self.run_main("--all")
         self.assertEqual(code, 1)
         self.assertIn(
@@ -461,10 +461,10 @@ class RootAndSkippedRowTests(RefusalCase):
         self.assertEqual(code, 1)
         self.assertIn("has no docs/admissions.md; point --root at the repository root", out)
 
-    def test_all_reports_an_orphan_fixture_row(self):
+    def test_all_reports_an_orphan_generated_row(self):
         self.plain()
-        orphan = fixture_path(SECOND)
-        self.ledger([("gen.py", "original", "-"), fixture_row(FIRST), (orphan, "fixture", "generator=gen.py seed=7")])
+        orphan = generated_path(SECOND)
+        self.ledger([("gen.py", "original", "-"), generated_row(FIRST), (orphan, "generated", "generator=gen.py seed=7")])
         code, out = self.run_main("--all")
         self.assertEqual(code, 1)
         self.assertIn(
@@ -476,7 +476,7 @@ class RootAndSkippedRowTests(RefusalCase):
 
     def test_all_reports_an_orphan_row_when_there_is_no_experiments_folder(self):
         self.write("gen.py", self.generator())
-        self.ledger([("gen.py", "original", "-"), fixture_row(FIRST)])
+        self.ledger([("gen.py", "original", "-"), generated_row(FIRST)])
         code, out = self.run_main("--all")
         self.assertEqual(code, 1)
         self.assertIn("is missing or not an experiment)", out)
@@ -493,7 +493,7 @@ class RootAndSkippedRowTests(RefusalCase):
     def test_all_reports_a_row_under_an_off_pattern_folder(self):
         self.write("gen.py", self.generator())
         self.write("experiments/scratch/data/f.txt", GOOD)
-        self.ledger([("gen.py", "original", "-"), ("experiments/scratch/data/f.txt", "fixture", "generator=gen.py seed=7")])
+        self.ledger([("gen.py", "original", "-"), ("experiments/scratch/data/f.txt", "generated", "generator=gen.py seed=7")])
         code, out = self.run_main("--all")
         self.assertEqual(code, 1)
         self.assertIn("experiments/scratch/ is missing or not an experiment)", out)

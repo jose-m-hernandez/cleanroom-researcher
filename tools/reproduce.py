@@ -3,27 +3,27 @@
 Usage: python3 tools/reproduce.py EXP-NNNN [--root PATH]
        python3 tools/reproduce.py --all [--root PATH]
 
-Give exactly one of an experiment id or --all. For each fixture row in
+Give exactly one of an experiment id or --all. For each generated row in
 docs/admissions.md whose path is under experiments/<id>/, the generator named
 in the row's basis is run in a temporary folder and its output is compared with
 the committed bytes. Nothing is written to the repository. A row is refused,
 without running its generator, when the ledger's own rules refuse it: a path
-that is not normal, a fixture outside its experiment, a generator with no
-original row, or a generator or fixture that is a symlink, sits under a
-symlink, or is not a regular file.
+that is not normal, a generated file outside its experiment, a generator with
+no original row, or a generator or generated file that is a symlink, sits
+under a symlink, or is not a regular file.
 
 Output: one line per generated file, ``reproduce: <path>: rebuilt, identical``
 or ``reproduce: <path>: differs (<reason>)``, then one summary line per
 experiment, ``reproduce: <id>: <n> rebuilt, <i> identical, <d> differ``. An
-experiment with no fixture rows prints ``reproduce: <id> has no generated
+experiment with no generated rows prints ``reproduce: <id> has no generated
 files``. An unknown experiment prints ``reproduce: no experiment <id>; the
 experiments are the folders under experiments/``. An unreadable ledger prints
 ``reproduce: docs/admissions.md cannot be read: <problem>; run tools/gate.py to
 see every finding``. --all with no experiments prints ``reproduce: no
 experiments``. A root with no docs/admissions.md prints ``reproduce: <root> has
 no docs/admissions.md; point --root at the repository root``. A symlinked
-experiment folder, an off-pattern folder under --all, and a fixture row whose
-experiment folder is missing are each reported, and the run exits 1.
+experiment folder, an off-pattern folder under --all, and a generated row
+whose experiment folder is missing are each reported, and the run exits 1.
 
 Exit 0 every file is identical, or there was nothing to rebuild. Exit 1 a file
 differs, the experiment is unknown, or the ledger is missing or cannot be read. Exit 2 usage
@@ -89,14 +89,14 @@ def unsafe_file(root: str, relpath: str) -> bool:
 
 
 def refuse_row(root: str, experiment: str, row, generator: str, rows) -> Optional[str]:
-    """Return the reason the ledger's own rules refuse this fixture row, else None."""
+    """Return the reason the ledger's own rules refuse this generated row, else None."""
     relpath = str(row["path"])
     if not check_admission.is_normal_path(generator) or not check_admission.is_normal_path(
         relpath
     ):
-        return "generator or fixture path is not a normal path inside the repository"
+        return "generator or generated file path is not a normal path inside the repository"
     if not relpath.startswith("experiments/%s/" % experiment):
-        return "fixture path is outside experiments/%s/" % experiment
+        return "generated file path is outside experiments/%s/" % experiment
     first = None
     for other in rows:
         if str(other["path"]) == generator:
@@ -113,7 +113,7 @@ def refuse_row(root: str, experiment: str, row, generator: str, rows) -> Optiona
 def rebuild_row(root: str, row, experiment: str, rows) -> Optional[str]:
     """Return None when the row's file is rebuilt identical, else the reason."""
     relpath = str(row["path"])
-    match = check_admission.FIXTURE_BASIS.match(str(row["basis"]))
+    match = check_admission.GENERATED_BASIS.match(str(row["basis"]))
     if not match:
         return "the basis must be generator=<path> seed=<int>"
     refused = refuse_row(root, experiment, row, match.group(1), rows)
@@ -133,7 +133,7 @@ def rebuild_row(root: str, row, experiment: str, rows) -> Optional[str]:
 def reproduce_one(root: str, experiment: str, rows, lines: List[str]) -> int:
     prefix = "experiments/%s/" % experiment
     mine = [
-        r for r in rows if r["class"] == "fixture" and str(r["path"]).startswith(prefix)
+        r for r in rows if r["class"] == "generated" and str(r["path"]).startswith(prefix)
     ]
     if not mine:
         say(lines, "%s has no generated files" % experiment)
@@ -187,7 +187,7 @@ def survey(root: str, lines: List[str]):
 def orphan_rows(rows, names: List[str], lines: List[str]) -> int:
     code = 0
     for row in rows:
-        if row["class"] != "fixture":
+        if row["class"] != "generated":
             continue
         parts = str(row["path"]).split("/")
         if len(parts) >= 3 and parts[0] == "experiments" and parts[1] not in names:
