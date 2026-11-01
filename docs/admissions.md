@@ -23,7 +23,9 @@ This is the ledger. Every file in the repository has exactly one row below sayin
 | docs/decisions/2026-10-21-write-ups-and-data-are-cc-by-4.md | original | - | Claude Code (claude-opus-5-5), 2026-10-21 |
 | docs/decisions/2026-10-22-an-experiment-claim-is-confirmatory-only-when-committed-first-and-clean-room.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22 |
 | docs/decisions/2026-10-23-only-agents-scoped-to-this-repository-write-to-it.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23 |
+| docs/decisions/2026-11-01-the-owners-own-addresses-are-listed.md | original | - | Claude Code (claude-sonnet-5-5), 2026-11-01 |
 | docs/experiment-template.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22 |
+| docs/owner-addresses.md | original | - | Claude Code (claude-sonnet-5-5), 2026-11-01 |
 | docs/writing-a-synthesis.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-21 |
 | docs/vocabulary.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | requirements-dev.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |

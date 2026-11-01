@@ -31,6 +31,8 @@ except Exception as _exc:  # reported as DEAD by run(), not as a traceback
 CHECK = "admission"
 LEDGER = "docs/admissions.md"
 VOCABULARY = "docs/vocabulary.md"
+OWNER_LIST = "docs/owner-addresses.md"
+OWNER_HEADER = "| address | what it is |"
 LEDGER_HEADER = "| path | class | basis | provenance |"
 CLASSES = ("sourced", "generated", "original", "recorded")
 MAX_BYTES = 100000
@@ -48,6 +50,7 @@ SEPARATOR = re.compile(r"^\|(\s*:?-+:?\s*\|)+$")
 GENERATED_BASIS = re.compile(r"^generator=(\S+) seed=(-?[0-9]+)$")
 RECORDED_BASIS = re.compile(r"^sha256=[0-9a-f]{64}$")
 VOCAB_ROW = re.compile(r"^\| `([^`]+)` \| (.+) \|$")
+OWNER_ROW = re.compile(r"^\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|$")
 
 Finding = Tuple[str, Optional[int], str]
 Row = Dict[str, object]
@@ -313,8 +316,56 @@ def check_a5(texts: Dict[str, str], existing: Set[str]) -> List[Finding]:
     return found
 
 
+def parse_owner_list(text: str) -> Tuple[List[Tuple[int, str]], List[Finding]]:
+    """Return the well-formed entries (line, address) and a finding per bad row."""
+    entries: List[Tuple[int, str]] = []
+    found: List[Finding] = []
+    seen: Set[str] = set()
+    prefix = "A6 owner address list: "
+    for number, line in enumerate(text.split("\n"), 1):
+        if not line.startswith("| ") or line.strip() == OWNER_HEADER or SEPARATOR.match(line):
+            continue
+        match = OWNER_ROW.match(line)
+        if not match:
+            found.append((OWNER_LIST, number, prefix + "a row is | address | what it is |"))
+            continue
+        address, what = match.group(1), match.group(2)
+        if not address.startswith(HTTPS):
+            found.append((OWNER_LIST, number, prefix + "the address must start with https"))
+        elif re.search(r"[\s|`]", address):
+            found.append((OWNER_LIST, number, prefix + "the address holds a space, bar or backtick"))
+        elif not what:
+            found.append((OWNER_LIST, number, prefix + "the what-it-is cell is empty"))
+        elif address in seen:
+            found.append((OWNER_LIST, number, prefix + "the address is listed twice"))
+        else:
+            seen.add(address)
+            entries.append((number, address))
+    return entries, found
+
+
+def check_owner_list(texts: Dict[str, str]) -> List[Finding]:
+    """Rules 2 and 3: the list is well formed, and every entry is used elsewhere."""
+    if OWNER_LIST not in texts:
+        return []
+    entries, found = parse_owner_list(texts[OWNER_LIST])
+    used: Set[str] = set()
+    for path, text in texts.items():
+        if path == OWNER_LIST:
+            continue
+        for _, match in line_matches(text, URL):
+            used.add(match.group(0).rstrip(".,;:"))
+    for number, address in entries:
+        if address not in used:
+            found.append((OWNER_LIST, number, "A6 owner address used nowhere: " + address))
+    return found
+
+
 def check_a6(
-    texts: Dict[str, str], registered: Set[str], classes: Dict[str, str]
+    texts: Dict[str, str],
+    registered: Set[str],
+    classes: Dict[str, str],
+    listed: Set[str] = frozenset(),  # type: ignore[assignment]
 ) -> List[Finding]:
     found: List[Finding] = []
     for path, text in texts.items():
@@ -322,7 +373,7 @@ def check_a6(
             continue
         for number, match in line_matches(text, URL):
             url = match.group(0).rstrip(".,;:")
-            if url in registered or is_reserved_host(host_of(url)):
+            if url in registered or url in listed or is_reserved_host(host_of(url)):
                 continue
             found.append((path, number, "A6 unregistered URL " + url))
     return found
@@ -436,7 +487,9 @@ def control() -> bool:
     five = bool(check_a5({"control.txt": bad_id + "\n"}, set()))
     six = bool(check_a6({"control.txt": bad_url + "\n"}, set(), {}))
     ten = bool(raw_segment_paths(["x/_raw/y"]))
-    return one and five and six and ten
+    bad_list = "| " + "http" + ":" + "//x | what |\n"
+    seven = bool(check_owner_list({OWNER_LIST: bad_list}))
+    return one and five and six and ten and seven
 
 
 def format_finding(finding: Finding) -> str:
@@ -494,6 +547,7 @@ def run(root: str) -> Tuple[int, List[str]]:
         for key, value in header.parse(texts[path])[1]:
             if key == "url":
                 registered.add(value)
+    listed = set(a for _, a in parse_owner_list(texts.get(OWNER_LIST, ""))[0])
     types = None
     if VOCABULARY in texts:
         types = vocabulary_values(texts[VOCABULARY], "Source types")
@@ -503,7 +557,8 @@ def run(root: str) -> Tuple[int, List[str]]:
     findings.extend(check_a3(rows))
     findings.extend(check_a4(root, rows, fileset))
     findings.extend(check_a5(texts, existing))
-    findings.extend(check_a6(texts, registered, classes))
+    findings.extend(check_a6(texts, registered, classes, listed))
+    findings.extend(check_owner_list(texts))
     findings.extend(check_a7(contents, classes))
     findings.extend(check_a8({p: texts[p] for p in source_paths}, types))
     findings.extend(check_a9({p: len(d) for p, d in contents.items()}, classes))
