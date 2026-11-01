@@ -32,7 +32,7 @@ CHECK = "admission"
 LEDGER = "docs/admissions.md"
 VOCABULARY = "docs/vocabulary.md"
 LEDGER_HEADER = "| path | class | basis | provenance |"
-CLASSES = ("sourced", "fixture", "original", "recorded")
+CLASSES = ("sourced", "generated", "original", "recorded")
 MAX_BYTES = 100000
 GENERATOR_TIMEOUT = 120
 HTTPS = "https" + ":" + "//"
@@ -45,7 +45,7 @@ URL = re.compile("https?" + ":" + r"//[^\s`'\"<>)\]}]*", re.IGNORECASE)
 ISO_DATE = re.compile(r"(?<![0-9])[0-9]{4}-[0-9]{2}-[0-9]{2}(?![0-9])")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 SEPARATOR = re.compile(r"^\|(\s*:?-+:?\s*\|)+$")
-FIXTURE_BASIS = re.compile(r"^generator=(\S+) seed=(-?[0-9]+)$")
+GENERATED_BASIS = re.compile(r"^generator=(\S+) seed=(-?[0-9]+)$")
 RECORDED_BASIS = re.compile(r"^sha256=[0-9a-f]{64}$")
 VOCAB_ROW = re.compile(r"^\| `([^`]+)` \| (.+) \|$")
 
@@ -194,7 +194,7 @@ def check_a3(rows: List[Row]) -> List[Finding]:
 def run_generator(
     root: str, generator: str, seed: str, relpath: str, committed: bytes
 ) -> Optional[str]:
-    """Run a fixture generator; return a problem text, or None when it matches."""
+    """Run the generator of a generated row; return a problem text, or None when it matches."""
     with tempfile.TemporaryDirectory() as out:
         cmd = [sys.executable, generator, "--seed", seed, "--out", out]
         try:
@@ -252,14 +252,14 @@ def check_a4(root: str, rows: List[Row], files: Set[str]) -> List[Finding]:
                     found.append((LEDGER, line, "A4 bad source id '%s' for %s" % (sid, path)))
                 elif "sources/%s/source.md" % sid not in files:
                     found.append((LEDGER, line, "A4 no sources/%s/source.md for %s" % (sid, path)))
-        elif cls == "fixture":
-            match = FIXTURE_BASIS.match(basis)
+        elif cls == "generated":
+            match = GENERATED_BASIS.match(basis)
             if not match:
-                found.append((LEDGER, line, "A4 fixture basis must be generator=<path> seed=<integer>: " + path))
+                found.append((LEDGER, line, "A4 generated basis must be generator=<path> seed=<integer>: " + path))
                 continue
             generator, seed = match.group(1), match.group(2)
             if not is_normal_path(generator) or not is_normal_path(path):
-                found.append((LEDGER, line, "A4 generator or fixture path escapes root: " + path))
+                found.append((LEDGER, line, "A4 generator or generated file path escapes root: " + path))
                 continue
             gen_row = first.get(generator)
             if gen_row is None or gen_row["class"] != "original":
@@ -331,7 +331,7 @@ def check_a6(
 def check_a7(contents: Dict[str, bytes], classes: Dict[str, str]) -> List[Finding]:
     found: List[Finding] = []
     for path, data in contents.items():
-        if classes.get(path) == "fixture" or is_recorded_file(path, classes):
+        if classes.get(path) == "generated" or is_recorded_file(path, classes):
             continue
         try:
             data.decode("utf-8")
@@ -380,7 +380,7 @@ def check_a9(sizes: Dict[str, int], classes: Dict[str, str]) -> List[Finding]:
     for path, size in sizes.items():
         if is_recorded_file(path, classes):
             continue
-        if size > MAX_BYTES and classes.get(path) != "fixture":
+        if size > MAX_BYTES and classes.get(path) != "generated":
             found.append((path, None, "A9 %d bytes is over %d" % (size, MAX_BYTES)))
     return found
 

@@ -14,7 +14,7 @@ The words this repository uses on purpose, each with one meaning.
 | `runtime` | This repository's term: the part of an agent harness that runs the model in a loop and executes its tool calls. |
 | `target` | The outside tool under test. |
 | `synthesis` | A set of findings, each graded, with a falsifier and the pinned sources that support it. |
-| `generated file` | A file with a `fixture` row in `docs/admissions.md`. `tools/reproduce.py` rebuilds it by running the generator that row names, and compares the result with the committed copy. |
+| `generated file` | A file with a `generated` row in `docs/admissions.md`. `tools/reproduce.py` rebuilds it by running the generator that row names, and compares the result with the committed copy. |
 
 The quoted phrases in `agent harness` and `evaluation harness` are from Anthropic, "Demystifying evals for AI agents" (2026-01-09). The other definitions are this repository's wording.
 
@@ -62,12 +62,38 @@ The quoted phrases in `agent harness` and `evaluation harness` are from Anthropi
 | `preregistered` | The protocol was committed here before the first recorded run. It was not entered in an outside registry. |
 | `exploratory` | The protocol was not committed before the first recorded run. |
 
+`exploratory` is a value in two tables. For a protocol it is about timing; for a claim it is about the order of reading. EXP-0001 is `preregistered` and its claim is `exploratory`.
+
 ## Experiment claims
 
 | Value | Meaning |
 | --- | --- |
 | `confirmatory` | The protocol was committed before the first recorded run, and the method was written before its author read the target for method work. A result may be stated as supporting the prediction or counting against it. |
 | `exploratory` | Not confirmatory: either the protocol was not committed before the first recorded run, or the method was written after its author read the target for method work. |
+
+`exploratory` is a value in two tables. For a protocol it is about timing; for a claim it is about the order of reading. EXP-0001 is `preregistered` and its claim is `exploratory`.
+
+## Experiment design
+
+Where a row here and an experiment's own **Terms** section differ, the experiment's section wins for that experiment.
+
+| Value | Meaning |
+| --- | --- |
+| `fixture` | One invented working session on a small invented project, with the questions asked about it. |
+| `probe` | A question about a fixture, with a short gold answer. |
+| `arm` | What a probe session reads. `floor` is the fixture's starting notes file. `baseline` is the notes file after the tool under test has run: the arm under test, not a run without the tool (that is `floor`). `oracle` is the starting file plus one hand-written line per needed fact. |
+| `variant` | A changed copy of the target. It is an arm, not the target. |
+| `control` | A live check that the measuring setup works. Not a comparison group: those are arms. |
+| `seal` | A committed list of file hashes and the probe ids that count, pushed before the tool under test runs on any fixture. After it, the set does not change. |
+| `recorded run` | Any live call made after the protocol was committed, controls included. |
+
+## Experiment status
+
+| Value | Meaning |
+| --- | --- |
+| `not run` | The protocol is committed and no live call has been made. |
+| `running` | The first live call has been made and scoring is not complete. |
+| `finished` | Scoring is complete, or the experiment has ended without it. The outcome is stated. |
 
 ## Redistributable licences
 
