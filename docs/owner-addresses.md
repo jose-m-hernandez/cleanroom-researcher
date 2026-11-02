@@ -4,3 +4,4 @@ This lists the repository owner's own web addresses. Rule A6 of the admission ch
 
 | address | what it is |
 | --- | --- |
+| https://jose.io | the maintainer's website |
