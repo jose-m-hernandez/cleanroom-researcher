@@ -4,9 +4,9 @@ The experiments table in `README.md` is the list of what exists. You can help in
 
 ## Ways to contribute
 
-- **Report a problem with an experiment.** Open an issue. Say which experiment, what you expected, and what you saw. You need an issue, and no code.
-- **Propose a new experiment.** Open a pull request. Copy `docs/experiment-template.md`, start the records with `tools/new_target.py`, and follow `docs/adding-a-target.md`. You need a protocol and a pinned tool.
-- **Turn notes into a synthesis.** Follow `docs/writing-a-synthesis.md`. You need a clone of this repository.
+- **Report a problem with an experiment.** Open an issue. Say which experiment, what you expected, and what you saw. No code needed.
+- **Propose a new experiment.** Open a pull request. Copy `docs/experiment-template.md`, start the records with `tools/new_target.py`, and follow `docs/adding-a-target.md`. You need a clone of this repository, a protocol and a pinned tool.
+- **Turn notes into a synthesis.** Follow `docs/writing-a-synthesis.md`. You need a clone of this repository and your own research notes.
 
 ## Before you open a pull request
 

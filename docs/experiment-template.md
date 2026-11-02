@@ -35,7 +35,7 @@ Report the results as tables generated from the recorded data. Include each tabl
 
 ## Analysis
 
-Analyse the results as planned. For each hypothesis, say whether the result supports it, counts against it, or is inconclusive under the criterion committed above. Label any analysis that was not planned as exploratory. State the conclusion only for the target version, models and environment tested, and say what result would have changed it.
+Analyse the results as planned. For each hypothesis, say which Outcome its protocol defines the result reaches, under the criterion committed above. Label any analysis that was not planned as exploratory. State the conclusion only for the target version, models and environment tested, and say what result would have changed it.
 
 ## Threats to validity
 
