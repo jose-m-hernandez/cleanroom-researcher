@@ -9,7 +9,7 @@ launched_by: who runs the experiment and pays for it; it may be set before any r
 
 ## Abstract
 
-Write one paragraph that says what was asked, what was done and what was found. If the claim is exploratory (the `Experiment claims` table in `docs/vocabulary.md`), the paragraph must say so. If the read log is reconstructed, it must say that too. State the finding with its scope: the target at its pinned version, the models, and the number of recorded runs. Claim nothing here that the Analysis section does not support.
+Put one plain sentence first, so the index can quote it. Write one paragraph that says what was asked, what was done and what was found. If the claim is exploratory (the `Experiment claims` table in `docs/vocabulary.md`), the paragraph must say so. If the read log is reconstructed, it must say that too. State the finding with its scope: the target at its pinned version, the models, and the number of recorded runs. Claim nothing here that the Analysis section does not support.
 
 **Under test:** <the target, its pinned version, and a link to its source record, such as [SRC-NNNN](../../sources/SRC-NNNN/source.md); or "this repository's own method; no outside tool">
 
@@ -35,7 +35,7 @@ Report the results as tables generated from the recorded data. Include each tabl
 
 ## Analysis
 
-Analyse the results as planned. For each hypothesis, say whether the result supports it, counts against it, or is inconclusive under the criterion committed above. Label any analysis that was not planned as exploratory. State the conclusion only for the target version, models and environment tested, and say what result would have changed it.
+Analyse the results as planned. For each hypothesis, say which Outcome its protocol defines the result reaches, under the criterion committed above. Label any analysis that was not planned as exploratory. State the conclusion only for the target version, models and environment tested, and say what result would have changed it.
 
 ## Threats to validity
 

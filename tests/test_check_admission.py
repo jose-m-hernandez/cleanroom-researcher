@@ -656,6 +656,105 @@ class A6Tests(RepoCase):
         self.assertFinding("A6 unregistered URL")
 
 
+OWNER_LIST = "docs/owner-addresses.md"
+OWNER_HEAD = "# Owner addresses\n\n| address | what it is |\n| --- | --- |\n"
+OWNER_ADDR = HTTPS + "jose.io"
+
+
+def owner_list(*rows):
+    return OWNER_HEAD + "".join("| %s | %s |\n" % row for row in rows)
+
+
+class OwnerAddressTests(RepoCase):
+    def build_with(self, list_text, notes):
+        files = base_files()
+        files[OWNER_LIST] = list_text
+        files["notes.txt"] = notes
+        self.build(files)
+
+    def test_listed_address_passes_also_with_trailing_punctuation(self):
+        self.build_with(owner_list((OWNER_ADDR, "the site")), "see (" + OWNER_ADDR + ").\nand " + OWNER_ADDR + ",\n")
+        self.assertClean()
+
+    def test_near_misses_fail(self):
+        variants = {
+            "scheme": "http" + "://" + "jose.io",
+            "suffix host": OWNER_ADDR + ".evil.com",
+            "trailing slash": OWNER_ADDR + "/",
+            "longer path": OWNER_ADDR + "/more",
+        }
+        for name, variant in variants.items():
+            with self.subTest(variant=name):
+                self.build_with(
+                    owner_list((OWNER_ADDR, "the site")),
+                    "keep " + OWNER_ADDR + "\nsee " + variant + "\n",
+                )
+                self.assertFinding("A6 unregistered URL " + variant)
+
+    def test_suffix_host_test_is_a_real_host(self):
+        self.assertFalse(check_admission.is_reserved_host(check_admission.host_of(OWNER_ADDR + ".evil.com")))
+
+    def test_unused_entry_fails(self):
+        self.build_with(owner_list((OWNER_ADDR, "the site")), "nothing here\n")
+        self.assertFinding("A6 owner address used nowhere: " + OWNER_ADDR)
+
+    def test_use_in_the_list_itself_does_not_count(self):
+        self.build_with(owner_list((OWNER_ADDR, "see " + OWNER_ADDR + "/x")), "nothing here\n")
+        self.assertFinding("A6 owner address used nowhere")
+
+    def test_use_only_in_a_recorded_file_does_not_count(self):
+        files = base_files()
+        files[OWNER_LIST] = owner_list((OWNER_ADDR, "the site"))
+        text = "see " + OWNER_ADDR + "\n"
+        files[rec_path()] = text
+        self.build(files, overrides={rec_path(): ("recorded", sha_basis(text))})
+        self.assertFinding("A6 owner address used nowhere: " + OWNER_ADDR)
+
+    def test_recorded_file_plus_a_real_use_is_clean(self):
+        files = base_files()
+        files[OWNER_LIST] = owner_list((OWNER_ADDR, "the site"))
+        text = "see " + OWNER_ADDR + "\n"
+        files[rec_path()] = text
+        files["notes.txt"] = text
+        self.build(files, overrides={rec_path(): ("recorded", sha_basis(text))})
+        self.assertClean()
+
+    def test_non_https_address_fails(self):
+        self.build_with(owner_list(("http" + "://" + "jose.io", "the site")), "x\n")
+        self.assertFinding("A6 owner address list:")
+
+    def test_empty_description_fails(self):
+        self.build_with(owner_list((OWNER_ADDR, "")), "see " + OWNER_ADDR + "\n")
+        self.assertFinding("A6 owner address list:")
+
+    def test_duplicate_address_fails(self):
+        self.build_with(
+            owner_list((OWNER_ADDR, "the site"), (OWNER_ADDR, "again")), "see " + OWNER_ADDR + "\n"
+        )
+        self.assertFinding("A6 owner address list:", "listed twice")
+
+    def test_address_with_a_space_fails(self):
+        self.build_with(owner_list((OWNER_ADDR + " x", "the site")), "x\n")
+        self.assertFinding("A6 owner address list:")
+
+    def test_empty_list_is_clean(self):
+        self.build_with(OWNER_HEAD, "nothing\n")
+        self.assertClean()
+
+    def test_no_list_changes_nothing(self):
+        files = base_files()
+        files["notes.txt"] = "see " + OWNER_ADDR + "\n"
+        self.build(files)
+        self.assertFinding("A6 unregistered URL " + OWNER_ADDR)
+
+    def test_the_list_must_be_admitted(self):
+        files = base_files()
+        files[OWNER_LIST] = OWNER_HEAD
+        rows = [r for r in auto_rows(files) if r[0] != OWNER_LIST]
+        self.build(files, rows=rows)
+        self.assertFinding("A1 not admitted", OWNER_LIST)
+
+
 class A7Tests(RepoCase):
     def test_invalid_utf8_fails(self):
         files = base_files()

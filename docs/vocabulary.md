@@ -95,6 +95,32 @@ Where a row here and an experiment's own **Terms** section differ, the experimen
 | `running` | The first live call has been made and scoring is not complete. |
 | `finished` | Scoring is complete, or the experiment has ended without it. The outcome is stated. |
 
+## Experiment outcomes
+
+An experiment's Outcome is one of the outcomes its own protocol defines, and the same word can sit under two experiments. Where a row here and an experiment's own protocol differ, the experiment's protocol wins for that experiment.
+
+### In every experiment
+
+| Value | Meaning |
+| --- | --- |
+| `inconclusive` | The recorded data do not decide the question under the protocol's rule. |
+| `not determined` | The experiment ended before its scoring was complete, in one of the ways its stopping rule lists. It counts for nothing and is not re-run under that protocol. |
+
+### EXP-0001
+
+| Value | Meaning |
+| --- | --- |
+| `supports the prediction` | The lower bound of the 95% interval is above T = 0.761. |
+| `counts against it` | The upper bound of the 95% interval is below T = 0.761. |
+
+### EXP-0002
+
+| Value | Meaning |
+| --- | --- |
+| `B better` | The lower bound of the 95% interval of B minus A is above 0. |
+| `B worse` | The upper bound of that interval is below 0. |
+| `No difference as large as δ` | The whole interval lies strictly inside (−0.05, 0.05). |
+
 ## Redistributable licences
 
 | Value | Meaning |
