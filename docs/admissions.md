@@ -25,6 +25,7 @@ This is the ledger. Every file in the repository has exactly one row below sayin
 | docs/decisions/2026-10-22-an-experiment-claim-is-confirmatory-only-when-committed-first-and-clean-room.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22 |
 | docs/decisions/2026-10-23-only-agents-scoped-to-this-repository-write-to-it.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23 |
 | docs/decisions/2026-11-01-the-owners-own-addresses-are-listed.md | original | - | Claude Code (claude-sonnet-5-5), 2026-11-01 |
+| docs/decisions/2026-11-02-a-finished-experiment-reports-observations-an-outcome-conclusions-and-next-experiments.md | original | - | Claude Code (claude-sonnet-5-5), 2026-11-02 |
 | docs/experiment-template.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22 |
 | docs/owner-addresses.md | original | - | Claude Code (claude-sonnet-5-5), 2026-11-01 |
 | docs/writing-a-synthesis.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-21 |
