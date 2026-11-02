@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use this repository, please cite it as below."
+title: "Repeatable experiments on AI tools"
+type: software
+authors:
+  - family-names: "Hernandez"
+    given-names: "José Miguel"
+repository-code: "https://github.com/jose-m-hernandez/cleanroom-researcher"
+license:
+  - MIT
+  - CC-BY-4.0

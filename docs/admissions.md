@@ -8,6 +8,7 @@ This is the ledger. Every file in the repository has exactly one row below sayin
 | .github/workflows/gate.yml | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | .gitignore | original | - | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | AGENTS.md | original | - | Claude Code (claude-sonnet-5-5), 2026-11-01 |
+| CITATION.cff | original | - | Claude Code (claude-sonnet-5-5), 2026-11-02 |
 | CONTRIBUTING.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22 |
 | LICENSE | sourced | SRC-0001 | Claude Code (claude-sonnet-5-5), 2026-10-20 |
 | LICENSE-CC-BY-4.0 | sourced | SRC-0002 | Claude Code (claude-sonnet-5-5), 2026-10-22 |
