@@ -344,14 +344,14 @@ def parse_owner_list(text: str) -> Tuple[List[Tuple[int, str]], List[Finding]]:
     return entries, found
 
 
-def check_owner_list(texts: Dict[str, str]) -> List[Finding]:
+def check_owner_list(texts: Dict[str, str], classes: Dict[str, str]) -> List[Finding]:
     """Rules 2 and 3: the list is well formed, and every entry is used elsewhere."""
     if OWNER_LIST not in texts:
         return []
     entries, found = parse_owner_list(texts[OWNER_LIST])
     used: Set[str] = set()
     for path, text in texts.items():
-        if path == OWNER_LIST:
+        if path == OWNER_LIST or is_recorded_file(path, classes):
             continue
         for _, match in line_matches(text, URL):
             used.add(match.group(0).rstrip(".,;:"))
@@ -488,7 +488,7 @@ def control() -> bool:
     six = bool(check_a6({"control.txt": bad_url + "\n"}, set(), {}))
     ten = bool(raw_segment_paths(["x/_raw/y"]))
     bad_list = "| " + "http" + ":" + "//x | what |\n"
-    seven = bool(check_owner_list({OWNER_LIST: bad_list}))
+    seven = bool(check_owner_list({OWNER_LIST: bad_list}, {}))
     return one and five and six and ten and seven
 
 
@@ -558,7 +558,7 @@ def run(root: str) -> Tuple[int, List[str]]:
     findings.extend(check_a4(root, rows, fileset))
     findings.extend(check_a5(texts, existing))
     findings.extend(check_a6(texts, registered, classes, listed))
-    findings.extend(check_owner_list(texts))
+    findings.extend(check_owner_list(texts, classes))
     findings.extend(check_a7(contents, classes))
     findings.extend(check_a8({p: texts[p] for p in source_paths}, types))
     findings.extend(check_a9({p: len(d) for p, d in contents.items()}, classes))

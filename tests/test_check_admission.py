@@ -702,6 +702,23 @@ class OwnerAddressTests(RepoCase):
         self.build_with(owner_list((OWNER_ADDR, "see " + OWNER_ADDR + "/x")), "nothing here\n")
         self.assertFinding("A6 owner address used nowhere")
 
+    def test_use_only_in_a_recorded_file_does_not_count(self):
+        files = base_files()
+        files[OWNER_LIST] = owner_list((OWNER_ADDR, "the site"))
+        text = "see " + OWNER_ADDR + "\n"
+        files[rec_path()] = text
+        self.build(files, overrides={rec_path(): ("recorded", sha_basis(text))})
+        self.assertFinding("A6 owner address used nowhere: " + OWNER_ADDR)
+
+    def test_recorded_file_plus_a_real_use_is_clean(self):
+        files = base_files()
+        files[OWNER_LIST] = owner_list((OWNER_ADDR, "the site"))
+        text = "see " + OWNER_ADDR + "\n"
+        files[rec_path()] = text
+        files["notes.txt"] = text
+        self.build(files, overrides={rec_path(): ("recorded", sha_basis(text))})
+        self.assertClean()
+
     def test_non_https_address_fails(self):
         self.build_with(owner_list(("http" + "://" + "jose.io", "the site")), "x\n")
         self.assertFinding("A6 owner address list:")
