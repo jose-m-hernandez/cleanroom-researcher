@@ -9,15 +9,17 @@ launched_by: the repository owner
 
 ## Abstract
 
-This is a planned study, and no results exist yet. It is exploratory, and it makes no confirmatory claim. Its method is the evaluation harness of EXP-0001, which was written after its authors had read the target, and its read log is reconstructed. Its fixtures are development fixtures that were used while that harness was built, so they are not blind.
+This study was run once, on 2026-11-02. It is exploratory, and it makes no confirmatory claim. Its method is the evaluation harness of EXP-0001, which was written after its authors had read the target, and its read log is reconstructed. Its fixtures are development fixtures that were used while that harness was built, so they are not blind.
 
 It compares two versions of the `/cpr:preserve` skill of the CPR plugin on the same 19 fixtures × 3 repeats:
 - **A** is the published skill at plugin commit `cfd1e77`.
 - **B** (`whole-values`) is A with one sentence of its skill file extended. It keeps exact numbers as well as paths, flags and identifiers. It keeps every item when the session gave a list. When the session changed a value, it records only the latest one.
 
-The primary measure is EXP-0001's probe accuracy on scorable probes. The outcome is decided by the 95% interval of the mean per-fixture difference, B minus A, against 0 and against δ = 0.05. The expected half-width of that interval is 0.026 to 0.041. Its width depends on how differently the fixtures respond to the two versions, which has not been measured.
+The primary measure is EXP-0001's probe accuracy on scorable probes. The outcome is decided by the 95% interval of the mean per-fixture difference, B minus A, against 0 and against δ = 0.05. The expected half-width of that interval is 0.026 to 0.041. Its width depends on how differently the fixtures respond to the two versions, which had not been measured before this run.
 
-Any finding holds only for these fixtures, those two models, Claude Code 2.1.302 and this one change.
+Any finding holds only for these fixtures, those two models, Claude Code 2.1.302 and this one change. Result: no difference as large as δ = 0.05 between A and B on the primary measure (mean difference 0.000, 95% interval [-0.023, 0.024]).
+
+**Under test:** the `/cpr:preserve` skill of the CPR plugin, at plugin commit `cfd1e77e07d2b3698591688e7e151d83d3ef51c3` (A), and a variant of it, B (`whole-values`), the same skill with one sentence of its skill file extended; source record [SRC-0003](../../sources/SRC-0003/source.md).
 
 ## Question
 
@@ -129,11 +131,61 @@ What is left out, and why:
 
 ## Results
 
-Not yet run.
+### Observations
+
+The experiment ran on 2026-11-02: 19 fixtures, 3 seeds and 4 arms (floor, oracle, A and B), with Claude Code 2.1.302, `claude-sonnet-5-5` for the preserve runs and probe sessions, and `claude-opus-5-5` as judge. All 143 non-abstention probes were scorable; none was dropped, and 8 were excluded by their specifications and not counted. The judge's two sanity controls passed (oracle recall 1.000, mismatch recall 0.000). In every one of the 57 preserve runs of each version, the notes file changed.
+
+Primary (probe accuracy on scorable probes, mean over fixtures, with its 95% interval):
+
+| Arm | Primary |
+| --- | --- |
+| floor | 0.000 [0.000, 0.000] |
+| oracle | 0.998 [0.995, 1.000] |
+| A (`baseline`) | 0.842 [0.792, 0.890] |
+| B (`whole-values`) | 0.842 [0.792, 0.890] |
+
+The floor reads 0.000 by construction: a probe is scorable only if the floor misses it.
+
+**Reported, not decisive.** The protocol asks for these to be reported and gives them no rule. Each is B minus A, as a mean per-fixture difference with its 95% interval: recall 0.008 [-0.006, 0.026]; precision -0.024 [-0.045, -0.003]; placement 0.022 [-0.032, 0.071]. The false-answer rate on abstention probes was 0.088 [0.026, 0.158] for A and 0.070 [0.018, 0.132] for B. B's notes file added 620.0 input tokens to a probe session, A's 592.1 (B's is 1.047 times A's). The interval for precision does not include 0; the protocol sets no rule for it, it takes no part in the Outcome, and its adjusted p-value is 0.2408 (unadjusted 0.0602). These figures are listed so the reader can see them, and they are not findings.
+
+**Two notes on the record.**
+
+1. *Two judge labels were unusable.* For two memories of A (one seed each, on two fixtures), the judge returned no usable line labels, including when asked a second time. Those two cells have no recall, precision or placement, and for those two fixtures A's values for those three measures use its other two seeds. No probe label was missing, so Primary, and so the Outcome, do not depend on them.
+2. *The A/A table is empty.* The report's A/A table compares seeds 1 and 2 with seeds 3 and 4 as a noise floor, so it needs four seeds. This protocol fixes three and does not plan an A/A analysis, so the table has no rows with data. This is not a deviation. The seed-to-seed spread that is available is the within-fixture standard deviation of Primary: 0.081 for A and 0.075 for B; the standard deviation of the per-fixture differences, B minus A, is 0.053.
+
+This repository publishes the run's `run.json`, its `scores.json` without one field, and a `REPORT.md` made again from those two files. The field left out is the failure gallery, which quotes text from the development fixtures, and those fixtures are not published. In `REPORT.md` the Failure gallery is replaced by a sentence saying so. Every table the Outcome rests on is in the published `REPORT.md`, and no number in this README comes from the withheld gallery.
+
+The run's spend ledger records $34.29 against the $45 cap; the protocol planned $38.93. The Cost table in `REPORT.md` totals $33.80 (33.7957 as printed), because it counts only calls whose labels were stored, and the judge calls that returned no usable label are not in it. Both figures are API-price equivalents; under a subscription they are not billed.
+
+The first attempt at Methods step 3 named the folder of fixtures one level above the folder of development fixtures. It stopped at fixture selection, before any run. It made no call and spent nothing. The step was then run again with the correct folder.
+
+### Outcome
+
+**No difference as large as δ.**
+
+The Outcome rests on one row of the report, "Paired differences against the baseline", `whole-values`, Primary: 19 fixtures, mean difference (B minus A) 0.000, 95% interval [-0.023, 0.024]. Applying the decision rule in its committed order: the lower bound is not above 0, so B is not better; the upper bound is not below 0, so B is not worse; the whole interval lies strictly inside (−0.05, 0.05), so the third outcome applies. The protocol's extra statement for "B better with an upper bound below 0.05" does not arise.
 
 ## Analysis
 
-Not yet run.
+### Conclusions
+
+In plain words: on these fixtures the one-sentence change to the skill made no measurable difference to how many of a session's facts the later session got right. Both versions got 0.842 of the scorable probes right, averaged over fixtures.
+
+**What the Outcome rules out.** On these fixtures, a mean per-fixture difference in Primary of 0.05 or more, in either direction. That is the size this experiment fixed in advance as the smallest that matters (δ = 0.05).
+
+**What it does not rule out or show.**
+- A smaller difference. The interval runs from -0.023 to 0.024.
+- Differences on single fixtures. The per-fixture differences have a standard deviation of 0.053 around a mean of 0.000, so some fixtures did better under one version and some under the other. The mean does not show which.
+- That either version is good. Both stand at 0.842 against the oracle's 0.998.
+- Anything about other fixtures, other models, other versions of Claude Code, or other changes to the skill. The fixtures are development fixtures that were used while the method was built, so this was not a blind test, and B was chosen from these fixtures' own failures. B was fitted to them, and still showed no difference as large as 0.05 on them.
+- Anything confirmatory. The experiment is exploratory.
+
+A finding here holds only for these fixtures, these two models, Claude Code 2.1.302 and this one change.
+
+### Next experiments
+
+- Does B still match A on fixtures it was not fitted to? This result is for the fixtures B was chosen from, and a held-out set is the test that would say whether it generalises.
+- What is left in the gap between A (0.842) and the oracle (0.998)? The change tried here did not close any of it on these fixtures.
 
 ## Threats to validity
 
@@ -173,3 +225,4 @@ Use the fixtures at the named commit, Claude Code 2.1.302, the two models and th
 ## Changelog
 
 - 2026-10-31: protocol committed (preregistration). `spend_cap_usd` set to 45 and `launched_by` set to the repository owner, both before any live call.
+- 2026-11-02: results recorded: Observations, Outcome, Conclusions and Next experiments written; the Abstract updated to state the finding; the **Under test** line added after the run, restating the target, the pin and the variant given in Materials; the run's data published under `recorded/` as described under Observations. No protocol text, rule, measure or number was changed.
