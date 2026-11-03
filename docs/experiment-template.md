@@ -33,9 +33,21 @@ Describe the steps of the method, in the order they run. Say what one run is, ho
 
 Report the results as tables generated from the recorded data. Include each table verbatim, and under each table name the generated file it was copied from. Report every recorded run, including failed and aborted ones, and list each excluded run with the rule that excluded it. Give the number of runs behind each figure and its spread or interval.
 
+### Observations
+What was measured, with no interpretation: the number of fixtures, seeds and runs, each exclusion and re-run with its rule, and each generated table with the file it was copied from.
+
+### Outcome
+The protocol's decision rule applied as committed: quote the one row it rests on, with its number and interval, and state the Outcome in the word that protocol defines (`docs/vocabulary.md`, Experiment outcomes).
+
 ## Analysis
 
 Analyse the results as planned. For each hypothesis, say which Outcome its protocol defines the result reaches, under the criterion committed above. Label any analysis that was not planned as exploratory. State the conclusion only for the target version, models and environment tested, and say what result would have changed it.
+
+### Conclusions
+What the Outcome shows and what it does not, for the target version, models and environment tested only, and what result would have changed it.
+
+### Next experiments
+Each a question this result suggests, with one line on why; a proposal that commits to nothing, and an experiment only once it has its own preregistered folder.
 
 ## Threats to validity
 

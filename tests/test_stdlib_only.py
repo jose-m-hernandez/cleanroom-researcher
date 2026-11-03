@@ -157,6 +157,8 @@ def experiment_of(rel):
     parts = rel.split("/")
     if len(parts) > 3 and parts[0] == "experiments" and parts[2] == "code":
         return parts[1]
+    if len(parts) == 3 and parts[0] == "experiments" and parts[2].endswith(".py"):
+        return parts[1]
     return None
 
 
@@ -360,6 +362,39 @@ class ExperimentLocalModuleTests(unittest.TestCase):
     def test_a_file_outside_code_gives_no_name(self):
         files = {"experiments/EXP-0001/notes.py": "", self.CODE + "a.py": "import notes\n"}
         self.assertEqual(self.violations(files), [self.CODE + "a.py imports notes"])
+
+    def test_a_script_directly_in_an_experiment_folder_counts_as_that_experiment(self):
+        with self.subTest(case="own experiment's module is allowed"):
+            files = {self.CODE + "report.py": "", "experiments/EXP-0001/gen.py": "import report\n"}
+            self.assertEqual(self.violations(files), [])
+        with self.subTest(case="another experiment's module stays a violation"):
+            files = {self.CODE + "report.py": "", "experiments/EXP-0002/gen.py": "import report\n"}
+            self.assertEqual(
+                self.violations(files), ["experiments/EXP-0002/gen.py imports report"]
+            )
+        for rel in (
+            "experiments/EXP-0001/recorded/x.py",
+            "experiments/EXP-0001/target/x.py",
+            "experiments/EXP-0001/target/whole-values/x.py",
+        ):
+            with self.subTest(case="deeper path", rel=rel):
+                self.assertIsNone(experiment_of(rel))
+        with self.subTest(case="rule is anchored"):
+            self.assertIsNone(experiment_of("experiments/EXP-0001/gen.txt"))
+            self.assertEqual(experiment_of("experiments/EXP-0001/gen.py"), "EXP-0001")
+        with self.subTest(case="a stranger is still a violation"):
+            files = {"experiments/EXP-0001/gen.py": "import requests\n"}
+            self.assertEqual(
+                self.violations(files), ["experiments/EXP-0001/gen.py imports requests"]
+            )
+        with self.subTest(case="a banned module is caught by the tripwire"):
+            with tempfile.TemporaryDirectory() as tmp:
+                full = os.path.join(tmp, "experiments", "EXP-0001", "gen.py")
+                os.makedirs(os.path.dirname(full), exist_ok=True)
+                with open(full, "w", encoding="utf-8") as handle:
+                    handle.write("import socket\n")
+                self.assertIn("experiments/EXP-0001/gen.py", python_files("experiments", tmp))
+                self.assertTrue(tripwire_hits(parse("experiments/EXP-0001/gen.py", tmp)))
 
 
 class RecordedFileTests(unittest.TestCase):

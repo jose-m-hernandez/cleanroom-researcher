@@ -1,0 +1,48 @@
+{
+ "arms": [
+  "floor",
+  "oracle",
+  "baseline",
+  "whole-values"
+ ],
+ "claude_code_version": "2.1.302",
+ "date": "20261102",
+ "excluded_cells": [],
+ "fixtures": [
+  "dev-001-csv-tally",
+  "dev-002-notes-api",
+  "dev-003-sales-etl",
+  "dev-004-md-linter",
+  "dev-005-flag-service",
+  "dev-006-ledger-cli",
+  "dev-007-link-shortener",
+  "dev-008-photo-renamer",
+  "dev-009-inventory-diff",
+  "dev-010-cron-expr",
+  "dev-011-webhook-router",
+  "dev-012-backup-snapshots",
+  "dev-013-unit-convert",
+  "dev-015-adventure-engine",
+  "dev-016-mail-templates",
+  "dev-017-metrics-exporter",
+  "dev-018-shift-planner",
+  "dev-019-plugin-registry",
+  "dev-020-ci-summary"
+ ],
+ "isolation_reruns": [],
+ "judge_model": "claude-opus-5-5",
+ "model": "claude-sonnet-5-5",
+ "outcome_only": [],
+ "plugin_ref": "cfd1e77e07d2b3698591688e7e151d83d3ef51c3",
+ "proof_counts": {
+  "excluded_after_rerun": 0,
+  "isolation_reruns": 0,
+  "outcome_only_by_check": {}
+ },
+ "raw_run_id": "20261102T204017Z-b6e27003",
+ "rng_seed": 20261017,
+ "run_id": "exp0002-results",
+ "seeds": 3,
+ "split": "dev",
+ "version": 1
+}
