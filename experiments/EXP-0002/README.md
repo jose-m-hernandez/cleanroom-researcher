@@ -144,18 +144,20 @@ Primary (probe accuracy on scorable probes, mean over fixtures, with its 95% int
 | A (`baseline`) | 0.842 [0.792, 0.890] |
 | B (`whole-values`) | 0.842 [0.792, 0.890] |
 
+The table is copied from the column Primary of the table "Per-arm metrics" in `REPORT.md`, with the arms named as in this README.
+
 The floor reads 0.000 by construction: a probe is scorable only if the floor misses it.
 
 **Reported, not decisive.** The protocol asks for these to be reported and gives them no rule. Each is B minus A, as a mean per-fixture difference with its 95% interval: recall 0.008 [-0.006, 0.026]; precision -0.024 [-0.045, -0.003]; placement 0.022 [-0.032, 0.071]. The false-answer rate on abstention probes was 0.088 [0.026, 0.158] for A and 0.070 [0.018, 0.132] for B. B's notes file added 620.0 input tokens to a probe session, A's 592.1 (B's is 1.047 times A's). The interval for precision does not include 0; the protocol sets no rule for it, it takes no part in the Outcome, and its adjusted p-value is 0.2408 (unadjusted 0.0602). These figures are listed so the reader can see them, and they are not findings.
 
 **Two notes on the record.**
 
-1. *Two judge labels were unusable.* For two memories of A (one seed each, on two fixtures), the judge returned no usable line labels, including when asked a second time. Those two cells have no recall, precision or placement, and for those two fixtures A's values for those three measures use its other two seeds. No probe label was missing, so Primary, and so the Outcome, do not depend on them.
+1. *Two judge labels were unusable.* For two notes files of A (one seed each, on two fixtures), the judge returned no usable line labels, including when asked a second time. Those two cells have no recall, precision or placement, and for those two fixtures A's values for those three measures use its other two seeds. No probe label was missing, so Primary, and so the Outcome, do not depend on them.
 2. *The A/A table is empty.* The report's A/A table compares seeds 1 and 2 with seeds 3 and 4 as a noise floor, so it needs four seeds. This protocol fixes three and does not plan an A/A analysis, so the table has no rows with data. This is not a deviation. The seed-to-seed spread that is available is the within-fixture standard deviation of Primary: 0.081 for A and 0.075 for B; the standard deviation of the per-fixture differences, B minus A, is 0.053.
 
 This repository publishes the run's `run.json`, its `scores.json` without one field, and a `REPORT.md` made again from those two files. The field left out is the failure gallery, which quotes text from the development fixtures, and those fixtures are not published. In `REPORT.md` the Failure gallery is replaced by a sentence saying so. Every table the Outcome rests on is in the published `REPORT.md`, and no number in this README comes from the withheld gallery.
 
-The run's spend ledger records $34.29 against the $45 cap; the protocol planned $38.93. The Cost table in `REPORT.md` totals $33.80 (33.7957 as printed), because it counts only calls whose labels were stored, and the judge calls that returned no usable label are not in it. Both figures are API-price equivalents; under a subscription they are not billed.
+The run's spend ledger records $34.29 against the $45 cap; the protocol planned $38.93. That ledger is not published, so the $34.29 cannot be checked from the files in this repository. The Cost table in `REPORT.md` totals $33.80 (33.7957 as printed), because it counts only calls whose labels were stored, and the judge calls that returned no usable label are not in it. Both figures are API-price equivalents; under a subscription they are not billed.
 
 The first attempt at Methods step 3 named the folder of fixtures one level above the folder of development fixtures. It stopped at fixture selection, before any run. It made no call and spent nothing. The step was then run again with the correct folder.
 
@@ -226,3 +228,4 @@ Use the fixtures at the named commit, Claude Code 2.1.302, the two models and th
 
 - 2026-10-31: protocol committed (preregistration). `spend_cap_usd` set to 45 and `launched_by` set to the repository owner, both before any live call.
 - 2026-11-02: results recorded: Observations, Outcome, Conclusions and Next experiments written; the Abstract updated to state the finding; the **Under test** line added after the run, restating the target, the pin and the variant given in Materials; the run's data published under `recorded/` as described under Observations. No protocol text, rule, measure or number was changed.
+- 2026-11-02, after review: in Observations, "memories" replaced by "notes files", the source of the Primary table named, and the spend ledger stated to be unpublished. No protocol text, rule, measure or number was changed.
