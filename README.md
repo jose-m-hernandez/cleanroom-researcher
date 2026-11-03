@@ -17,7 +17,7 @@ Both are exploratory: their method was written after its authors read the tool, 
 
 ## Results so far
 
-- [EXP-0002](experiments/EXP-0002/README.md#conclusions) (exploratory): No difference as large as δ. Mean per-fixture difference in probe accuracy, the variant minus the published skill: 0.000, 95% interval -0.023 to 0.024, 19 fixtures; δ = 0.05.
+- [EXP-0002](experiments/EXP-0002/README.md#conclusions) (exploratory): No difference as large as δ. Mean per-fixture difference in probe accuracy, the variant minus the published skill: 0.000, 95% interval -0.023 to 0.024, 19 development fixtures, the variant having been chosen from their failures; δ = 0.05.
 
 ## How an experiment is written
 
