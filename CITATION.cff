@@ -6,6 +6,3 @@ authors:
   - family-names: "Hernandez"
     given-names: "José Miguel"
 repository-code: "https://github.com/jose-m-hernandez/cleanroom-researcher"
-license:
-  - MIT
-  - CC-BY-4.0
