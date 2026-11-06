@@ -729,6 +729,12 @@ class OwnerAddressTests(RepoCase):
         self.build_with(text, "see " + OWNER_ADDR + "\n")
         self.assertClean()
 
+    def test_entry_with_trailing_punctuation_still_matches(self):
+        for mark in ".,;:":
+            with self.subTest(mark=mark):
+                self.build_with(owner_list((OWNER_ADDR + mark, "the site")), "see " + OWNER_ADDR + "\n")
+                self.assertClean()
+
     def test_non_https_address_fails(self):
         self.build_with(owner_list(("http" + "://" + "jose.io", "the site")), "x\n")
         self.assertFinding("A6 owner address list:")

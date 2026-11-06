@@ -337,7 +337,9 @@ def parse_owner_list(text: str) -> Tuple[List[Tuple[int, str]], List[Finding]]:
         if not match:
             found.append((OWNER_LIST, number, prefix + "a row is | address | what it is |"))
             continue
-        address, what = match.group(1), match.group(2)
+        # Same normalization as a use (check_a6, check_owner_list), so trailing
+        # punctuation on an entry can't make it unmatchable.
+        address, what = match.group(1).rstrip(".,;:"), match.group(2)
         if not address.startswith(HTTPS):
             found.append((OWNER_LIST, number, prefix + "the address must start with https"))
         elif re.search(r"[\s|`]", address):
