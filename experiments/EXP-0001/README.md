@@ -63,8 +63,14 @@ Probe accuracy on scorable probes, a share from 0 to 1, built in three steps:
 
 - **Why exploratory.** The method was written after its authors had read the target, and the clean-room line (`docs/decisions/2026-10-21-the-clean-room-line.md`) requires the opposite order, which this protocol takes to rule out a confirmatory claim. So this question makes no confirmatory claim. Its analysis plan, its 95% interval and δ below are kept as stated all the same.
 - **Threshold.** T = 0.761. It is the development primary, 0.861, minus δ = 0.10, where δ is the smallest difference this experiment treats as mattering. The 0.861 comes from a single seed of development run r1, the result set `dev-baseline-1seed-r1` (see Provenance). It is a design input, not data for this experiment.
+
+  > Added 2026-11-06, before any recorded run: REPORTED ONLY, and it never changes the outcome. The report also compares the interval with 0.713: the development primary before 8 probes were excluded (0.813, Threat 6), minus δ = 0.10. The outcome is decided against T = 0.761 alone.
+
 - **Prediction.** The lower bound of the 95% confidence interval of the baseline's primary measure is above 0.761. If it is, the result supports the prediction.
 - **What counts against it.** An upper bound below 0.761 counts against the prediction. That would mean the development figure overstates the held-out level by more than δ. It would not mean that the skill keeps nothing.
+
+  > Added 2026-11-06, before any recorded run: the outcome names "supports the prediction" and "counts against it", here and wherever they appear in this README, are labels for the two decisive results of this decision rule. They are not confirmatory claims. This experiment's claim is exploratory (Abstract; Threat 5), and these labels do not change that.
+
 - **Otherwise** the outcome is inconclusive. A bound exactly equal to 0.761 is neither above nor below it, so it is inconclusive too.
 - **Not determined.** An experiment that ends before its scoring is complete has the outcome not determined (Stopping rule).
 - The two decisive outcomes cannot both hold, so the order in which they are checked does not matter.
@@ -74,6 +80,11 @@ Probe accuracy on scorable probes, a share from 0 to 1, built in three steps:
   - 0.037 uses the pilot's 3-seed spread of 0.095 directly.
 
   So if the true level is near 0.786, the pilot's 3-seed level, the most likely outcome is inconclusive: at those two half-widths, by a normal approximation with the fixture as the unit, its probability is 0.67 and 0.74.
+
+  > Added 2026-11-06, before any recorded run: the arithmetic behind the half-width of 0.032. The one-seed spread of 0.100 holds the seed-to-seed variance, so that variance is subtracted to leave the between-fixture variance: 0.100² − 0.070² = 0.0051. The variance of a fixture's mean over 3 seeds is then 0.0051 + 0.070² / 3 = 0.0067, its square root is 0.082, and the half-width is 1.96 × 0.082 / √25 = 0.032. The 0.037 is 1.96 × 0.095 / √25.
+
+  > Added 2026-11-06, before any recorded run: when the outcome is inconclusive because the interval holds T, the report describes it by where the interval lies against T = 0.761: it gives both bounds and the centre, says that the interval holds T, and says whether its centre is above or below T. It does not describe that result as support for the prediction or as a failure of it.
+
 - There is no second question, and no comparison of the skill with a plain prompt or with another model.
 
 ### The test that decides the primary question
@@ -83,6 +94,8 @@ A 95% percentile bootstrap confidence interval decides the primary question.
 - The **bootstrap** builds it by resampling: draw n per-fixture values, with replacement, from the n observed ones, where n is the number of fixtures in the primary (at most 25); take their mean; repeat b = 10000 times; keep the middle 95% of those means, from the 2.5th to the 97.5th percentile.
 - The unit is the fixture, so the 3 seeds of one fixture count once.
 - The random number generator is seeded with 20261017, so the same data always give the same interval.
+
+  > Added 2026-11-06, before any recorded run: REPORTED ONLY, and it never changes the outcome. Beside the percentile bootstrap interval, the report gives a t interval, a BCa bootstrap interval, or both, computed from the same per-fixture values. The percentile interval alone decides the outcome.
 
 ### Number of runs, and why
 
@@ -125,6 +138,9 @@ At most 25 fixtures × 3 seeds × 3 arms; at least 20 fixtures are sealed (Metho
   - The evaluation harness at `08ef45f` fails a run on both kinds of check alike, and stops a batch on a failed preserve run; the port separates the two kinds.
 - **Counts.** The report gives the number of isolation re-runs, the number of cells excluded after one, and the number of runs that failed only outcome checks, by check.
 - A probe answer missing from a session, or a judge label that is missing or malformed, is left out of that cell's numerator and denominator. It is not scored as incorrect.
+
+  > Added 2026-11-06, before any recorded run: REPORTED ONLY, and it never changes the outcome. The report also gives the primary measure recomputed with each missing answer and each missing label counted as incorrect, and the number of missing answers and missing labels by arm (floor, oracle and baseline). The rule above decides the outcome.
+
 - No probe may be flagged `excluded` after the seal.
 - **Missing data:**
   - The scoring command runs exactly twice: the second time immediately after the first, whatever the first showed. The second pass asks the judge again only for the labels the first left missing. There is no third pass.
@@ -145,6 +161,9 @@ At most 25 fixtures × 3 seeds × 3 arms; at least 20 fixtures are sealed (Metho
   - At kappa ≥ 0.6 the judge's labels stand.
   - Below 0.6, the outcome of the primary question is reported as inconclusive, and the answers are not re-scored.
   - Kappa ≥ 0.6 does not bound a judge bias as large as δ: in the worked case of Threat 12, a judge that raises the level by 0.10 still reaches a kappa of 0.94. So the judge-minus-person difference is reported beside it (Reported, not decisive).
+
+    > Added 2026-11-06, before any recorded run: if the 95% interval of the judge-minus-person difference includes δ = 0.10, the bias in the direction that favours the prediction (Threat 2; Threat 12), the Conclusions say so beside the outcome, and say that the audit does not rule out a judge bias as large as δ. They state the outcome as the rule gives it and do not change it. This is fixed here, before any result.
+
   - How the sample is drawn and blinded is set out in Methods, step 11.
 
 ### Reported, not decisive
@@ -157,6 +176,9 @@ None of these changes the outcome of the primary question. Each that is a mean o
 - The counts of isolation re-runs, of cells excluded after one, and of runs that failed only outcome checks (Exclusions).
 - The held-out primary recomputed with the filter that produced T: floor and oracle seed 1 only, so a probe counts when the floor's seed-1 answer is not correct and the oracle's is.
 - **The judge-minus-person difference.** On the audit sample, the baseline primary from the judge's labels minus the same from the repository owner's labels, with each label's answers weighted by the inverse of that label's sampling fraction (the share of that label's judged answers that the sample drew), so that the sample stands for the whole frame. Its interval resamples fixtures: a cluster bootstrap, which resamples whole fixtures, with all their sampled answers, rather than single answers, because answers within a fixture are correlated.
+
+  > Added 2026-11-06, before any recorded run: the difference is computed on the scorable probes among the sampled answers only, as the primary measure is; sampled answers on probes that are not scorable do not enter it. The audit has one labeller, the repository owner, who knows the design and this protocol's prediction and threshold (extending Threat 12).
+
 - **Answers naming more than one value.** The count of baseline answers that name more than one candidate value. An answer that names the gold answer and another value can be labelled `correct`; the judge prompt is not changed. They are counted mechanically, by a rule fixed before the seal, and the repository owner checks that rule on the audit sample. No new judge call is made.
 - The primary split by each probe's `code_answers` tag, which says whether a file in the fixture's repository, other than `CLAUDE.md`, states the answer.
 - Recall, precision (the share of the file's added lines that record a needed item) and placement (the share of recorded needed items with a line under a heading that fits) of needed items in the baseline file, from the line-matching judge.
@@ -185,7 +207,13 @@ There is one primary question, so no correction for multiple comparisons applies
   - The items judge prompt numbers each added line, with the heading it was added under. For each line, it asks which item the line records (a needed item, a not-needed item, or neither) and whether the heading fits.
 - **Task set.** 25 held-out fixtures, not yet written; at most 3 of them may be replaced before the seal (Methods, steps 6 and 7).
   - 20 are short sessions and 5 are long sessions of 30 or more turns.
+
+    > Added 2026-11-06, before any recorded run: a replacement fixture is of the same type as the fixture it replaces: a replacement for a short session is short, and a replacement for a long session is long. If, after replacements within the generation headroom (Materials, spend plan, Headroom), fewer than 5 long fixtures (30 or more turns) pass the validator, the set is not sealed, no baseline run happens, and the experiment ends with the outcome not determined (How the experiment can end, item 9).
+
   - They follow the rules of the fixture authoring guide in the method code. The authoring agent reads a copy of that guide with the passages that report development findings removed; the copy's sha256 is recorded in the seal. Each fixture has at least 5 needed items and 2 not-needed items, and at least one knowledge-update, one temporal and one abstention probe.
+
+    > Added 2026-11-06, before any recorded run: the passages cut from the authoring agent's copy of the guide are the passages that report development findings. The passage at `experiments/EXP-0001/code/FIXTURES.md` line 81, which reports that the generation of `dev-014-log-digest` failed six times, is one of them. The text above does not give the full list of cut passages, so that list is open. The rules at line 37 ("At least 2 needed items per pilot fixture sit mid-turn") and line 59 ("Each pilot fixture has at least one" item whose source is tool output) say "pilot fixture", and the text above does not settle whether they bind held-out fixtures, so that question is open too. Both are settled by the repository owner before the authoring agent's first run. A Changelog entry, committed before the authoring agent's first run, records the list of cut passages, the sha256 of the copy, the answer on lines 37 and 59, and the names of the files that are the fixture specification and the generation specification (Methods, step 6). Line numbers are those of `FIXTURES.md` at commit `ee4ef0b`.
+
   - Their ids take the form `heldout-NNN-<slug>`.
 - **Dates of the first and last recorded run.** None yet.
 - **Spend plan.** All amounts are API-price equivalents; under a subscription they are not billed.
@@ -210,6 +238,9 @@ There is one primary question, so no correction for multiple comparisons applies
     The live judge-check spends from the control ledger, and the replacements' floor and oracle sessions from the evaluation ledger, because that is where the evaluation harness charges them. The phase caps nest under $55. With the authoring agent's bound they sum to $65.00 ($19.50 + $34.00 + $8.50 + $3.00), so the $55 ceiling binds first: it binds their sum, whichever cap is reached first.
   - **Headroom,** at the planned figures above:
     - under the generation cap: $19.50 − $9.06 = $10.44, for generation retries and replacements;
+
+      > Added 2026-11-06, before any recorded run: the headroom under the generation cap is $7.44, not $10.44. The Changelog entry of 2026-10-23 charges the authoring agent's $3.00 to the generation ledger, so the headroom is $19.50 − $9.06 − $3.00 = $7.44, for generation retries and replacements. The $3.00 is the bound of 4 runs at $0.75, not a recorded mean. The planned total of $53.30 is unchanged.
+
     - under the control cap: $8.50 − $8.33 = $0.17;
     - under the evaluation cap: $34.00 − $32.91 = $1.09; at recorded means, the replacements' floor and oracle sessions, $0.90, fit inside it;
     - under $55: $55 − $53.30 = $1.70.
@@ -277,6 +308,9 @@ The steps run in this order. A step does not start until the one before it has f
    - The manifest, the record and the repair log are committed together, in one commit, before any baseline run. Nothing from a baseline run is seen before the seal.
    - The seal commit is pushed to the public remote before step 9, and the push is recorded.
    - The fixture files stay in a private store outside this repository until the results are published. They are published with the results, so that anyone can check them against the manifest and replicate the run.
+
+     > Added 2026-11-06, before any recorded run: the results publish, with the fixtures, the copy of the authoring guide that the authoring agent read, the fixture specification and the generation specification it was given (Methods, step 6), each with its sha256, so that a reader can check each against the seal.
+
    - Every later step first checks the files against the manifest and the sealed hashes, and a mismatch ends the experiment with the outcome not determined.
    - The sealed scorable record is the authority. The final scoring must reproduce it exactly; any difference stops scoring and ends the experiment with the outcome not determined.
    - No probe is excluded, repaired or reworded after the seal.
@@ -411,6 +445,8 @@ none
 
 > Added 2026-11-05, before any recorded run: until this experiment is run, the command prints `reproduce: EXP-0001 has no generated files` and exits 0.
 
+> Added 2026-11-06, before any recorded run: the label "Added <date>, before any recorded run:" is the form for an addition made before the first recorded run, as in the addendum above. The form "Added <date>, after the recorded run:" in `docs/decisions/2026-11-05-preregistered-sections-take-labelled-addenda-never-edits.md` is for an addition made after it.
+
 ## How to replicate
 
 **What to run.** On your own account, with Claude Code 2.1.302, `claude-sonnet-5-5`, `claude-opus-5-5`, and the plugin at the pinned commit:
@@ -453,6 +489,9 @@ This criterion was fixed in this protocol, before any result was seen.
 - 2026-10-22: protocol committed (preregistration).
 - 2026-10-22: `spend_cap_usd` set to 55 and `launched_by` set to the repository owner, both before any live call.
 - 2026-10-22: the read log is reconstructed from commit history. Its times are upper bounds taken from that history, not the times of the reads, and it lists what the history shows was read, not a guarantee that nothing else was read.
+
+> Added 2026-11-06, before any recorded run: the dates of the three Changelog entries of 2026-10-22 above are local dates, in US Pacific time. The commit that holds them was made at 17:08 on 2026-10-22, UTC−7, which is 2026-10-23 in UTC.
+
 - 2026-10-23: clarifications made before any data. None changes the analysis plan; each states how an existing rule is read, as ruled before the first live call.
   - Final scoring and missing labels (P:130, P:132, P:291): the final scoring only reuses the sealed floor and oracle labels, and never asks the judge again for a floor or oracle label that went missing before the seal.
   - "Runs exactly twice" (P:130) applies to each scoring occasion: each pre-seal round, and the final scoring.
@@ -471,7 +510,19 @@ This criterion was fixed in this protocol, before any result was seen.
   - The plugin check (P:331) applies to the `cpr` plugin, the only plugin any run loads.
   - The rule for counting answers that name more than one value (P:160) is fixed at the seal, after this protocol's commit, and is recorded in the sealed record.
   - The cluster bootstrap for the judge-minus-person difference (P:159) uses b = 10000 resamples and the seed 20261017, the same as the primary interval (P:85).
+> Added 2026-11-06, before any recorded run: the date of the entry above is a UTC date. The commit that holds it was made at 17:28 on 2026-10-22, UTC−7, which is 2026-10-23 in UTC; its local US Pacific date is 2026-10-22.
+
 - 2026-10-23: the method code under `code/` lands in stages: first a port of the evaluation harness to this repository's rules, then the runner features and the analysis this protocol requires. Methods step 2 is complete only when a later Changelog entry says the method code is complete. No live call has been made and no run is recorded.
 - 2026-10-23: a clarification made before any data. In C7 (P:243), "the widest `allowed_bash` among the 25 specs" means the union of every spec's `allowed_bash` entries, which is at least as wide as any one spec's list.
 - 2026-10-25: a clarification made before any data. The clean-room lint (P:249) is the evaluation harness's `lint` command: it runs this repository's vocabulary rules V1 to V4 and its barred-string scan over the fixture store, prints entry numbers only, and fails closed when no list is set.
 - 2026-11-05: an addendum under How to reproduce, added before any recorded run. It says what the command prints until the experiment is run. No preregistered text is changed.
+- 2026-11-06: addenda made before any recorded run, from a method review. Each is a labelled blockquote placed directly after the text it clarifies, and none changes the analysis plan or any preregistered text. Line numbers are those of the preregistration (P:n).
+  - Outcome names (P:66, P:67): they are labels of the decision rule, not confirmatory claims.
+  - The guide's cut passages and the "pilot fixture" rules (P:188): the cut list and the binding of lines 37 and 59 are open, and are settled and recorded before the authoring agent's first run.
+  - Publication (P:279): the redacted guide, the fixture specification and the generation specification are published with the results, each with its sha256.
+  - Judge-minus-person difference (P:159): scorable probes only, and one labeller who knows the prediction and threshold.
+  - Replacement fixtures (P:187): a replacement matches the type it replaces, and fewer than 5 long fixtures means no seal.
+  - Clarifications (P:73 to P:76, P:212, P:412, P:453 to P:455): the half-width arithmetic, the generation headroom of $7.44, the label form, and the local dates of three entries.
+  - The date of the fourth Changelog entry of the preregistration (P:456): it is a UTC date, 2026-10-23; its local US Pacific date is 2026-10-22.
+  - Reported only, never changing the outcome: missing answers counted as incorrect, with missing counts by arm (P:127); a t or BCa interval beside the percentile interval (P:81 to P:85); a comparison against 0.813 − δ (P:65); and how Conclusions treat a judge-minus-person interval that includes δ (P:147) and how an inconclusive result is described (P:76), both said in advance.
+- 2026-11-06: Methods step 2 is complete. The method code under `code/` is complete at commit `6c61b304a4e3ace25eac553fe1965f5adccb8514`, the last commit to change `experiments/EXP-0001/code/`. The method code also imports `tools/barred_scan.py` and `tools/check_vocabulary.py`, last changed at `ee4ef0b`, and through them `tools/lib/`, last changed at `9be9f04`. The seal records the commit it was made from, so a reader can check that none of them changed between those commits and the seal. No live call has been made and no run is recorded.
