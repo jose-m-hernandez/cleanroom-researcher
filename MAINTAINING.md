@@ -42,3 +42,15 @@ An approval covers exact bytes. An edit to an approved file makes a new object, 
 ## Running the gate after a rename
 
 The gate builds its file list from git's staging area, plus any untracked files that are not ignored. A file you renamed or deleted but have not staged still appears under its old name, so the gate fails on a file that is no longer there. Stage the change first with `git add -A`, then run the gate with the clean-environment command in `CONTRIBUTING.md`. If you would rather not stage in your working copy, run the gate in a fresh clone where the change is staged.
+
+## Reproduce CI's case-sensitive run on macOS
+
+CI runs on Ubuntu, whose filesystem is case-sensitive, and the gate counts a skipped test as DEAD. A Mac's default volume ignores case, so some cases fail only on CI. To run the gate on a case-sensitive volume, with no sudo, work in an empty folder outside your clone and keep your clone's path in `$CLONE`:
+
+```
+hdiutil create -size 1g -fs 'Case-sensitive APFS' -type SPARSE -volname CRTEST crtest
+mkdir crmnt && hdiutil attach crtest.sparseimage -nobrowse -mountpoint "$PWD/crmnt"
+mkdir crmnt/tmp && git clone "$CLONE" crmnt/repo && cd crmnt/repo
+```
+
+Run the command from `CONTRIBUTING.md` here, with `TMPDIR="$PWD/../tmp"` added after `PATH=/usr/bin:/bin`, so the tests' scratch files land on the volume too (`env -i` would otherwise drop it). When done, `cd` out of the volume, run `hdiutil detach crmnt`, and delete `crtest.sparseimage`.
