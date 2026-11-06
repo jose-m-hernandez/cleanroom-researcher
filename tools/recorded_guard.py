@@ -38,6 +38,8 @@ import re
 import sys
 from typing import List, Optional
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # so `python -I` finds the sibling modules
+
 try:
     from lib import paths, repofiles
 

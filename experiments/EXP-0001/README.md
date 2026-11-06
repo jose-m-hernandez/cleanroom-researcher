@@ -409,6 +409,8 @@ none
 
 `python3 tools/reproduce.py EXP-0001` rebuilds the generated files from the recorded data and says, for each, whether it is identical to the committed copy. It does not check the copies of tables in this README, and it does not run the target or any model again; that is replication. The evaluation harness's report is built from the recorded run files and score files alone, with no model call, and the same inputs give the same bytes.
 
+> Added 2026-11-05, before any recorded run: until this experiment is run, the command prints `reproduce: EXP-0001 has no generated files` and exits 0.
+
 ## How to replicate
 
 **What to run.** On your own account, with Claude Code 2.1.302, `claude-sonnet-5-5`, `claude-opus-5-5`, and the plugin at the pinned commit:
@@ -472,3 +474,4 @@ This criterion was fixed in this protocol, before any result was seen.
 - 2026-10-23: the method code under `code/` lands in stages: first a port of the evaluation harness to this repository's rules, then the runner features and the analysis this protocol requires. Methods step 2 is complete only when a later Changelog entry says the method code is complete. No live call has been made and no run is recorded.
 - 2026-10-23: a clarification made before any data. In C7 (P:243), "the widest `allowed_bash` among the 25 specs" means the union of every spec's `allowed_bash` entries, which is at least as wide as any one spec's list.
 - 2026-10-25: a clarification made before any data. The clean-room lint (P:249) is the evaluation harness's `lint` command: it runs this repository's vocabulary rules V1 to V4 and its barred-string scan over the fixture store, prints entry numbers only, and fails closed when no list is set.
+- 2026-11-05: an addendum under How to reproduce, added before any recorded run. It says what the command prints until the experiment is run. No preregistered text is changed.

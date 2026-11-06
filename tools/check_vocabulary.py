@@ -51,6 +51,8 @@ import re
 import sys
 from typing import Dict, List, Optional, Tuple
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # so `python -I` finds the sibling modules
+
 try:
     from lib import paths, repofiles
 

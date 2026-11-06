@@ -47,6 +47,8 @@ import re
 import sys
 from typing import Dict, List, Optional, Set, Tuple
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # so `python -I` finds the sibling modules
+
 try:
     import check_admission
     from lib import header, paths, repofiles
