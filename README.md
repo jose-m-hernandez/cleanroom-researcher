@@ -2,9 +2,9 @@
 
 Does a tool that saves a session's notes keep the facts a later session needs? Does a one-line change to its instructions help? This repository asks questions like these about AI tools and answers them by experiment. Each experiment commits its question, its method, and the result that would count against its prediction before the first run. It then records what happened and says how to check it. Once an experiment has run, one offline command rebuilds its generated files from the recorded data and says whether each matches the committed copy, and you can replicate the experiment on your own account.
 
-If you think an experiment is wrong, or want to add one, start with `CONTRIBUTING.md`.
+If you think an experiment is wrong, or want to add one, start with [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Designed and run by José Miguel Hernandez, who directed Claude Code to write its code and documents (see docs/admissions.md).
+Designed and run by José Miguel Hernandez, who directed Claude Code to write its code and documents (see [docs/admissions.md](docs/admissions.md)).
 
 ## Experiments
 
@@ -13,7 +13,7 @@ Designed and run by José Miguel Hernandez, who directed Claude Code to write it
 | [EXP-0001](experiments/EXP-0001/README.md) | Does the development accuracy of `/cpr:preserve` hold on fresh, blind fixtures? | preregistered | exploratory | not run | - |
 | [EXP-0002](experiments/EXP-0002/README.md) | Does a one-line change to `/cpr:preserve` keep more of a session's facts? | preregistered | exploratory | finished | No difference as large as δ |
 
-Both are exploratory: their method was written after its authors read the tool, so neither can confirm anything. Words are in `docs/vocabulary.md`: `not run` means the protocol is committed and no live call has been made; `running` means the first live call has been made; `finished` means scoring is complete or the experiment has ended, and the Outcome is one of the outcomes that experiment's own protocol defines, listed by experiment under Experiment outcomes in `docs/vocabulary.md`. `-` means none yet.
+Both claims are exploratory: their method was written after its authors read the tool, so neither can confirm anything. Words are in [docs/vocabulary.md](docs/vocabulary.md): `not run` means the protocol is committed and no live call has been made; `running` means the first live call has been made; `finished` means scoring is complete or the experiment has ended, and the Outcome is one of the outcomes that experiment's own protocol defines, listed by experiment under Experiment outcomes in `docs/vocabulary.md`. `-` means none yet.
 
 ## Results so far
 
@@ -23,15 +23,17 @@ Both are exploratory: their method was written after its authors read the tool, 
 
 Each experiment is a folder under `experiments/` whose `README.md` follows `docs/experiment-template.md`. Directly after its abstract, the line **Under test** names the tool being tested, or says the experiment tests this repository's own method. Its header says whether its protocol was preregistered (committed in this repository before the first recorded run; not entered in an outside registry) or exploratory (not committed before the first recorded run).
 
-## Rebuild an experiment
+## Reproduce an experiment
 
-`python3 tools/reproduce.py EXP-NNNN` rebuilds the generated files of that experiment on your machine, offline, and says for each whether it is identical to the committed copy. `python3 tools/reproduce.py --all` does every experiment.
+You need Python 3.9 or later and git; there is nothing to install (standard library only). The file `requirements-dev.txt` is only for the development checks that contributors run ([CONTRIBUTING.md](CONTRIBUTING.md)); you do not need it here.
+
+From the clone's root, `python3 tools/reproduce.py EXP-NNNN` rebuilds the generated files of that experiment on your machine, offline, and says for each whether it is identical to the committed copy. `python3 tools/reproduce.py --all` does every experiment. To run it from another folder, add `--root <path>`, where `<path>` is the clone's root.
 
 Until an experiment's first recorded run, `python3 tools/reproduce.py EXP-NNNN` (and `--all`) prints `reproduce: EXP-NNNN has no generated files` and exits 0. That is the expected result, not a failure.
 
 ## Replicate an experiment
 
-Each experiment's `README.md` has a How to replicate section: what to run on your own account, what counts as agreement with the recorded results, and the expected cost and time.
+Each experiment's `README.md` has a How to replicate section: what to run on your own account, what counts as agreement with the recorded results, and the expected cost and time. The pinned agent harness and plugin are listed in that README's Materials section.
 
 EXP-0002 cannot be replicated while its fixtures are unpublished (`experiments/EXP-0002/README.md`, Materials).
 
