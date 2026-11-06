@@ -20,6 +20,8 @@ import tempfile
 import unittest
 from typing import Callable, List, Optional, Tuple
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # so `python -I` finds the sibling modules
+
 TEST_PATTERN = "test_*.py"
 CHILD_PREFIX = "tests-child:"
 

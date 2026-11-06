@@ -20,6 +20,8 @@ import sys
 import tempfile
 from typing import Dict, List, Optional, Set, Tuple
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # so `python -I` finds the sibling modules
+
 try:
     from lib import header, paths, repofiles
 

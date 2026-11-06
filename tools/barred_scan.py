@@ -107,6 +107,8 @@ import tempfile
 import unicodedata
 from typing import Dict, List, Mapping, Optional, Tuple
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # so `python -I` finds the sibling modules
+
 try:
     from lib import repofiles
 

@@ -1,5 +1,6 @@
 import io
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -498,6 +499,21 @@ class RootAndSkippedRowTests(RefusalCase):
         self.assertEqual(code, 1)
         self.assertIn("experiments/scratch/ is missing or not an experiment)", out)
         self.assertFalse(os.path.exists(self.marker))
+
+
+class IsolatedModeTests(unittest.TestCase):
+    def test_the_command_runs_under_python_dash_i(self):
+        # -I drops the script's folder from the import path, so the script must restore it.
+        repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        done = subprocess.run(
+            [sys.executable, "-I", os.path.join("tools", "reproduce.py"), FIRST],
+            cwd=repo,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
+        )
+        self.assertEqual(done.returncode, 0, done.stdout)
+        self.assertIn("reproduce: %s has no generated files" % FIRST, done.stdout)
 
 
 if __name__ == "__main__":
