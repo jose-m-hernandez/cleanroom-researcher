@@ -209,6 +209,8 @@ none
 
 `python3 tools/reproduce.py EXP-0002` rebuilds the generated files from the recorded data, and says for each whether it is identical to the committed copy. Until the first recorded run it prints no generated files.
 
+Added 2026-11-05, after the recorded run: it now rebuilds `REPORT.md` from the files in `recorded/` and reports whether it is identical to the committed copy.
+
 ## How to replicate
 
 Use the fixtures at the named commit, Claude Code 2.1.302, the two models and the plugin at the pinned commit. Run Methods steps 2 to 5 on your own account. A replication agrees when it reaches the same one of the four outcomes. This criterion is fixed here, before any result.
@@ -229,3 +231,4 @@ Use the fixtures at the named commit, Claude Code 2.1.302, the two models and th
 - 2026-10-31: protocol committed (preregistration). `spend_cap_usd` set to 45 and `launched_by` set to the repository owner, both before any live call.
 - 2026-11-02: results recorded: Observations, Outcome, Conclusions and Next experiments written; the Abstract updated to state the finding; the **Under test** line added after the run, restating the target, the pin and the variant given in Materials; the run's data published under `recorded/` as described under Observations. No protocol text, rule, measure or number was changed.
 - 2026-11-02, after review: in Observations, "memories" replaced by "notes files", the source of the Primary table named, and the spend ledger stated to be unpublished. No protocol text, rule, measure or number was changed.
+- 2026-11-05: added a labelled addendum under How to reproduce (decision 2026-11-05-preregistered-sections-take-labelled-addenda-never-edits).
