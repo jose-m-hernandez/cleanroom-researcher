@@ -719,6 +719,16 @@ class OwnerAddressTests(RepoCase):
         self.build(files, overrides={rec_path(): ("recorded", sha_basis(text))})
         self.assertClean()
 
+    def test_row_without_a_space_after_the_bar_is_reported(self):
+        bad = OWNER_HEAD + "|" + OWNER_ADDR + "|the site|\n"
+        self.build_with(bad, "see " + OWNER_ADDR + "\n")
+        self.assertFinding("A6 owner address list:")
+
+    def test_headings_prose_and_blank_lines_in_the_list_stay_skipped(self):
+        text = owner_list((OWNER_ADDR, "the site")) + "\n## Notes\nSome prose | with a bar in it.\n"
+        self.build_with(text, "see " + OWNER_ADDR + "\n")
+        self.assertClean()
+
     def test_non_https_address_fails(self):
         self.build_with(owner_list(("http" + "://" + "jose.io", "the site")), "x\n")
         self.assertFinding("A6 owner address list:")
