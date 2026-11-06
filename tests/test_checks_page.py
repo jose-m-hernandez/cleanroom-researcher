@@ -21,7 +21,7 @@ CLOSING = "E5 is the `_raw` rule, which A10 implements."
 EXPECTED = (
     ["A%d" % n for n in range(0, 11)]
     + ["V%d" % n for n in range(1, 9)]
-    + ["E1", "E2", "E3", "E4", "E6", "E7", "S1", "S2", "S3"]
+    + ["E1", "E2", "E3", "E4", "E6", "E7", "E8", "S1", "S2", "S3"]
 )
 
 

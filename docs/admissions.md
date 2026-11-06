@@ -27,6 +27,7 @@ This is the ledger. Every file in the repository has exactly one row below sayin
 | docs/decisions/2026-10-23-only-agents-scoped-to-this-repository-write-to-it.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-23 |
 | docs/decisions/2026-11-01-the-owners-own-addresses-are-listed.md | original | - | Claude Code (claude-sonnet-5-5), 2026-11-01 |
 | docs/decisions/2026-11-02-a-finished-experiment-reports-observations-an-outcome-conclusions-and-next-experiments.md | original | - | Claude Code (claude-sonnet-5-5), 2026-11-02 |
+| docs/decisions/2026-11-05-preregistered-sections-take-labelled-addenda-never-edits.md | original | - | Claude Code (claude-sonnet-5-5), 2026-11-05 |
 | docs/experiment-template.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22 |
 | docs/owner-addresses.md | original | - | Claude Code (claude-sonnet-5-5), 2026-11-01 |
 | docs/writing-a-synthesis.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-21 |
@@ -182,6 +183,7 @@ This is the ledger. Every file in the repository has exactly one row below sayin
 | tools/reproduce.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22 |
 | sources/SRC-0003/source.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-22 |
 | experiments/EXP-0001/README.md | original | - | Claude Code (claude-opus-5-5), 2026-10-22 |
+| experiments/EXP-0001/prereg.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-11-05 |
 | experiments/EXP-0001/read-log.md | original | - | Claude Code (claude-opus-5-5), 2026-10-22 |
 | tests/test_exp0001_seal_canary.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-30 |
 | tests/test_exp0001_report_decision.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-30 |
@@ -213,6 +215,7 @@ This is the ledger. Every file in the repository has exactly one row below sayin
 | experiments/EXP-0002/code/runner/seal.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
 | experiments/EXP-0002/code/runner/stats.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
 | experiments/EXP-0002/code/score.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
+| experiments/EXP-0002/prereg.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-11-05 |
 | experiments/EXP-0002/read-log.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31 |
 | experiments/EXP-0002/recorded/run.json | recorded | sha256=dc532af8e52208d0c8043f47cde0811341705407736288011c61d94d652f644b | EXP-0002 run exp0002-results (Claude Code 2.1.302), 2026-11-02 |
 | experiments/EXP-0002/recorded/scores.json | recorded | sha256=17f2e233d43afd78d2a08e5c41c1e6f991ead0d5e11b408145c8c51e34f7209b | EXP-0002 run exp0002-results (Claude Code 2.1.302), 2026-11-02 |

@@ -75,6 +75,8 @@ Then commit the experiment record before the first recorded run. The `protocol` 
 
 If you are already past the point of committing first, change `protocol` to `exploratory` and say so in the abstract. Do not backdate anything.
 
+After you commit the preregistration, write `experiments/EXP-NNNN/prereg.txt`: a `commit: <full sha>` line naming that commit, then a `readme_lines: <n>` line with the number of README lines `git blame` gives it (check E8, `docs/checks.md`). The gate fails on E8 until the file exists. If you later commit a clarification made before any data, add its `commit:` line too and raise n by the lines it contributes. After the first recorded run, preregistered text is never edited; add a labelled addendum instead (`docs/decisions/2026-11-05-preregistered-sections-take-labelled-addenda-never-edits.md`).
+
 Commit the method code under `experiments/EXP-NNNN/code/` before you first read the target for method work. When the read log is `contemporaneous`, the check compares the commit time of the first commit that touches that folder with the time of the earliest read-log entry whose reason is `method`, and the commit must not be later. Both times can be set by hand, so this is a consistency check on the read log, not proof (step 6).
 
 ## 6. Keep the read log as you go

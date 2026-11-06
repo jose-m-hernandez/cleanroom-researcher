@@ -325,13 +325,23 @@ def parse_owner_list(text: str) -> Tuple[List[Tuple[int, str]], List[Finding]]:
     seen: Set[str] = set()
     prefix = "A6 owner address list: "
     for number, line in enumerate(text.split("\n"), 1):
-        if not line.startswith("| ") or line.strip() == OWNER_HEADER or SEPARATOR.match(line):
+        if line.strip() == OWNER_HEADER or SEPARATOR.match(line):
+            continue
+        # "Looks like a list row" is narrow: the line starts with "|" and ends with "|".
+        # A row that fails the "| " start (no space after the bar) is reported;
+        # blank lines, headings and prose, which don't have that shape, stay skipped.
+        looks_like_row = line.startswith("|") and line.rstrip().endswith("|")
+        if not line.startswith("| "):
+            if looks_like_row:
+                found.append((OWNER_LIST, number, prefix + "a row starts with a bar and a space"))
             continue
         match = OWNER_ROW.match(line)
         if not match:
             found.append((OWNER_LIST, number, prefix + "a row is | address | what it is |"))
             continue
-        address, what = match.group(1), match.group(2)
+        # Same normalization as a use (check_a6, check_owner_list), so trailing
+        # punctuation on an entry can't make it unmatchable.
+        address, what = match.group(1).rstrip(".,;:"), match.group(2)
         if not address.startswith(HTTPS):
             found.append((OWNER_LIST, number, prefix + "the address must start with https"))
         elif re.search(r"[\s|`]", address):
