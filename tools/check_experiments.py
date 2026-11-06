@@ -19,7 +19,7 @@ Rules:
 - E4 recorded data never changes: a file under experiments/EXP-NNNN/recorded/ holds the same bytes in every commit that holds it and in the working tree. Deleting one is not a finding. To correct recorded data, add a new file and say why in the experiment's changelog.
 - E6 order and disclosure. E6a: in a preregistered experiment, every commit that adds or changes a file under recorded/ has an earlier commit, among its ancestors, that touched the experiment's README. E6b: in an experiment whose read log is contemporaneous, the first commit under the method folder is no later than the earliest read-log entry whose reason is method. E6c: an exploratory experiment's abstract says "exploratory", and an experiment with a reconstructed read log says "reconstructed" there. E6a uses git ancestry. E6b compares the committer time with times a person wrote down, and both can be set by hand: it is a consistency check on the read log, an honesty record, and not proof of order.
 - E7 live runs: an experiment with any recorded/runs/<run>/ file declares a positive spend_cap_usd and a launched_by, and each run folder holds an isolation.json proof.
-- E8 the preregistration's blame count: each experiment with a README has a prereg.txt of exactly two lines, ``commit: <40 hex>`` and ``readme_lines: <n>``. The number of README lines ``git blame`` attributes to that commit at HEAD must equal n. Fewer means preregistered text was changed, moved or deleted; more means the sidecar is wrong. A shallow clone is a finding, never a skip (docs/decisions/2026-11-05-preregistered-sections-take-labelled-addenda-never-edits.md).
+- E8 the preregistration's blame count: each experiment with a README has a prereg.txt of one or more ``commit: <40 hex>`` lines (the preregistration commit and any pre-data clarification commits) and then one ``readme_lines: <n>`` line. The number of README lines ``git blame`` attributes to those commits together at HEAD must equal n. Fewer means preregistered text was changed, moved or deleted; more means the sidecar is wrong. A shallow clone is a finding, never a skip (docs/decisions/2026-11-05-preregistered-sections-take-labelled-addenda-never-edits.md).
 - S1 a synthesis file is syntheses/SYN-NNNN.md, holds at least one finding (a "### " heading), and each finding names its sources.
 - S2 each finding has a grade from the Evidence grades table.
 - S3 each finding has a falsifier.
@@ -790,18 +790,25 @@ def prereg_path(folder: str) -> str:
     return "%s%s/%s" % (EXPERIMENTS_DIR, folder, PREREG_SIDECAR)
 
 
-def parse_prereg(text: str) -> Optional[Tuple[str, int]]:
-    """(commit, readme_lines) from a sidecar of exactly two lines, else None."""
+def parse_prereg(text: str) -> Optional[Tuple[List[str], int]]:
+    """(commits, readme_lines) from a sidecar of one or more 'commit:' lines
+    followed by exactly one 'readme_lines:' line, else None. A commit may be
+    listed once."""
     lines = text.split("\n")
     if lines and lines[-1] == "":
         lines = lines[:-1]
-    if len(lines) != 2:
+    if len(lines) < 2:
         return None
-    first = re.match(r"^commit: ([0-9a-f]{40})$", lines[0])
-    second = re.match(r"^readme_lines: ([0-9]+)$", lines[1])
-    if not first or not second:
+    last = re.match(r"^readme_lines: ([0-9]+)$", lines[-1])
+    if not last:
         return None
-    return first.group(1), int(second.group(1))
+    commits: List[str] = []
+    for line in lines[:-1]:
+        found = re.match(r"^commit: ([0-9a-f]{40})$", line)
+        if not found or found.group(1) in commits:
+            return None
+        commits.append(found.group(1))
+    return commits, int(last.group(1))
 
 
 def check_e8(
@@ -843,12 +850,13 @@ def check_e8(
                 (
                     sidecar,
                     None,
-                    "E8 prereg.txt must be exactly two lines, 'commit: <40 lowercase hex>' and "
-                    "'readme_lines: <n>'; rewrite it",
+                    "E8 prereg.txt must be one or more 'commit: <40 lowercase hex>' lines (each commit "
+                    "once), then exactly one 'readme_lines: <n>' line; rewrite it",
                 )
             )
             continue
-        commit, expected = parsed
+        commits, expected = parsed
+        commit = "+".join(c[:7] for c in commits)
         found = counts.get(folder)
         if found is None:
             findings.append(
@@ -856,7 +864,7 @@ def check_e8(
                     sidecar,
                     None,
                     "E8 git cannot blame %s at HEAD for commit %s; commit the README and "
-                    "name a commit in this history" % (readme_path(folder), commit[:7]),
+                    "name commits in this history" % (readme_path(folder), commit),
                 )
             )
         elif found < expected:
@@ -866,7 +874,7 @@ def check_e8(
                     None,
                     "E8 git blame attributes %d README lines to %s, fewer than the %d recorded: "
                     "preregistered text was edited, moved or deleted; restore it and add an "
-                    "addendum instead" % (found, commit[:7], expected),
+                    "addendum instead" % (found, commit, expected),
                 )
             )
         elif found > expected:
@@ -876,7 +884,7 @@ def check_e8(
                     None,
                     "E8 git blame attributes %d README lines to %s, more than the %d recorded: "
                     "the sidecar is wrong; set readme_lines to the count at the preregistration"
-                    % (found, commit[:7], expected),
+                    % (found, commit, expected),
                 )
             )
     return findings
@@ -887,7 +895,8 @@ def blame_counts(root: str, folders: List[str], sidecars: Dict[str, str]) -> Dic
     for folder in folders:
         parsed = parse_prereg(sidecars[folder]) if folder in sidecars else None
         if parsed is not None:
-            counts[folder] = repofiles.blamed_lines(root, readme_path(folder), parsed[0])
+            parts = [repofiles.blamed_lines(root, readme_path(folder), c) for c in parsed[0]]
+            counts[folder] = None if any(p is None for p in parts) else sum(parts)  # type: ignore[misc]
     return counts
 
 

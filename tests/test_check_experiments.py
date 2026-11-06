@@ -1088,7 +1088,7 @@ class E8Tests(tca.RepoCase):
         tca.write(self.root, "experiments/EXP-0001/prereg.txt", "commit: %s\n" % self.sha)
         code, hits = self.e8()
         self.assertEqual(code, 1)
-        self.assertIn("exactly two lines", hits[0])
+        self.assertIn("exactly one 'readme_lines: <n>' line", hits[0])
 
     def test_a_shallow_clone_fails(self):
         self.sidecar()
@@ -1108,3 +1108,31 @@ class E8Tests(tca.RepoCase):
         self.assertEqual(code, 1, lines)
         self.assertEqual(len(hits), 1, hits)
         self.assertIn("shallow clone", hits[0])
+
+    def test_a_preregistration_may_span_two_commits(self):
+        tca.write(self.root, README, self.files[README] + "four\nfive\n")
+        second = self.commit("clarify before data")
+        tca.write(
+            self.root,
+            "experiments/EXP-0001/prereg.txt",
+            "commit: %s\ncommit: %s\nreadme_lines: %d\n" % (self.sha, second, self.lines + 2),
+        )
+        self.commit("sidecar")
+        self.assertEqual(self.e8()[1], [])
+        tca.write(self.root, README, (self.files[README] + "four\nfive\n").replace("five", "FIVE"))
+        self.commit("edit a line from the second commit")
+        code, hits = self.e8()
+        self.assertEqual(code, 1)
+        self.assertEqual(len(hits), 1, hits)
+        self.assertIn("fewer than the %d recorded" % (self.lines + 2), hits[0])
+        self.assertIn("%s+%s" % (self.sha[:7], second[:7]), hits[0])
+
+    def test_a_commit_listed_twice_or_a_misplaced_count_fails(self):
+        for body in (
+            "commit: %s\ncommit: %s\nreadme_lines: %d\n" % (self.sha, self.sha, self.lines),
+            "readme_lines: %d\ncommit: %s\n" % (self.lines, self.sha),
+        ):
+            tca.write(self.root, "experiments/EXP-0001/prereg.txt", body)
+            code, hits = self.e8()
+            self.assertEqual(code, 1)
+            self.assertIn("one or more", hits[0])
