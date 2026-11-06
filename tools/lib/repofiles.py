@@ -346,6 +346,20 @@ def touched_before(root: str, commit: str, path: str) -> bool:
     return bool(_rev_list(root, ["--full-history", "-n", "1", commit + "^@", "--", path]))
 
 
+def blamed_lines(root: str, path: str, commit: str) -> Optional[int]:
+    """How many lines of path at HEAD git blame attributes to commit, or None
+    when path cannot be blamed (no commits, or path is not in HEAD)."""
+    _require_commit_id(commit)
+    proc = _run(root, ["blame", "--line-porcelain", "HEAD", "--", path])
+    if proc.returncode != 0:
+        return None
+    count = 0
+    for line in proc.stdout.split(b"\n"):
+        if line.startswith(commit.encode("ascii") + b" "):
+            count += 1
+    return count
+
+
 def has_commit(root: str, commit: str) -> bool:
     """True when commit is a commit object in this repository."""
     _require_commit_id(commit)

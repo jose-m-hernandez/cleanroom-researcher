@@ -19,6 +19,7 @@ Rules:
 - E4 recorded data never changes: a file under experiments/EXP-NNNN/recorded/ holds the same bytes in every commit that holds it and in the working tree. Deleting one is not a finding. To correct recorded data, add a new file and say why in the experiment's changelog.
 - E6 order and disclosure. E6a: in a preregistered experiment, every commit that adds or changes a file under recorded/ has an earlier commit, among its ancestors, that touched the experiment's README. E6b: in an experiment whose read log is contemporaneous, the first commit under the method folder is no later than the earliest read-log entry whose reason is method. E6c: an exploratory experiment's abstract says "exploratory", and an experiment with a reconstructed read log says "reconstructed" there. E6a uses git ancestry. E6b compares the committer time with times a person wrote down, and both can be set by hand: it is a consistency check on the read log, an honesty record, and not proof of order.
 - E7 live runs: an experiment with any recorded/runs/<run>/ file declares a positive spend_cap_usd and a launched_by, and each run folder holds an isolation.json proof.
+- E8 the preregistration's blame count: each experiment with a README has a prereg.txt of exactly two lines, ``commit: <40 hex>`` and ``readme_lines: <n>``. The number of README lines ``git blame`` attributes to that commit at HEAD must equal n. Fewer means preregistered text was changed, moved or deleted; more means the sidecar is wrong. A shallow clone is a finding, never a skip (docs/decisions/2026-11-05-preregistered-sections-take-labelled-addenda-never-edits.md).
 - S1 a synthesis file is syntheses/SYN-NNNN.md, holds at least one finding (a "### " heading), and each finding names its sources.
 - S2 each finding has a grade from the Evidence grades table.
 - S3 each finding has a falsifier.
@@ -28,7 +29,7 @@ That every cited source exists is A5's job, and reserved id shapes are V1's.
 Rule numbers follow the repository's check list: E5 is the _raw rule, implemented as A10 in check_admission.py.
 
 A repository with no experiments/ folder is clean. A positive control runs
-before any scan: each of E1 to E4, E6, E7 and S1 to S3 must find a planted
+before any scan: each of E1 to E4, E6 to E8 and S1 to S3 must find a planted
 problem, or the check is DEAD. Each rule is a function of parsed data, so the
 control needs no disk; the history rules take history facts that run()
 gathers. A shallow clone is DEAD when an experiment needs history for E6a or
@@ -782,6 +783,114 @@ def check_s3(files: List[str], texts: Dict[str, str]) -> List[Finding]:
     return found
 
 
+PREREG_SIDECAR = "prereg.txt"
+
+
+def prereg_path(folder: str) -> str:
+    return "%s%s/%s" % (EXPERIMENTS_DIR, folder, PREREG_SIDECAR)
+
+
+def parse_prereg(text: str) -> Optional[Tuple[str, int]]:
+    """(commit, readme_lines) from a sidecar of exactly two lines, else None."""
+    lines = text.split("\n")
+    if lines and lines[-1] == "":
+        lines = lines[:-1]
+    if len(lines) != 2:
+        return None
+    first = re.match(r"^commit: ([0-9a-f]{40})$", lines[0])
+    second = re.match(r"^readme_lines: ([0-9]+)$", lines[1])
+    if not first or not second:
+        return None
+    return first.group(1), int(second.group(1))
+
+
+def check_e8(
+    folders: List[str],
+    sidecars: Dict[str, str],
+    counts: Dict[str, Optional[int]],
+    shallow: bool,
+) -> List[Finding]:
+    """E8 over the experiment folders that have a README.
+
+    sidecars maps a folder to its prereg.txt text; counts maps a folder to the
+    blamed line count for the sidecar's commit (None when git cannot blame)."""
+    findings: List[Finding] = []
+    for folder in folders:
+        sidecar = prereg_path(folder)
+        if shallow:
+            findings.append(
+                (
+                    sidecar,
+                    None,
+                    "E8 this is a shallow clone, so git blame cannot count the preregistration's lines; "
+                    "fetch the full history (git fetch --unshallow, or fetch-depth: 0)",
+                )
+            )
+            continue
+        if folder not in sidecars:
+            findings.append(
+                (
+                    sidecar,
+                    None,
+                    "E8 the experiment has a README but no prereg.txt; add one with the lines "
+                    "'commit: <full sha of the preregistration commit>' and 'readme_lines: <n>'",
+                )
+            )
+            continue
+        parsed = parse_prereg(sidecars[folder])
+        if parsed is None:
+            findings.append(
+                (
+                    sidecar,
+                    None,
+                    "E8 prereg.txt must be exactly two lines, 'commit: <40 lowercase hex>' and "
+                    "'readme_lines: <n>'; rewrite it",
+                )
+            )
+            continue
+        commit, expected = parsed
+        found = counts.get(folder)
+        if found is None:
+            findings.append(
+                (
+                    sidecar,
+                    None,
+                    "E8 git cannot blame %s at HEAD for commit %s; commit the README and "
+                    "name a commit in this history" % (readme_path(folder), commit[:7]),
+                )
+            )
+        elif found < expected:
+            findings.append(
+                (
+                    sidecar,
+                    None,
+                    "E8 git blame attributes %d README lines to %s, fewer than the %d recorded: "
+                    "preregistered text was edited, moved or deleted; restore it and add an "
+                    "addendum instead" % (found, commit[:7], expected),
+                )
+            )
+        elif found > expected:
+            findings.append(
+                (
+                    sidecar,
+                    None,
+                    "E8 git blame attributes %d README lines to %s, more than the %d recorded: "
+                    "the sidecar is wrong; set readme_lines to the count at the preregistration"
+                    % (found, commit[:7], expected),
+                )
+            )
+    return findings
+
+
+def blame_counts(root: str, folders: List[str], sidecars: Dict[str, str]) -> Dict[str, Optional[int]]:
+    counts: Dict[str, Optional[int]] = {}
+    for folder in folders:
+        parsed = parse_prereg(sidecars[folder]) if folder in sidecars else None
+        if parsed is not None:
+            counts[folder] = repofiles.blamed_lines(root, readme_path(folder), parsed[0])
+    return counts
+
+
 def plant_readme(protocol: str, kind: str, cap: str = "5", abstract: str = "") -> str:
     values = {
         "id": "EXP-0001",
@@ -819,6 +928,14 @@ def control() -> List[str]:
     )
     e7 = check_e7(files, {"EXP-0001": plant_readme("preregistered", "contemporaneous", cap="0")}, {})
 
+    good = "commit: %s\nreadme_lines: 3\n" % ("a" * 40)
+    e8 = (
+        check_e8(["EXP-0001"], {}, {}, False)
+        and check_e8(["EXP-0001"], {"EXP-0001": good}, {"EXP-0001": 2}, False)
+        and check_e8(["EXP-0001"], {"EXP-0001": good}, {"EXP-0001": 4}, False)
+        and check_e8(["EXP-0001"], {"EXP-0001": good}, {"EXP-0001": 3}, True)
+    )
+
     synthesis = "syntheses/SYN-0001.md"
     text = {synthesis: "# S\n\n### f\nsources: none\ngrade: x\nfalsifier:   \n"}
     s1 = check_s1([synthesis], text)
@@ -827,7 +944,7 @@ def control() -> List[str]:
     return [
         rule
         for rule, hits in (
-            ("E1", e1), ("E2", e2), ("E3", e3), ("E4", e4), ("E6", e6), ("E7", e7),
+            ("E1", e1), ("E2", e2), ("E3", e3), ("E4", e4), ("E6", e6), ("E7", e7), ("E8", e8),
             ("S1", s1), ("S2", s2), ("S3", s3),
         )
         if not hits
@@ -947,6 +1064,14 @@ def run(root: str) -> Tuple[int, List[str]]:
     except repofiles.RepoFilesError as exc:
         return 2, ["%s: DEAD %s" % (CHECK, exc)]
 
+    with_readme = [f for f in folders if readme_path(f) in listed]
+    sidecars = {f: read_text(root, prereg_path(f)) for f in with_readme if prereg_path(f) in listed}
+    try:
+        shallow = bool(with_readme) and repofiles.is_shallow(root)
+        counts = {} if shallow else blame_counts(root, with_readme, sidecars)
+    except repofiles.RepoFilesError as exc:
+        return 2, ["%s: DEAD %s" % (CHECK, exc)]
+
     findings: List[Finding] = []
     findings.extend(check_e1(files, readmes, protocols, kinds))
     findings.extend(check_e2(records))
@@ -954,6 +1079,7 @@ def run(root: str) -> Tuple[int, List[str]]:
     findings.extend(check_e4(versions))
     findings.extend(check_e6(files, readmes, logs, reasons, ancestry, first_method_time))
     findings.extend(check_e7(files, readmes, proofs))
+    findings.extend(check_e8(with_readme, sidecars, counts, shallow))
     findings.extend(check_s1(files, texts))
     findings.extend(check_s2(files, texts, grades))
     findings.extend(check_s3(files, texts))

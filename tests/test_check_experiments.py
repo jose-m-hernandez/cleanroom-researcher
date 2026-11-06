@@ -63,12 +63,25 @@ def code_repo_md(**over):
     return tca.source_md(key_order=header.CODE_REPO_KEYS, **values)
 
 
+def stub_blame_counts(_root, folders, sidecars):
+    """E1 to E7 tests are not about E8: every sidecar they plant says 0 lines, and this says 0."""
+    return {f: 0 for f in folders if f in sidecars}
+
+
 class ExperimentCase(tca.RepoCase):
+    def setUp(self):
+        super().setUp()
+        patcher = mock.patch.object(check_experiments, "blame_counts", stub_blame_counts)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def make(self, extra=None, vocab=VOCAB, source=None, read_log=True):
         files = {"notes.txt": "hello\n", SOURCE: source or tca.source_md()}
         if vocab is not None:
             files[VOCABULARY_PATH] = vocab
         files.update(extra or {})
+        for path in [p for p in files if re.match(r"^experiments/EXP-[0-9]{4}/README\.md$", p)]:
+            files.setdefault(path[: -len("README.md")] + "prereg.txt", "commit: %s\nreadme_lines: 0\n" % GOOD_COMMIT)
         if read_log and README in files:
             files.setdefault(READ_LOG, READ_LOG_EMPTY)
         self.build(files)
@@ -989,3 +1002,109 @@ class RealVocabularyLicenceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class E8Tests(tca.RepoCase):
+    """E8 on a real temp git repository, with nothing stubbed."""
+
+    PREREG_README = "# T\n\none\ntwo\nthree\n"
+
+    def git(self, *args):
+        proc = subprocess.run(
+            ["git", "-C", self.root] + list(args),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True,
+        )
+        return proc.stdout.decode().strip()
+
+    def commit(self, message):
+        self.git("add", "-A")
+        self.git(*(IDENTITY + ["commit", "-q", "-m", message]))
+        return self.git("rev-parse", "HEAD")
+
+    def setUp(self):
+        super().setUp()
+        self.files = {
+            "notes.txt": "hello\n",
+            SOURCE: tca.source_md(),
+            VOCABULARY_PATH: VOCAB,
+            README: readme_md() + self.PREREG_README,
+            READ_LOG: READ_LOG_EMPTY,
+        }
+        self.build(self.files)
+        self.sha = self.commit("preregister")
+        self.lines = len(self.files[README].split("\n")) - 1
+
+    def sidecar(self, commit=None, lines=None):
+        tca.write(
+            self.root,
+            "experiments/EXP-0001/prereg.txt",
+            "commit: %s\nreadme_lines: %d\n" % (commit or self.sha, self.lines if lines is None else lines),
+        )
+
+    def e8(self):
+        code, lines = check_experiments.run(self.root)
+        return code, [ln for ln in lines if ": E8 " in ln]
+
+    def test_an_untouched_readme_with_a_right_sidecar_passes(self):
+        self.sidecar()
+        self.commit("sidecar")
+        self.assertEqual(self.e8()[1], [])
+
+    def test_editing_one_preregistered_line_fails(self):
+        self.sidecar()
+        self.commit("sidecar")
+        tca.write(self.root, README, self.files[README].replace("two", "TWO"))
+        self.commit("edit")
+        code, hits = self.e8()
+        self.assertEqual(code, 1)
+        self.assertEqual(len(hits), 1, hits)
+        self.assertIn("fewer than the %d recorded" % self.lines, hits[0])
+
+    def test_appending_a_labelled_addendum_passes(self):
+        self.sidecar()
+        self.commit("sidecar")
+        tca.write(
+            self.root, README,
+            self.files[README] + "\nAdded 2026-11-05, after the recorded run:\n\nA note.\n",
+        )
+        self.commit("addendum")
+        self.assertEqual(self.e8()[1], [])
+
+    def test_a_missing_sidecar_fails(self):
+        code, hits = self.e8()
+        self.assertEqual(code, 1)
+        self.assertEqual(len(hits), 1, hits)
+        self.assertIn("no prereg.txt", hits[0])
+
+    def test_a_count_below_the_blame_means_the_sidecar_is_wrong(self):
+        self.sidecar(lines=self.lines - 1)
+        self.commit("sidecar")
+        code, hits = self.e8()
+        self.assertEqual(code, 1)
+        self.assertIn("more than the %d recorded" % (self.lines - 1), hits[0])
+        self.assertIn("sidecar is wrong", hits[0])
+
+    def test_a_sidecar_that_is_not_two_lines_fails(self):
+        tca.write(self.root, "experiments/EXP-0001/prereg.txt", "commit: %s\n" % self.sha)
+        code, hits = self.e8()
+        self.assertEqual(code, 1)
+        self.assertIn("exactly two lines", hits[0])
+
+    def test_a_shallow_clone_fails(self):
+        self.sidecar()
+        self.commit("sidecar")
+        tca.write(self.root, README, self.files[README] + "\nmore\n")
+        self.commit("later")
+        holder = tempfile.TemporaryDirectory()
+        self.addCleanup(holder.cleanup)
+        clone = os.path.join(holder.name, "shallow")
+        subprocess.run(
+            ["git", "clone", "-q", "--depth", "1", "file://" + self.root, clone],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True,
+        )
+        self.assertTrue(repofiles.is_shallow(clone))
+        code, lines = check_experiments.run(clone)
+        hits = [ln for ln in lines if ": E8 " in ln]
+        self.assertEqual(code, 1, lines)
+        self.assertEqual(len(hits), 1, hits)
+        self.assertIn("shallow clone", hits[0])
