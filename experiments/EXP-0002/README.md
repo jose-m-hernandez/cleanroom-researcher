@@ -186,6 +186,7 @@ A finding here holds only for these fixtures, these two models, Claude Code 2.1.
 
 ### Next experiments
 
+- Did the variant's notes files change in the ways its three clauses ask for, measured by each clause's own count? The recorded run did not keep the notes files themselves, only line-count differences and token figures (the probe-input token mean was 620.0 for the variant and 592.1 for the published skill), so this needs a new run that keeps them.
 - Does B still match A on fixtures it was not fitted to? This result is for the fixtures B was chosen from, and a held-out set is the test that would say whether it generalises.
 - What is left in the gap between A (0.842) and the oracle (0.998)? The change tried here did not close any of it on these fixtures.
 
@@ -232,3 +233,4 @@ Use the fixtures at the named commit, Claude Code 2.1.302, the two models and th
 - 2026-11-02: results recorded: Observations, Outcome, Conclusions and Next experiments written; the Abstract updated to state the finding; the **Under test** line added after the run, restating the target, the pin and the variant given in Materials; the run's data published under `recorded/` as described under Observations. No protocol text, rule, measure or number was changed.
 - 2026-11-02, after review: in Observations, "memories" replaced by "notes files", the source of the Primary table named, and the spend ledger stated to be unpublished. No protocol text, rule, measure or number was changed.
 - 2026-11-05: added a labelled addendum under How to reproduce (decision 2026-11-05-preregistered-sections-take-labelled-addenda-never-edits).
+- 2026-11-09: a question added under Next experiments, whether the variant's notes files changed in the ways its clauses ask for. No protocol text, rule, measure or number was changed.
