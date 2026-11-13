@@ -186,6 +186,7 @@ This is the ledger. Every file in the repository has exactly one row below sayin
 | experiments/EXP-0001/addenda-commit-dates.md | original | - | Claude Code (claude-opus-5-5 and claude-fable-5-2), 2026-11-12 |
 | experiments/EXP-0001/prereg.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-11-05 |
 | experiments/EXP-0001/read-log.md | original | - | Claude Code (claude-opus-5-5), 2026-10-22 |
+| experiments/EXP-0001/seal-history.md | original | - | Claude Code (claude-opus-5-5 and claude-fable-5-2), 2026-11-12 |
 | tests/test_exp0001_seal_canary.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-30 |
 | tests/test_exp0001_report_decision.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-30 |
 | tests/test_exp0001_control_gate.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-30 |
