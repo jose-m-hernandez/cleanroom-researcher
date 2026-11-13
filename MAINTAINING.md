@@ -27,7 +27,13 @@ The job is a signal, not a control: a pull request can change the workflow file 
 
 ## After merge
 
-The `barred` job runs with the secrets on every push to this repository. If it fails after a merge, open the file it names and fix it in a new pull request.
+The `barred` job runs with the secrets on every push to a branch in this repository, and the scan reads all the history it can reach: every blob of every commit, every path that ever existed, every commit message and identity, and the branch name. A finding that has reached the default branch therefore stays in history. A later pull request that edits or renames the file does not clear it, and the job keeps failing on every branch that contains that commit.
+
+If the use is intentional, approve it (the section "Approving an intentional use"; a finding in a path or a branch name cannot be approved).
+
+If it is not, removing it means rewriting the default branch's history, and that stays with the repository owner (the decision of 2026-10-23 in `docs/decisions/`). Never quote the string in a comment, issue or commit message.
+
+A rewrite gives new ids to the rewritten commit and every commit after it. An approval that names one of them is lost, and a `prereg.txt` that names one no longer matches history, so E8 fails until the sidecar names the new ids.
 
 ## Approving an intentional use
 
@@ -38,6 +44,35 @@ The maintainers can approve one intentional use of a barred string, so the scan 
 3. Run the scan again. It must pass. A line that no longer matches a finding fails the scan as stale: delete it.
 
 An approval covers exact bytes. An edit to an approved file makes a new object, which needs its own line. A commit approval is lost if the commit is rewritten, for example by a rebase, an amend or a squash merge.
+
+## Changing an experiment after it is published
+
+Preregistered text is never edited, moved or deleted, and that includes a typo fix or a reflowed paragraph. E8 counts the README lines that `git blame` attributes to the commits in `prereg.txt`, and each of these lowers the count.
+
+To correct or update preregistered text, add a dated addendum, set off and labelled "Added <YYYY-MM-DD>, after the recorded run:", and list it in the experiment's Changelog (`docs/decisions/2026-11-05-preregistered-sections-take-labelled-addenda-never-edits.md`).
+
+E8 has two messages. "Fewer than the recorded" means preregistered text was edited, moved or deleted: restore it and add an addendum instead. "More than the recorded" means the sidecar is wrong: set `readme_lines` to the count at the preregistration.
+
+A recorded file never changes (E4). To correct one, add a new file with its own `recorded` row in `docs/admissions.md` (A4), and say why in the Changelog.
+
+A README that takes only addenda only grows, and no file other than a generated or recorded one may be over 100000 bytes (A9). Check the README's size before you write a long addendum.
+
+## Everything CI runs, and how to run it before you push
+
+| Job | What it runs | Python | Local command |
+| --- | --- | --- | --- |
+| `gate-tests` (and the summary job `gate`) | the whole gate, `python3 tools/gate.py` | 3.9 and 3.13 | the clean-environment command in `CONTRIBUTING.md` |
+| `dev-tools` | the test suite under pytest | 3.13 | `python3 -m pytest -q -p no:cacheprovider tests` |
+| `barred` | the scan, with the secrets | 3.13 | `python3 tools/barred_scan.py`, with `BARRED_STRINGS_PATH` set to the private list |
+| `reproduce` | every experiment's generated files | 3.9 and 3.13 | `python3 tools/reproduce.py --all` |
+| `recorded-guard` | the guard, on fork pull requests only | 3.13 | `python3 tools/recorded_guard.py --base <full commit id>` |
+
+`--checks-only` is not the gate. It skips the tests stage, one of four, and the tests read the text of some documents and of `.github/workflows/gate.yml`, so a change to words alone can fail there. Four things make a local run differ from CI:
+
+- As root, some tests skip, and the gate counts a skip as DEAD.
+- In a shallow clone E8 fails and the barred scan is DEAD. CI fetches the full history.
+- On a detached HEAD the barred scan is DEAD. Run it on a named branch: the branch name is scanned too.
+- CI runs Python 3.9 and 3.13, so a pass on one does not cover the other.
 
 ## Running the gate after a rename
 
