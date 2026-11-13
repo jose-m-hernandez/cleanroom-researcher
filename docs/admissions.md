@@ -219,6 +219,10 @@ This is the ledger. Every file in the repository has exactly one row below sayin
 | experiments/EXP-0002/code/score.py | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31; copy of experiments/EXP-0001/code at 6c61b30 |
 | experiments/EXP-0002/prereg.txt | original | - | Claude Code (claude-sonnet-5-5), 2026-11-05 |
 | experiments/EXP-0002/read-log.md | original | - | Claude Code (claude-sonnet-5-5), 2026-10-31 |
+| experiments/EXP-0001/recorded/seal/manifest.txt | recorded | sha256=14cc23c6c82d620dfcce4e2881aeef03e900b1fc852e049bd5d23e5e828fdce5 | EXP-0001 seal (Claude Code 2.1.302), 2026-11-12 |
+| experiments/EXP-0001/recorded/seal/record.json | recorded | sha256=f760ef72423b9a6c0afd43791f18f5f56f850956cc9b12a25b02c30d81fd27d9 | EXP-0001 seal (Claude Code 2.1.302), 2026-11-12 |
+| experiments/EXP-0001/recorded/seal/repair-log/repair-log.md | recorded | sha256=d795bf43275e5f6986fda4220c645337aecf2c9bad3fad4ccb76419db00debb8 | EXP-0001 seal (Claude Code 2.1.302), 2026-11-12 |
+| experiments/EXP-0001/recorded/seal/seal.json | recorded | sha256=9dd398e5d7aebab3abe6e9904311caa160e278587ace38c854467a11499da186 | EXP-0001 seal (Claude Code 2.1.302), 2026-11-12 |
 | experiments/EXP-0002/recorded/run.json | recorded | sha256=dc532af8e52208d0c8043f47cde0811341705407736288011c61d94d652f644b | EXP-0002 run exp0002-results (Claude Code 2.1.302), 2026-11-02 |
 | experiments/EXP-0002/recorded/scores.json | recorded | sha256=17f2e233d43afd78d2a08e5c41c1e6f991ead0d5e11b408145c8c51e34f7209b | EXP-0002 run exp0002-results (Claude Code 2.1.302), 2026-11-02 |
 | experiments/EXP-0002/target/whole-values/LICENSE | sourced | SRC-0003 | Claude Code (claude-sonnet-5-5), 2026-10-31; the target's licence notice |

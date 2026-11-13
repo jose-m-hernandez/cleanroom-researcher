@@ -1,0 +1,287 @@
+{
+ "count_rule": "An answer names more than one value when its probe has at least one stale answer and the answer contains, ignoring letter case, both the gold answer and at least one stale answer; probes without stale answers are not counted. No other normalisation is applied: no whitespace or punctuation handling. This is the rule of the function names_more_than_one in experiments/EXP-0001/code/runner/audit.py at commit 6c61b304a4e3ace25eac553fe1965f5adccb8514.\n",
+ "excluded_fixtures": {},
+ "fixtures": {
+  "heldout-001-ledgerlite": {
+   "dropped": {},
+   "excluded": [],
+   "scorable": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5"
+   ]
+  },
+  "heldout-002-trailpost": {
+   "dropped": {},
+   "excluded": [],
+   "scorable": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5"
+   ]
+  },
+  "heldout-003-gridhaul": {
+   "dropped": {},
+   "excluded": [],
+   "scorable": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5"
+   ]
+  },
+  "heldout-004-mailsift": {
+   "dropped": {},
+   "excluded": [],
+   "scorable": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5"
+   ]
+  },
+  "heldout-005-petalcount": {
+   "dropped": {},
+   "excluded": [],
+   "scorable": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5"
+   ]
+  },
+  "heldout-006-quizfoundry": {
+   "dropped": {},
+   "excluded": [],
+   "scorable": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5"
+   ]
+  },
+  "heldout-007-bikeshare-ops": {
+   "dropped": {},
+   "excluded": [],
+   "scorable": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5"
+   ]
+  },
+  "heldout-008-logwhittle": {
+   "dropped": {},
+   "excluded": [],
+   "scorable": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5"
+   ]
+  },
+  "heldout-009-cardmint": {
+   "dropped": {},
+   "excluded": [],
+   "scorable": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5"
+   ]
+  },
+  "heldout-010-shelfscan": {
+   "dropped": {},
+   "excluded": [],
+   "scorable": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5"
+   ]
+  },
+  "heldout-011-tidegauge": {
+   "dropped": {},
+   "excluded": [],
+   "scorable": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5"
+   ]
+  },
+  "heldout-012-rotabook": {
+   "dropped": {},
+   "excluded": [],
+   "scorable": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5"
+   ]
+  },
+  "heldout-013-kilnlog": {
+   "dropped": {},
+   "excluded": [],
+   "scorable": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5"
+   ]
+  },
+  "heldout-014-seedvault": {
+   "dropped": {},
+   "excluded": [],
+   "scorable": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5"
+   ]
+  },
+  "heldout-015-ferrytime": {
+   "dropped": {},
+   "excluded": [],
+   "scorable": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5"
+   ]
+  },
+  "heldout-016-coopfeed": {
+   "dropped": {},
+   "excluded": [],
+   "scorable": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5"
+   ]
+  },
+  "heldout-017-inkpress": {
+   "dropped": {},
+   "excluded": [],
+   "scorable": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5"
+   ]
+  },
+  "heldout-018-voltmap": {
+   "dropped": {},
+   "excluded": [],
+   "scorable": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5"
+   ]
+  },
+  "heldout-019-bakeroster": {
+   "dropped": {},
+   "excluded": [],
+   "scorable": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5"
+   ]
+  },
+  "heldout-020-skylark-ci": {
+   "dropped": {},
+   "excluded": [],
+   "scorable": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5"
+   ]
+  },
+  "heldout-021-pantrylog": {
+   "dropped": {},
+   "excluded": [],
+   "scorable": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5",
+    "p6"
+   ]
+  },
+  "heldout-022-kiteboard": {
+   "dropped": {},
+   "excluded": [],
+   "scorable": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5",
+    "p6"
+   ]
+  },
+  "heldout-023-orbitnote": {
+   "dropped": {},
+   "excluded": [],
+   "scorable": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5",
+    "p6"
+   ]
+  },
+  "heldout-024-parcelwise": {
+   "dropped": {},
+   "excluded": [],
+   "scorable": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5",
+    "p6"
+   ]
+  },
+  "heldout-025-weirwatch": {
+   "dropped": {},
+   "excluded": [],
+   "scorable": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5",
+    "p6"
+   ]
+  }
+ },
+ "version": 1
+}
