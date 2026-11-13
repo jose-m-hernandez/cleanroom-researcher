@@ -51,7 +51,14 @@ Preregistered text is never edited, moved or deleted, and that includes a typo f
 
 To correct or update preregistered text, add a dated addendum, set off and labelled "Added <YYYY-MM-DD>, after the recorded run:", and list it in the experiment's Changelog (`docs/decisions/2026-11-05-preregistered-sections-take-labelled-addenda-never-edits.md`).
 
-E8 has two messages. "Fewer than the recorded" means preregistered text was edited, moved or deleted: restore it and add an addendum instead. "More than the recorded" means the sidecar is wrong: set `readme_lines` to the count at the preregistration.
+E8 has two messages. "More than the recorded" means the sidecar is wrong: set `readme_lines` to the count at the preregistration. "Fewer than the recorded" has two causes:
+
+- Preregistered text was edited, moved or deleted: restore it and add an addendum instead.
+- A commit id in `prereg.txt` is no longer in history, so git blame can attribute no lines to it. This follows a history rewrite, or a squash merge of a branch whose sidecar named its own commits, which the merge replaced. Restoring text does not help: the sidecar must name the new ids, as in "After merge".
+
+To tell them apart, run `git merge-base --is-ancestor <id> HEAD` for each id in the sidecar. It prints nothing and exits 0 when the commit is in HEAD's history, and it fails when the id is not. If every id passes, the cause is the first.
+
+When a pull request is squash-merged, the commits it contained are replaced by one new commit. A pull request that adds or changes a `prereg.txt` must therefore name commit ids that will exist on the default branch after the merge.
 
 A recorded file never changes (E4). To correct one, add a new file with its own `recorded` row in `docs/admissions.md` (A4), and say why in the Changelog.
 
@@ -62,10 +69,10 @@ A README that takes only addenda only grows, and no file other than a generated 
 | Job | What it runs | Python | Local command |
 | --- | --- | --- | --- |
 | `gate-tests` (and the summary job `gate`) | the whole gate, `python3 tools/gate.py` | 3.9 and 3.13 | the clean-environment command in `CONTRIBUTING.md` |
-| `dev-tools` | the test suite under pytest | 3.13 | `python3 -m pytest -q -p no:cacheprovider tests` |
+| `dev-tools` | the test suite under pytest | 3.13 | `python3 -m pytest -q -p no:cacheprovider tests`, after installing `requirements-dev.txt` (`CONTRIBUTING.md`, "Before you open a pull request") |
 | `barred` | the scan, with the secrets | 3.13 | `python3 tools/barred_scan.py`, with `BARRED_STRINGS_PATH` set to the private list |
 | `reproduce` | every experiment's generated files | 3.9 and 3.13 | `python3 tools/reproduce.py --all` |
-| `recorded-guard` | the guard, on fork pull requests only | 3.13 | `python3 tools/recorded_guard.py --base <full commit id>` |
+| `recorded-guard` | the guard, on fork pull requests only | 3.13 | `python3 tools/recorded_guard.py --base <full commit id>`, giving the tip of the pull request's base branch, which is what CI passes |
 
 `--checks-only` is not the gate. It skips the tests stage, one of four, and the tests read the text of some documents and of `.github/workflows/gate.yml`, so a change to words alone can fail there. Four things make a local run differ from CI:
 
