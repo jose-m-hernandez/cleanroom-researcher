@@ -20,7 +20,7 @@ env -i PATH=/usr/bin:/bin HOME="$(mktemp -d)" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_C
 
 The command clears the environment so the gate sees nothing from your home directory or git settings. If `python3` or `git` is not in `/usr/bin` or `/bin`, add its directory to `PATH` in the command. The command is written for a Unix shell, such as the one on macOS or Linux.
 
-The whole gate takes several minutes on a laptop, and it prints nothing until the end. To run the checks without the tests, run `python3 tools/gate.py --checks-only`. It takes a few seconds and ends with `gate: PASS (checks only)`.
+The whole gate takes several minutes on a laptop, and it prints nothing until the end. To run the checks without the tests, run `python3 tools/gate.py --checks-only`. It takes a few seconds and ends with `gate: PASS (checks only)`. This is not the gate: the tests it skips also read some documents, so a change to words alone can fail the whole gate.
 
 Then rebuild every experiment's generated files:
 
