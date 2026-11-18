@@ -325,17 +325,18 @@ def parse_owner_list(text: str) -> Tuple[List[Tuple[int, str]], List[Finding]]:
     seen: Set[str] = set()
     prefix = "A6 owner address list: "
     for number, line in enumerate(text.split("\n"), 1):
-        if line.strip() == OWNER_HEADER or SEPARATOR.match(line):
+        # A line whose first non-space character is "|" is a table line, indented or not.
+        # Prose, headings and blank lines don't start that way and stay skipped.
+        row = line.strip()
+        if not row.startswith("|") or row == OWNER_HEADER or SEPARATOR.match(row):
             continue
-        # "Looks like a list row" is narrow: the line starts with "|" and ends with "|".
         # A row that fails the "| " start (no space after the bar) is reported;
-        # blank lines, headings and prose, which don't have that shape, stay skipped.
-        looks_like_row = line.startswith("|") and line.rstrip().endswith("|")
-        if not line.startswith("| "):
-            if looks_like_row:
-                found.append((OWNER_LIST, number, prefix + "a row starts with a bar and a space"))
+        # so is a table line with no closing bar.
+        if not row.startswith("| "):
+            shape = "a row starts with a bar and a space" if row.endswith("|") else "a row is | address | what it is |"
+            found.append((OWNER_LIST, number, prefix + shape))
             continue
-        match = OWNER_ROW.match(line)
+        match = OWNER_ROW.match(row)
         if not match:
             found.append((OWNER_LIST, number, prefix + "a row is | address | what it is |"))
             continue

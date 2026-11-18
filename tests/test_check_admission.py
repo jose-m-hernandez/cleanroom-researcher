@@ -729,6 +729,42 @@ class OwnerAddressTests(RepoCase):
         self.build_with(text, "see " + OWNER_ADDR + "\n")
         self.assertClean()
 
+    def test_indented_well_formed_row_is_read(self):
+        text = OWNER_HEAD + "  | " + OWNER_ADDR + " | the site |\n"
+        self.build_with(text, "see " + OWNER_ADDR + "\n")
+        self.assertClean()
+        self.build_with(text, "nothing here\n")
+        self.assertFinding("A6 owner address used nowhere: " + OWNER_ADDR)
+
+    def test_indented_malformed_row_is_reported(self):
+        for name, row in {
+            "empty cell": "  | " + OWNER_ADDR + " |  |",
+            "three cells": "  | " + OWNER_ADDR + " | the site | extra |",
+        }.items():
+            with self.subTest(row=name):
+                self.build_with(OWNER_HEAD + row + "\n", "see " + OWNER_ADDR + "\n")
+                self.assertFinding("A6 owner address list:")
+
+    def test_table_line_with_no_closing_bar_is_reported(self):
+        for name, row in {
+            "space after bar": "| " + OWNER_ADDR + " | the site",
+            "no space after bar": "|" + OWNER_ADDR + " | the site",
+            "indented": "  | " + OWNER_ADDR + " | the site",
+        }.items():
+            with self.subTest(row=name):
+                self.build_with(OWNER_HEAD + row + "\n", "see " + OWNER_ADDR + "\n")
+                self.assertFinding("A6 owner address list: a row is | address | what it is |")
+
+    def test_indented_header_and_separator_stay_skipped(self):
+        text = "# Owner addresses\n\n  | address | what it is |\n  | --- | --- |\n| " + OWNER_ADDR + " | the site |\n"
+        self.build_with(text, "see " + OWNER_ADDR + "\n")
+        self.assertClean()
+
+    def test_indented_prose_with_a_bar_stays_skipped(self):
+        text = owner_list((OWNER_ADDR, "the site")) + "   Some prose | with a bar\n"
+        self.build_with(text, "see " + OWNER_ADDR + "\n")
+        self.assertClean()
+
     def test_entry_with_trailing_punctuation_still_matches(self):
         for mark in ".,;:":
             with self.subTest(mark=mark):
