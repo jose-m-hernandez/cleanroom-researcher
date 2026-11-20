@@ -74,7 +74,7 @@ class CommandGateTests(GateEnv):
                 self.assertIn(KEY, text)
 
     def test_with_all_three_passing_each_command_opens(self):
-        put(self.environ, **{KEY: control_entry()}, C6=st.entry("PASS"), C7=st.entry("PASS"))
+        put(self.environ, **{KEY: control_entry()}, C6=st.entry("PASS"), C7=st.entry("PASS"), JC=st.jc())
         for command in seal.GATED_COMMANDS:
             with self.subTest(command=command):
                 self.assertEqual(seal.command_gate(command, self.environ), "")

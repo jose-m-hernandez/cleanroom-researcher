@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Entry point for the evals harness: preflight, control, canary, judge-check, validate, gen-fixture, install-check, install-verify, spend-rebuild, lint, seal, audit-export, audit-score, run, score, report, pilot, pilot-md."""
+"""Entry point for the evals harness: preflight, control, canary, judge-check, validate, gen-fixture, install-check, install-verify, spend-rebuild, lint, author, seal, audit-export, audit-score, run, score, report, pilot, pilot-md."""
 
 from __future__ import annotations
 
@@ -16,7 +16,9 @@ import lint
 import pilot
 import arms
 import audit
+import author
 import probes
+import repair
 import seal
 import report  # noqa: E402
 import score  # noqa: E402
@@ -36,6 +38,21 @@ def seal_stop(command, final, seal_dir, fixtures_root, results):
     return None
 
 
+def author_flag_refusal(args) -> str:
+    """"" when the flags of `author` fit together, else the refusal label (before any gate, any read, any launch)."""
+    if not args.repair:
+        if args.source or args.fixtures_root:
+            return "--from and --fixtures-root belong to --repair"
+        return "" if args.prompt else "--prompt is required"
+    if not (args.source and args.fixtures_root and args.guide and args.out):
+        return "--repair needs --from, --fixtures-root, --guide and --out"
+    for flag, value in (("--prompt", args.prompt), ("--extra", args.extra), ("--replaces", args.replaces),
+                        ("--only-ids", args.only_ids)):
+        if value is not None:
+            return f"--repair cannot be used with {flag}"
+    return ""
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="run.py")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -47,24 +64,39 @@ def main(argv=None) -> int:
     sub.add_parser("judge-check", help="live judge controls and sanity cases; needs CPR_EVAL_LIVE=1")
     check = sub.add_parser("validate", help="validate every fixture spec under the fixtures folder; no model call")
     check.add_argument("--heldout-complete", action="store_true", help="also require the full held-out long-session count")
+    check.add_argument("--fixtures-root", help="a fixture store (<id>/spec.json) instead of the in-repo fixtures folder; the set rules run on it, the lint does not")
     gen = sub.add_parser("gen-fixture", help="generate, normalize, verify and install one fixture; needs CPR_EVAL_LIVE=1")
     gen.add_argument("fixture_id")
     inst = sub.add_parser("install-check", help="resume control for an installed fixture; needs CPR_EVAL_LIVE=1")
     inst.add_argument("fixture_id")
     verify = sub.add_parser("install-verify", help="re-check an installed fixture offline (evidence gate)")
     verify.add_argument("fixture_id")
+    for store_command in (gen, inst, verify):
+        store_command.add_argument("--fixtures-root", help="a fixture store (<id>/spec.json) instead of the in-repo fixtures folder")
     rebuild = sub.add_parser("spend-rebuild", help="recompute spend.json from the stored run records (per-invocation costs); dry run unless --write")
     rebuild.add_argument("--write", action="store_true", help="write spend.json atomically")
     lnt = sub.add_parser("lint", help="clean-room lint of a fixture store (P:249): vocabulary rules V1-V4 and the barred-string scan; needs BARRED_STRINGS or BARRED_STRINGS_PATH")
     lnt.add_argument("fixtures_root")
+    aut = sub.add_parser("author", help="one tool-less call that writes held-out specs, or with --repair repairs them; at most 4 calls, repair included, and 3 replacements; needs CPR_EVAL_LIVE=1")
+    aut.add_argument("--prompt", help="the authoring prompt file (required without --repair)")
+    aut.add_argument("--repair", action="store_true", help="one repair call over the floor and oracle results of --from: --out is a new full store, the repair log is written beside it as <out>.repair-log.md")
+    aut.add_argument("--from", dest="source", help="with --repair: the floor and oracle results (run.json, scores.json, probes/); read only")
+    aut.add_argument("--fixtures-root", help="with --repair: the fixture store to repair (copied byte for byte into --out)")
+    aut.add_argument("--guide", required=True, help="the scrubbed guide file")
+    aut.add_argument("--out", required=True, help="the spec store to write <id>/spec.json into (outside every clone)")
+    aut.add_argument("--extra", help="a file whose text is appended to the prompt; only its sha256 is recorded")
+    aut.add_argument("--only-ids", help="comma-separated ids; other blocks in the reply are not written")
+    aut.add_argument("--replaces", help="comma-separated ids this call replaces; at most 3 replacements in all")
     batch = sub.add_parser("run", help="preserve runs and probe sessions for arms x fixtures x seeds; needs CPR_EVAL_LIVE=1")
     batch.add_argument("--split", default="dev", choices=fixtures.SPLITS)
     batch.add_argument("--fixtures", default="all", help="'all', or comma-separated fixture ids or id prefixes")
     batch.add_argument("--fixtures-root", help="directory holding <id>/spec.json (default <code>/fixtures/<split>)")
-    batch.add_argument("--out", help="results directory (required; outside the clone, or under experiments/EXP-0001/recorded/); raw logs go to $TMPDIR/cpr-eval/raw/<run id>/")
+    batch.add_argument("--out", help="results directory (required; outside every clone); raw logs go to $TMPDIR/cpr-eval/raw/<run id>/")
     batch.add_argument("--arms", default="floor,baseline,oracle")
     batch.add_argument("--seal", help="seal folder; a baseline arm on held-out fixtures needs one whose manifest.txt is committed")
     batch.add_argument("--preseal", help="floor and oracle results the seal covers; carried into --out (held-out baseline runs)")
+    batch.add_argument("--supersede", help="comma-separated held-out fixture ids: move their floor and oracle sessions and arm texts aside (never deleted) into <out>/superseded/<stamp>/, write superseded.json and rerun only them; needs --repair-log")
+    batch.add_argument("--repair-log", help="the repair log (<store>.repair-log.md); every --supersede id must have its '## <id>' section in it")
     batch.add_argument("--seeds", type=int, default=5)
     batch.add_argument("--budget-usd", type=float, help="stop before a unit when the pilot ledger has grown by this much")
     batch.add_argument("--date", help="YYYYMMDD for run.json (default today)")
@@ -101,13 +133,27 @@ def main(argv=None) -> int:
     pil.add_argument("--seeds", type=int, default=3)
     pil.add_argument("--arms", default="floor,baseline,oracle")
     pil.add_argument("--budget-usd", type=float, required=True, help="most the pilot ledger may grow in this invocation; above phase_caps.evaluation refuses")
-    pil.add_argument("--out", help="results directory (required; outside the clone, or under experiments/EXP-0001/recorded/)")
+    pil.add_argument("--out", help="results directory (required; outside every clone)")
     pil.add_argument("--date", help="YYYYMMDD for run.json (default today)")
     pmd = sub.add_parser("pilot-md", help="regenerate PILOT.md from a pilot results directory; no model call")
     pmd.add_argument("--from", dest="source", required=True, help="results directory written by pilot")
     pmd.add_argument("--fixtures-root", help="directory holding <id>/gen.json (default <code>/fixtures/<split of the run>)")
     pmd.add_argument("--out", help="directory to write into (default: the --from directory)")
     args = parser.parse_args(argv)
+    if args.command == "author":
+        refusal = author_flag_refusal(args)
+        if refusal:
+            print(f"author: REFUSED {refusal}")
+            return 2
+    store = None
+    if args.command in ("gen-fixture", "install-check", "install-verify", "validate") and args.fixtures_root is not None:
+        store = Path(args.fixtures_root)
+        if not store.is_dir():
+            print(f"{args.command}: REFUSED --fixtures-root does not exist")
+            return 2
+        if repair.store_has_link_or_git(store):
+            print(f"{args.command}: REFUSED the fixture store holds a symlink or a git folder")
+            return 2
     try:
         isolation_mode = claude_run.load_config().get("isolation")
     except (OSError, ValueError, AttributeError):
@@ -120,8 +166,8 @@ def main(argv=None) -> int:
         if refusal:
             print(f"{args.command}: REFUSED {refusal}")
             return 2
-    if args.command in ("run", "pilot", "report", "pilot-md", "seal") and (args.out or args.command in ("run", "pilot", "seal")):
-        refusal = claude_run.out_refusal(args.out)
+    if args.command in ("run", "pilot", "report", "pilot-md", "seal", "author") and (args.out or args.command in ("run", "pilot", "seal", "author")):
+        refusal = (claude_run.strict_out_refusal if args.command in ("run", "pilot") else claude_run.out_refusal)(args.out)
         if refusal:
             print(f"{args.command}: REFUSED {refusal}")
             return 2
@@ -148,23 +194,39 @@ def main(argv=None) -> int:
     if args.command == "judge-check":
         return judge.judge_check()
     if args.command == "validate":
+        if store:
+            return fixtures.run_validate(store, heldout_complete=args.heldout_complete, flat=True)
         return fixtures.run_validate(heldout_complete=args.heldout_complete)
     if args.command == "gen-fixture":
+        if store:
+            return fixtures.command_gen_fixture(args.fixture_id, root=store, flat=True)
         return fixtures.command_gen_fixture(args.fixture_id)
     if args.command == "install-check":
+        if store:
+            return fixtures.command_install_check(args.fixture_id, root=store, flat=True)
         return fixtures.command_install_check(args.fixture_id)
     if args.command == "install-verify":
+        if store:
+            return fixtures.install_verify(args.fixture_id, root=store, flat=True)
         return fixtures.install_verify(args.fixture_id)
     if args.command == "spend-rebuild":
         return claude_run.spend_rebuild(write=args.write)
     if args.command == "lint":
         return lint.command_lint(args.fixtures_root)
+    if args.command == "author" and args.repair:
+        return author.command_repair(args.source, args.fixtures_root, args.guide, args.out)
+    if args.command == "author":
+        split = lambda value: [i.strip() for i in value.split(",")] if value is not None else None  # noqa: E731
+        return author.command_author(args.prompt, args.guide, args.out, args.extra, split(args.only_ids),
+                                     split(args.replaces))
     if args.command == "run":
         date = args.date or datetime.date.today().strftime("%Y%m%d")
         root = Path(args.fixtures_root) if args.fixtures_root else fixtures.FIXTURES_DIR / args.split
         out = Path(args.out)
+        supersede = None if args.supersede is None else [i.strip() for i in args.supersede.split(",") if i.strip()]
         return probes.command_run(root, out, args.split, args.fixtures, [a for a in args.arms.split(",") if a],
-                                  args.seeds, args.budget_usd, date, seal_dir=args.seal, preseal=args.preseal)
+                                  args.seeds, args.budget_usd, date, seal_dir=args.seal, preseal=args.preseal,
+                                  supersede=supersede, repair_log=args.repair_log)
     if args.command == "score":
         out = Path(args.source)
         try:

@@ -230,5 +230,97 @@ class ReportContentTests(unittest.TestCase):
             self.assertNotIn(bad, text)
 
 
+LINE = ("Superseded after the repair re-check: %d excluded cells of %d fixtures are not counted above; "
+        "they are listed in superseded.json.")
+
+
+def record(cells=0, ids=1) -> dict:
+    return {"version": 1, "stamp": "20261119T101112Z", "scoring_occasion": 2,
+            "ids": [f"heldout-{n:03d}-x" for n in range(1, ids + 1)],
+            "excluded_cells": [{"kind": "probe", "arm": "floor", "fixture": "heldout-001-x", "seed": n, "checks": ["c"]}
+                               for n in range(1, cells + 1)]}
+
+
+class SupersededLineTests(unittest.TestCase):
+    """One line says how many superseded excluded cells the report no longer counts."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp = Path(self._tmp.name)
+        self.run = json.loads(read(TREE / "run.json"))
+        self.scores = json.loads(read(TREE / "scores.json"))
+        self.counted = dict(self.run, proof_counts={"isolation_reruns": 2, "excluded_after_rerun": 1,
+                                                    "outcome_only_by_check": {}},
+                            excluded_cells=[{"kind": "probe", "arm": "oracle", "fixture": "dev-001-x", "seed": 2,
+                                             "checks": ["markers_found"]}])
+
+    def results(self, run, superseded=None) -> Path:
+        folder = self.tmp / "src"
+        shutil.copytree(TREE, folder)
+        (folder / "run.json").write_text(json.dumps(run), encoding="utf-8")
+        if superseded is not None:
+            (folder / "superseded.json").write_text(superseded if isinstance(superseded, str) else json.dumps(superseded),
+                                                    encoding="utf-8")
+        return folder
+
+    def test_without_the_record_the_report_is_byte_for_byte_what_it_was(self):
+        old = report.build_markdown(self.run, self.scores)
+        self.assertEqual(report.build_markdown(self.run, self.scores, None, None), old)
+        self.assertEqual(report.build_markdown(self.counted, self.scores), report.build_markdown(self.counted, self.scores, None))
+        folder = self.results(self.run)
+        self.assertEqual(report.write_report(folder, self.tmp / "o1", io.StringIO()), 0)
+        self.assertEqual((self.tmp / "o1" / "REPORT.md").read_bytes(), (TREE / "REPORT.md").read_bytes())
+        self.assertNotIn("Superseded", old)
+
+    def test_the_line_has_the_exact_text_and_numbers(self):
+        for cells, ids in ((3, 2), (1, 1), (0, 1)):  # printed even when the first number is 0
+            with self.subTest(cells=cells, ids=ids):
+                md = report.build_markdown(self.counted, self.scores, None, record(cells, ids))
+                self.assertEqual(md.count("Superseded after the repair re-check"), 1)
+                self.assertIn("\n" + LINE % (cells, ids) + "\n", md)
+
+    def test_the_line_sits_after_the_isolation_paragraph_and_before_the_excluded_bullets(self):
+        md = report.build_markdown(self.counted, self.scores, None, record(3, 2))
+        at = lambda text: md.index(text)  # noqa: E731
+        self.assertLess(at("Isolation re-runs: 2."), at("Superseded after"))
+        self.assertLess(at("Superseded after"), at("- Excluded: dev-001-x"))
+        self.assertLess(at("- Excluded: dev-001-x"), at("## Judge sanity controls"))
+        plain = report.build_markdown(self.counted, self.scores)
+        self.assertEqual(md.replace(LINE % (3, 2) + "\n\n", "", 1), plain)  # nothing else changed
+
+    def test_without_proof_counts_the_line_is_its_own_paragraph_after_the_header_block(self):
+        md = report.build_markdown(self.run, self.scores, None, record(2, 1))
+        self.assertNotIn("## Per-run proof counts", md)
+        self.assertLess(md.index("Unit of analysis:"), md.index("Superseded after"))
+        self.assertLess(md.index("Superseded after"), md.index("## Judge sanity controls"))
+        self.assertIn("\n\n" + LINE % (2, 1) + "\n\n## Judge sanity controls", md)
+        self.assertEqual(md.replace(LINE % (2, 1) + "\n\n", "", 1), report.build_markdown(self.run, self.scores))
+
+    def test_write_report_reads_the_record_from_the_results_folder(self):
+        folder = self.results(self.counted, record(3, 2))
+        # the record opens scoring occasion 2: the report accepts only a scores.json stamped for it
+        (folder / "score-passes-occasion-2.json").write_text(json.dumps(
+            {"normal": {"started": 1, "aborted": 0}, "final": {"started": 0, "aborted": 0}}), encoding="utf-8")
+        (folder / "scores.json").write_text(json.dumps(dict(self.scores, **{"pass": {"id": 1, "mode": "normal", "occasion": 2}})),
+                                            encoding="utf-8")
+        self.assertEqual(report.write_report(folder, self.tmp / "o2", io.StringIO()), 0)
+        self.assertIn(LINE % (3, 2), read(self.tmp / "o2" / "REPORT.md"))
+        again = self.tmp / "o3"
+        self.assertEqual(report.write_report(folder, again, io.StringIO()), 0)
+        self.assertEqual((again / "REPORT.md").read_bytes(), (self.tmp / "o2" / "REPORT.md").read_bytes())  # deterministic
+
+    def test_an_unreadable_or_malformed_record_is_a_report_error(self):
+        for text in ("{oops", "[]", json.dumps({"ids": []}), json.dumps({"ids": {}, "excluded_cells": []}),
+                     json.dumps({"ids": [], "excluded_cells": 3})):
+            with self.subTest(text=text):
+                shutil.rmtree(self.tmp / "src", ignore_errors=True)
+                folder = self.results(self.run, text)
+                shown = io.StringIO()
+                self.assertEqual(report.write_report(folder, self.tmp / "o4", shown), 1)
+                self.assertRegex(shown.getvalue(), r"^report: STOP superseded\.json (unreadable|malformed)\n$")
+                self.assertFalse((self.tmp / "o4" / "REPORT.md").exists())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -24,6 +24,18 @@ ISOLATION_MODES = ("sources", "tempconfig")
 OUTCOME_CHECKS = frozenset({"result_error", "ask_user", "denials", "over_cap"})
 # A change of the agent harness version or the model stops the experiment instead of leading to a re-run (README P:120).
 PIN_CHANGE_CHECKS = frozenset({"version_mismatch", "model_mismatch"})
+# Every isolation check label `check` can give (the pin-change labels included); a run's isolation.json names them with
+# OUTCOME_CHECKS. A test reads `_check` and fails when this set and the source disagree.
+ISOLATION_CHECKS = frozenset({
+    "init_missing", "init_plugins_missing", "init_skills_missing", "init_agents_missing", "init_mcp_servers_missing",
+    "isolation_invalid", "memory_paths_invalid", "version_unpinned", "version_mismatch", "model_unpinned",
+    "model_mismatch", "no_markers", "kind_invalid", "sandbox_missing", "plugin_entry_invalid", "plugin_cpr_count",
+    "plugin_path", "plugin_source", "plugin_unexpected", "plugin_not_builtin", "mcp_servers", "allowlist_unset",
+    "skills_entry_invalid", "agents_entry_invalid", "skills_outside_allowlist", "agents_outside_allowlist",
+    "skill_cpr_preserve_missing", "memory_path_outside", "memory_dir_symlink", "host_hook", "baseline_unproven",
+    "hook_unpaired", "sessionstart_count", "transcript_missing", "instructions_attachment_missing",
+    "transcript_corrupt", "transcript_session_mismatch", "instructions_not_project", "user_or_local_files",
+    "instructions_outside_sandbox", "instructions_mismatch", "markers_found", "probe_tools"})
 MARKER_MIN_CHARS = 25
 MARKERS_PER_FILE = 3
 

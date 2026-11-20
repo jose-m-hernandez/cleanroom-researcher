@@ -52,11 +52,17 @@ GATED_ARGV = {
     "score": ["score", "--from", "{out}"],
     "pilot": ["pilot", "--budget-usd", "1", "--out", "{out}"],
     "canary-generation": ["canary", "--type", "generation"],
+    "author": ["author", "--prompt", "{out}/p.md", "--guide", "{out}/g.md", "--out", "{out}/store"],
 }
 
 
 def entry(outcome="PASS", token=None):
     return {"outcome": outcome, "token": token or os.urandom(32).hex(), "started_utc": STARTED, "run_id": "r-1"}
+
+
+def jc(outcome="PASS"):
+    """The JC (judge-check) entry: no token, like the C1-5 entry."""
+    return {"outcome": outcome, "started_utc": STARTED, "run_id": "judge-check-0a1b2c3d"}
 
 
 def write_gates(environ, **entries):
@@ -376,14 +382,14 @@ class GateTests(FakeHome):
                 (claude_run.eval_root(self.environ) / "gates.json").unlink()
 
     def test_gen_fixture_also_needs_c7(self):
-        write_gates(self.environ, C6="PASS")
+        write_gates(self.environ, C6="PASS", JC=jc())
         self.assertRefused("gen-fixture", "C7 canary has not passed")
         self.assertEqual(seal.command_gate("gen-fixture", self.environ).count("C7"), 1)
-        write_gates(self.environ, C6="PASS", C7="PASS")
+        write_gates(self.environ, C6="PASS", C7="PASS", JC=jc())
         self.assertEqual(seal.command_gate("gen-fixture", self.environ), "")
 
     def test_the_other_commands_do_not_need_c7(self):
-        write_gates(self.environ, C6="PASS")
+        write_gates(self.environ, C6="PASS", JC=jc())
         for command in GATED_ARGV:
             if command != "gen-fixture":
                 self.assertEqual(seal.command_gate(command, self.environ), "", command)
@@ -416,7 +422,7 @@ class GateTests(FakeHome):
         self.assertEqual(seal.read_gates(self.environ)[0], None)
 
     def test_a_c6_pass_opens_every_gated_command_but_the_refusal_is_not_the_live_check(self):
-        write_gates(self.environ, C6="PASS", C7="PASS")
+        write_gates(self.environ, C6="PASS", C7="PASS", JC=jc())
         for command in GATED_ARGV:
             with self.subTest(command=command):
                 self.assertEqual(seal.command_gate(command, self.environ), "")
@@ -443,7 +449,8 @@ class GateTests(FakeHome):
         self.assertEqual(set(seal.GATED_COMMANDS), set(GATED_ARGV))
         sources = {p.name: p.read_text(encoding="utf-8") for p in Path(exp0001_paths.RUNNER).glob("*.py")}
         callers = {n for n, text in sources.items() if "claude_run.run_claude" in text or "def run_claude" in text}
-        self.assertEqual(callers, {"claude_run.py", "fixtures.py", "judge.py", "pilot.py", "probes.py", "seal.py"})
+        self.assertEqual(callers, {"author.py", "claude_run.py", "fixtures.py", "judge.py", "pilot.py", "probes.py",
+                                   "seal.py"})
 
 
 class ScanTests(FakeHome):
@@ -570,7 +577,7 @@ class World(base.Env):
         shutil.copytree(Path(_TEMPLATE["dir"]) / "store", self.store)
         shutil.copytree(Path(_TEMPLATE["dir"]) / "pre", self.pre)
         self.scores = copy.deepcopy(_TEMPLATE["scores"])
-        self.gates = write_gates(self.environ, C6="PASS", C7="PASS")
+        self.gates = write_gates(self.environ, C6="PASS", C7="PASS", JC=jc())
         self.repair, self.guide, self.rule = (self.private / n for n in ("repair.log", "guide.md", "count-rule.txt"))
         self.repair.write_text("repair log: one fixture reworded\n", encoding="utf-8")
         self.guide.write_text("the guide\n", encoding="utf-8")
@@ -1386,6 +1393,50 @@ class AfterTheSealTests(World):
                                  "--seal", str(self.seal_dir), "--audit", str(audit_json)])
         self.assertNotIn("seal does not verify", shown.getvalue())
         self.assertEqual(code, 0, shown.getvalue())
+
+
+class SupersededRecordInTheSealTests(World):
+    """A results folder that holds superseded.json (a repair re-check) hands it to the seal folder."""
+
+    RECORD = {"version": 1, "stamp": "20261119T000000Z", "ids": [HIDS[0]], "scoring_occasion": 2,
+              "moved": [], "excluded_cells": []}
+
+    def with_record(self):
+        arms.write_json(self.pre / "superseded.json", self.RECORD)
+
+    def test_the_seal_folder_holds_an_identical_copy_and_seal_json_its_hash(self):
+        self.with_record()
+        self.sealed()
+        copy_path = self.seal_dir / "superseded.json"
+        self.assertEqual(copy_path.read_bytes(), (self.pre / "superseded.json").read_bytes())
+        self.assertEqual(self.seal_json()["superseded"],
+                         {"path": "superseded.json", "sha256": hashlib.sha256(copy_path.read_bytes()).hexdigest()})
+        self.assertIn("superseded.json", self.files_under(self.seal_dir))
+
+    def test_verify_finds_nothing_and_then_a_changed_copy(self):
+        self.with_record()
+        self.sealed()
+        self.assertEqual(seal.verify(self.seal_dir, self.store, self.pre), [])
+        path = self.seal_dir / "superseded.json"
+        path.write_bytes(path.read_bytes() + b" ")
+        self.assertEqual(seal.verify(self.seal_dir, self.store, self.pre), ["changed:seal/superseded.json"])
+        path.unlink()
+        self.assertEqual(seal.verify(self.seal_dir, self.store, self.pre), ["missing:seal/superseded.json"])
+
+    def test_without_the_record_the_seal_is_what_it_was(self):
+        self.sealed()
+        self.assertEqual(self.files_under(self.seal_dir), ["manifest.txt", "record.json", "repair-log/repair.log", "seal.json"])
+        self.assertEqual(set(self.seal_json()), {"version", "started_utc", "code_head", "labels", "sessions", "guide",
+                                                  "count_rule", "audit_seed", "manifest", "record", "repair_log"})
+        self.assertEqual(seal.verify(self.seal_dir, self.store, self.pre), [])
+
+    def test_a_malformed_ref_is_unreadable_not_a_crash(self):
+        self.with_record()
+        self.sealed()
+        seal_json = self.seal_json()
+        seal_json["superseded"] = {"sha256": "0" * 64}
+        (self.seal_dir / "seal.json").write_text(json.dumps(seal_json), encoding="utf-8")
+        self.assertEqual(seal.verify(self.seal_dir, self.store, self.pre), ["unreadable:seal.json"])
 
 
 class NoGateStateInTheRepositoryTests(unittest.TestCase):

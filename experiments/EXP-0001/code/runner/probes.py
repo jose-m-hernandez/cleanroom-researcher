@@ -8,8 +8,13 @@ replies are.
 
 from __future__ import annotations
 
+import datetime
+import hashlib
 import json
+import os
 import random
+import re
+import shutil
 import sys
 import uuid
 from pathlib import Path
@@ -197,13 +202,44 @@ def write_run_json(out, cfg, split, fids, arm_names, seeds, date, judge_model=No
     return meta
 
 
+REPO_ROOT = claude_run.ROOT  # the folder that holds experiments/, from this code's own location, never from --out
+
+
+def write_isolation(out) -> None:
+    """Write <repository>/<RECORDED_DIR>/runs/<run id>/isolation.json from <out>/run.json: counts and check labels only.
+
+    The run id is the name of --out. The raw results stay outside the repository (README P:319); only this file is
+    written into it, at the path the preregistration names (P:311, P:349). "isolated" is judged over the included cells
+    (P:119-126 allow excluded ones): it is false only while a failed-isolation cell is neither excluded nor finished.
+    "excluded" counts the excluded cells and lists the isolation check labels that excluded them, nothing else.
+    "checks" names every check the per-run proof applies (isolation and outcome). The repository's E7 check reads this
+    file for an experiment's recorded runs.
+    """
+    meta = arms.read_json(Path(out) / "run.json")
+    run_id = meta["run_id"]
+    if run_id in ("", ".", ".."):
+        raise BatchStop("run id is not a folder name")
+    labels = isolation.ISOLATION_CHECKS | isolation.OUTCOME_CHECKS
+    excluded = meta.get("excluded_cells", [])
+    cell_key = lambda e: (e["kind"], e["arm"], e["fixture"], e["seed"])
+    pending = [e for e in meta.get("isolation_reruns", []) if cell_key(e) not in {cell_key(x) for x in excluded}
+               and not (arms.preserve_path if e["kind"] == "preserve" else arms.probe_path)(
+                   out, e["arm"], e["fixture"], e["seed"]).is_file()]
+    proof = {"checks": sorted(labels), "excluded": {"count": len(excluded), "checks": sorted(
+                 {c for e in excluded for c in e.get("checks", []) if c in labels})},
+             "isolated": not pending,
+             "proof_counts": meta["proof_counts"], "run_id": run_id}
+    arms.write_json(Path(REPO_ROOT).joinpath(*claude_run.RECORDED_DIR, "runs", run_id, "isolation.json"), proof)
+
+
 def log_proof(out, key: str, entry: dict) -> None:
-    """Append entry to one of run.json's proof lists and refresh its counts."""
+    """Append entry to one of run.json's proof lists and refresh its counts and the run's isolation.json."""
     path = Path(out) / "run.json"
     meta = arms.read_json(path)
     meta.setdefault(key, []).append(entry)
     meta["proof_counts"] = proof_counts(meta)
     arms.write_json(path, meta)
+    write_isolation(out)
 
 
 def log_denials(out, cell: dict, record: dict) -> None:
@@ -348,28 +384,165 @@ def run_batch(fixtures_root, out, split, fids, arm_names, seeds, cfg, environ, r
                 res.pop("record")
                 arms.write_json(path, res)
                 done += 1
+    write_isolation(out)  # the batch ended without a stop: its proof counts are final
     cost = claude_run.spend_total(environ, "evaluation") - start
     print(f"run: {done} units run, {skipped} already present, pilot ledger +${cost:.2f}", file=stdout)
     return 0
 
 
+# --------------------------------------------------------------------------
+# Supersede: the floor and oracle re-check of repaired held-out fixtures (README step 6)
+# --------------------------------------------------------------------------
+
+SUPERSEDED_NAME = "superseded.json"
+SUPERSEDE_ARMS = ("floor", "oracle")
+SUPERSEDE_FOLDERS = ("probes", "arms", "preserve")
+SUPERSEDE_ID = re.compile(r"^heldout-\d{3}-[a-z0-9-]+$")  # author.ID_LINE's pattern
+SCORING_OCCASION = 2  # a re-check is its own scoring occasion with its own two passes (P:458 clarifies P:130)
+
+
+def utc_stamp() -> str:
+    return datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def supersede_refusal(out, ids, repair_log, split, arm_names, seal_dir, preseal, seeds=None) -> str:
+    """"" or the first refusal label for the supersede flags, checked in the order the README lists (exit 2)."""
+    if (ids is None) != (repair_log is None):
+        return "--supersede and --repair-log go together"
+    if ids is None:
+        return ""
+    if seal_dir or preseal or split != "heldout" or not arm_names or any(a not in SUPERSEDE_ARMS for a in arm_names):
+        return "--supersede is for the floor and oracle re-check of held-out fixtures only"
+    if not ids or not all(SUPERSEDE_ID.match(i) for i in ids):
+        return "--supersede needs ids of the form heldout-NNN-name"
+    out = Path(out)
+    try:
+        known = arms.read_json(out / "run.json")["fixtures"]
+    except (OSError, ValueError, KeyError, TypeError):
+        known = []
+    for fid in ids:
+        if fid not in known:
+            return f"fixture {fid} is not in this results folder"
+    for fid in ids:
+        if not all((out / "probes" / arm / fid).is_dir() for arm in SUPERSEDE_ARMS):
+            return f"fixture {fid} has no floor and oracle sessions to supersede"
+    try:
+        lines = Path(repair_log).read_text(encoding="utf-8").splitlines()
+    except (OSError, ValueError):
+        return "the repair log is missing"
+    for fid in ids:
+        if f"## {fid}" not in lines:
+            return f"the repair log does not name fixture {fid}"
+    if (out / SUPERSEDED_NAME).exists():
+        return "this folder already holds a superseded record (one repair round, P:252)"
+    if seeds is not None:  # the rerun covers exactly the seeds the folder recorded
+        try:
+            recorded = arms.read_json(out / "run.json")["seeds"]
+        except (OSError, ValueError, KeyError, TypeError):
+            recorded = None
+        if type(recorded) is not int:
+            return "run.json does not record the seeds"
+        if int(seeds) != recorded:
+            return f"--seeds {int(seeds)} must equal the {recorded} seeds recorded in run.json"
+    return ""
+
+
+def supersede_preflight(fixtures_root, out, ids, cfg, split, environ) -> None:
+    """Raise BatchStop for what run_batch would refuse after the files had moved: an invalid new spec, a changed pin."""
+    for fid in ids:
+        try:
+            spec = fixtures.load_spec(Path(fixtures_root) / fid / "spec.json")
+        except (OSError, ValueError):
+            raise BatchStop(f"spec unreadable: {fid}")
+        if fixtures.validate_spec(spec, directory_name=fid):
+            raise BatchStop(f"spec invalid: {fid}")
+    old = arms.read_json(Path(out) / "run.json")
+    for key, want in (("rng_seed", cfg.get("rng_seed", 0)), ("claude_code_version", cfg.get("claude_code_version")),
+                      ("model", cfg.get("model")), ("plugin_ref", cfg.get("plugin_ref")), ("split", split)):
+        if old.get(key) != want:
+            raise BatchStop(f"{key} changed since this run started")
+    if arms.RUN_ID_RE.match(str(old.get("raw_run_id"))):
+        try:
+            arms.check_raw_owner(old["raw_run_id"], out, environ)
+        except arms.RawError as exc:
+            raise BatchStop(str(exc))
+
+
+def supersede_files(out, ids, repair_log, stamp=None) -> dict:
+    """Move the floor and oracle sessions, arm texts and preserve files of ids to <out>/superseded/<stamp>/ and write
+    <out>/superseded.json. Nothing is deleted; the folders keep their relative paths. All folders move or none: a
+    failed move puts back what moved and raises. excluded_cells entries of these fixtures move into the record (they
+    would block the rerun); isolation_reruns and outcome_only entries stay (events that happened)."""
+    out, ids = Path(out), sorted(ids)
+    stamp = stamp or utc_stamp()
+    target = out / "superseded" / stamp
+    if target.exists():
+        raise BatchStop(f"superseded/{stamp} already exists")
+    plan = [Path(kind) / arm / fid for fid in ids for arm in SUPERSEDE_ARMS for kind in SUPERSEDE_FOLDERS
+            if (out / kind / arm / fid).is_dir()]
+    try:  # every read the record needs, before the first move: a failure here leaves the folders as they were
+        meta = arms.read_json(out / "run.json")
+        moved_cells = [e for e in meta.get("excluded_cells", []) if e.get("fixture") in ids]
+        log_sha = hashlib.sha256(Path(repair_log).read_bytes()).hexdigest()
+        new_meta = dict(meta, excluded_cells=[e for e in meta.get("excluded_cells", []) if e not in moved_cells])
+        new_meta["proof_counts"] = proof_counts(new_meta)
+        record = {"version": 1, "stamp": stamp, "ids": ids, "scoring_occasion": SCORING_OCCASION,
+                  "repair_log": {"name": Path(repair_log).name, "sha256": log_sha},
+                  "moved": [{"from": r.as_posix(), "to": (Path("superseded") / stamp / r).as_posix()}
+                            for r in sorted(plan, key=lambda p: p.as_posix())],
+                  "excluded_cells": moved_cells}
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise BatchStop(f"supersede failed, nothing moved: {type(exc).__name__}")
+    done = []
+    try:
+        for rel in plan:
+            (target / rel).parent.mkdir(parents=True, exist_ok=True)
+            os.rename(out / rel, target / rel)
+            done.append(rel)
+        arms.write_json(out / SUPERSEDED_NAME, record)  # all or nothing until the record exists
+    except OSError as exc:
+        for rel in reversed(done):
+            os.rename(target / rel, out / rel)
+        shutil.rmtree(target, ignore_errors=True)
+        (out / SUPERSEDED_NAME).unlink(missing_ok=True)
+        try:
+            (out / "superseded").rmdir()  # only when empty
+        except OSError:
+            pass
+        raise BatchStop(f"supersede failed, nothing moved: {type(exc).__name__}")
+    arms.write_json(out / "run.json", new_meta)
+    write_isolation(out)
+    return record
+
+
 def command_run(fixtures_root, out, split, wanted, arm_names, seeds, budget_usd, date, environ=None, stdout=None,
-                runner=None, arms_dir=None, seal_dir=None, preseal=None, repo_root=None) -> int:
+                runner=None, arms_dir=None, seal_dir=None, preseal=None, repo_root=None, supersede=None,
+                repair_log=None) -> int:
     """Live: needs CPR_EVAL_LIVE=1, a clean environment and a passing preflight. --out follows the CLI's rule.
 
     A baseline arm on held-out fixtures needs seal_dir (a seal whose manifest.txt is committed in repo_root) and
     preseal (the floor and oracle results the seal covers): the seal is verified before any launch, and the pre-seal
     labels and session files are carried into out read-only (P:276). Dev fixtures are unchanged.
+
+    supersede (a list of ids) with repair_log (the CLI's --supersede and --repair-log) moves those held-out fixtures'
+    floor and oracle sessions aside after the live gate and reruns only them (see supersede_files); its refusals exit 2
+    before any move.
     """
     stdout = stdout or sys.stdout
-    refusal = claude_run.out_refusal(None if out is None else str(out))
+    refusal = claude_run.strict_out_refusal(None if out is None else str(out))
     if refusal:
         print(f"run: REFUSED {refusal}", file=stdout)
         return 2
+    refusal = supersede_refusal(out, supersede, repair_log, split, arm_names, seal_dir, preseal, seeds)
     try:
         chosen = select_fixtures(fixtures_root, wanted)
     except BatchStop:
         chosen = None  # the batch reports it
+    if not refusal and supersede is not None and chosen is not None:
+        refusal = next((f"fixture {i} is not selected by --fixtures" for i in supersede if i not in chosen), "")
+    if refusal:
+        print(f"run: REFUSED {refusal}", file=stdout)
+        return 2
     if chosen is not None:
         code, text = seal.baseline_guard(split, chosen, arm_names, fixtures_root, seal_dir, preseal, repo_root)
         if code:
@@ -386,6 +559,11 @@ def command_run(fixtures_root, out, split, wanted, arm_names, seeds, budget_usd,
                 raise BatchStop("no fixtures selected")
             if carry:
                 seal.carry_preseal(seal_dir, preseal, out)
+            if supersede is not None:  # after the live gate and the preflight: a refused gate moves nothing
+                supersede_preflight(fixtures_root, out, supersede, cfg, split, env)
+                record = supersede_files(out, supersede, repair_log)
+                print(f"run: superseded {len(record['ids'])} fixtures ({len(record['moved'])} folders moved) into "
+                      f"superseded/{record['stamp']}/", file=o)
             return run_batch(fixtures_root, out, split, fids, arm_names, seeds, cfg, env, runner, budget_usd, date,
                              arms_dir, o)
         except (BatchStop, arms.ArmError, seal.SealStop) as exc:

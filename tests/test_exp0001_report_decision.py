@@ -71,7 +71,7 @@ class LeftTests(unittest.TestCase):
 
     def test_sealed_and_left(self):
         ids = ["heldout-%03d-x" % n for n in range(1, 23)]
-        record = {"fixtures": {f: {} for f in ids},
+        record = {"fixtures": {f: {"scorable": ["p1", "p2", "p3"]} for f in ids},
                   "excluded_fixtures": {ids[-1]: {"reason": "the answer leaks", "date": "2026-10-20"}}}
         baseline = {f: {"primary": 0.5} for f in ids}
         baseline[ids[3]] = {"primary": None}
@@ -84,7 +84,7 @@ class LeftTests(unittest.TestCase):
 
     def test_more_sealed_than_planned_never_goes_below_zero(self):
         ids = ["f%02d" % n for n in range(27)]
-        out = report.sealed_and_left({"fixtures": {f: {} for f in ids}, "excluded_fixtures": {}},
+        out = report.sealed_and_left({"fixtures": {f: {"scorable": ["p1", "p2", "p3"]} for f in ids}, "excluded_fixtures": {}},
                                      {"per_fixture": {"baseline": {f: {"primary": 1.0} for f in ids}}})
         self.assertEqual((out["sealed"], out["left"]), (27, 0))
 
@@ -186,7 +186,8 @@ class MultiValueTests(unittest.TestCase):
 def final_input(n_audit=100, kappa=0.9, count_rule="the count rule\nsecond line", repair="repair log line\nline two"):
     """A hand `final` dict for build_markdown, over the synthetic tree's six fixtures (25 sealed, none left)."""
     ids = json.loads((TREE / "scores.json").read_text(encoding="utf-8"))["fixtures"]
-    record = {"fixtures": {f: {} for f in ids + ["heldout-%03d-pad" % n for n in range(19)]}, "excluded_fixtures": {},
+    record = {"fixtures": {f: {"scorable": ["p1", "p2", "p3"]} for f in ids + ["heldout-%03d-pad" % n for n in range(19)]},
+              "excluded_fixtures": {},
               "count_rule": count_rule}
     return {"record": record, "repair_log_text": repair, "audit": {"n": n_audit, "kappa": kappa}}
 

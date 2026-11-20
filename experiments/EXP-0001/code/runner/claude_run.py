@@ -144,8 +144,9 @@ def invocation_cost(reported, prior=None, *, resumed=False, forked=False):
     return round(reported - base, 10)
 
 
-PHASES = ("control", "judge", "generation", "evaluation")
+PHASES = ("control", "judge", "generation", "evaluation", "authoring")
 SHARED_LEDGER = {"judge": "control"}  # the judge check spends from the control budget
+AUTHORING_CAP_USD = 3.00  # the authoring agent's own bound (4 calls x $0.75); a code constant, not a config key
 
 
 def ledger_of(phase) -> str:
@@ -156,7 +157,12 @@ def ledger_of(phase) -> str:
 
 
 def phase_cap(cfg: dict, phase) -> float:
-    """The cap for a phase's ledger, from config phase_caps. A missing phase or cap refuses."""
+    """The cap for a phase's ledger, from config phase_caps. A missing phase or cap refuses.
+
+    The authoring ledger's cap is the constant AUTHORING_CAP_USD, not a config value.
+    """
+    if ledger_of(phase) == "authoring":
+        return AUTHORING_CAP_USD
     caps = cfg.get("phase_caps")
     cap = caps.get(ledger_of(phase)) if isinstance(caps, dict) else None
     if isinstance(cap, bool) or not isinstance(cap, (int, float)) or not math.isfinite(cap) or cap <= 0:
@@ -229,7 +235,7 @@ def spend_rebuild(environ=None, write=False, out=None, cfg=None) -> int:
     try:
         cap = float((cfg or load_config())["max_budget_usd_per_run"])
         old = {"control": spend_total(environ, "control"), "generation": spend_total(environ, "generation"),
-               "evaluation": spend_total(environ, "evaluation")}
+               "evaluation": spend_total(environ, "evaluation"), "authoring": spend_total(environ, "authoring")}
         entries = []
         for path in sorted((eval_root(environ) / "runs").glob("*/record.json")):
             rec = json.loads(path.read_text(encoding="utf-8"))
@@ -241,7 +247,7 @@ def spend_rebuild(environ=None, write=False, out=None, cfg=None) -> int:
     except (OSError, ValueError, KeyError, TypeError, ConfigError, SpendError) as exc:
         print(f"spend-rebuild: REFUSED {type(exc).__name__}: {exc}", file=out)
         return 1
-    new = {"control": 0.0, "generation": 0.0, "evaluation": 0.0}
+    new = {"control": 0.0, "generation": 0.0, "evaluation": 0.0, "authoring": 0.0}
     last = {}
     for _, _, rec in sorted(entries, key=lambda e: e[:2]):
         sid = rec["session_id"]
@@ -261,7 +267,8 @@ def spend_rebuild(environ=None, write=False, out=None, cfg=None) -> int:
         print("spend-rebuild: dry run, nothing written (--write to apply)", file=out)
         return 0
     atomic_write(eval_root(environ) / "spend.json",
-                 json.dumps({"total": new["control"], "phases": {"generation": new["generation"], "evaluation": new["evaluation"]}}))
+                 json.dumps({"total": new["control"], "phases": {"generation": new["generation"], "evaluation": new["evaluation"],
+                                                        "authoring": new["authoring"]}}))
     print("spend-rebuild: wrote spend.json", file=out)
     return 0
 
@@ -320,7 +327,7 @@ def inside_clone(path, root=None) -> bool:
 RECORDED_DIR = ("experiments", "EXP-0001", "recorded")
 
 
-def path_refusal(value, flag, root=None) -> str:
+def path_refusal(value, flag, root=None, allow_recorded=True) -> str:
     """"" when value is an acceptable folder to write into, else the refusal message naming flag.
 
     There is no default inside the repository, so a missing value refuses. A value inside the clone is accepted only
@@ -331,6 +338,8 @@ def path_refusal(value, flag, root=None) -> str:
     root = Path(ROOT if root is None else root)
     if not inside_clone(value, root):
         return ""
+    if not allow_recorded:  # run and pilot: P:319 keeps raw records out of the repository, so no folder in any clone
+        return f"{flag} is inside the repository clone"
     recorded = _stat_or_none(root.joinpath(*RECORDED_DIR))
     if recorded is not None and walk_finds(value, recorded, on_error=False):
         return ""
@@ -340,6 +349,11 @@ def path_refusal(value, flag, root=None) -> str:
 def out_refusal(value, root=None) -> str:
     """"" when value is an acceptable --out, else the refusal message."""
     return path_refusal(value, "--out", root)
+
+
+def strict_out_refusal(value, root=None) -> str:
+    """"" when value is an acceptable --out for run and pilot (outside every clone, recorded/ included), else the refusal."""
+    return path_refusal(value, "--out", root, allow_recorded=False)
 
 
 def from_refusal(value, root=None) -> str:
@@ -414,7 +428,8 @@ def bash_tools(patterns) -> list:
 
 
 def build_argv(cfg: dict, prompt: str, *, session_id=None, resume=None, plugin=None,
-               plain=False, probe=False, model=None, allowed_tools=None, fork_session=False) -> list:
+               plain=False, probe=False, model=None, allowed_tools=None, fork_session=False,
+               notools=False) -> list:
     argv = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose", "--include-hook-events"]
     if plain:
         # Plain stays plain (no setting sources, no plugin); only the model is pinned explicitly.
@@ -436,7 +451,8 @@ def build_argv(cfg: dict, prompt: str, *, session_id=None, resume=None, plugin=N
     argv += ["--resume", resume] if resume else ["--session-id", session_id or str(uuid.uuid4())]
     if fork_session and resume:
         argv += ["--fork-session"]
-    if probe:
+    if probe or notools:
+        # notools: no tools, but no output cap and the full run timeout (the author command's long reply).
         argv += ["--tools", ""]
     return argv
 
@@ -492,7 +508,7 @@ def parse_stream(text: str) -> list:
 def run_claude(cfg: dict, prompt: str, sandbox: Path, *, label: str, phase: str, kind: str = "plain",
                session_id=None, resume=None, plugin=None, plain=False, probe=False,
                model=None, environ=None, prior=None, allowed_tools=None, fork_session=False,
-               extra_session_ids=(), on_launch=None) -> dict:
+               extra_session_ids=(), on_launch=None, notools=False) -> dict:
     """One `claude -p` call. Returns the run record; proof is isolation.check().
 
     Every launch is gated here: CPR_EVAL_LIVE=1, a valid config, and the phase's cumulative spend under
@@ -519,7 +535,7 @@ def run_claude(cfg: dict, prompt: str, sandbox: Path, *, label: str, phase: str,
     sid = resume or session_id or str(uuid.uuid4())
     argv = build_argv(cfg, prompt, session_id=None if resume else sid, resume=resume,
                       plugin=plugin, plain=plain, probe=probe, model=model,
-                      allowed_tools=allowed_tools, fork_session=fork_session)
+                      allowed_tools=allowed_tools, fork_session=fork_session, notools=notools)
     config_dir = child_config_dir(env)
     mem_state = memory_state(config_dir, sandbox)
     if resume:

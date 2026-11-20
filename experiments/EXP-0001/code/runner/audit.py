@@ -227,6 +227,10 @@ def export(results_dir, seal_dir, fixtures_root, out, stdout=None) -> int:
             _emit(stdout, "audit-export: STOP the results are not the final scoring (held-out results with a baseline arm)")
             return 1
         scores = arms.read_json(Path(results_dir) / "scores.json")
+        stale = score.pass_problem(results_dir, True, scores)  # the report's check: a stale scores.json is refused
+        if stale:
+            _emit(stdout, f"audit-export: STOP {stale}")
+            return 1
         if not isinstance(scores.get("labels"), dict):
             _emit(stdout, "audit-export: STOP scores.json has no labels block")
             return 1

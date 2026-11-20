@@ -20,6 +20,7 @@ import json
 import os
 import re
 import sys
+import uuid
 from pathlib import Path
 
 import claude_run
@@ -463,6 +464,14 @@ def _judge_check(environ, out, config_path) -> int:
     if environ.get("CPR_EVAL_LIVE") != "1":
         print("live run refused: set CPR_EVAL_LIVE=1", file=out)
         return 2
+    import seal  # inside the function: seal imports score, which imports this module
+
+    gates, reason = seal.read_gates(environ, missing_ok=True)
+    if gates is None or seal.JUDGE_KEY in gates:  # an unreadable gate file cannot be recorded into: fail closed
+        print("judge-check: REFUSED " + (reason + "; it is not overwritten" if gates is None else
+                                         "JC already has an entry; a judge-check is never re-run"), file=out)
+        return 2
+    started = seal.utc_now()
     cfg = claude_run.load_config(config_path)
     jcfg = cfg["judge"]
     if jcfg.get("backend") != "claude":
@@ -488,7 +497,10 @@ def _judge_check(environ, out, config_path) -> int:
         raise JudgeStop("items isolation failed: " + ",".join(rec["proof"]["failures"]))
     items_ok = score_items(lines, ITEMS_CASE["expect"]) if lines else 0
     summary = f"backend=claude model={model} isolation=PASS calls 2 probe {probe_ok}/{len(PROBE_CASES)} items {items_ok}/5"
-    if probe_ok != len(PROBE_CASES) or items_ok != 5:
+    missed = probe_ok != len(PROBE_CASES) or items_ok != 5
+    entry = {"outcome": "FAIL" if missed else "PASS", "started_utc": started, "run_id": f"judge-check-{uuid.uuid4().hex[:8]}"}
+    seal.record_judge_check(entry, environ)  # a stop or an error above recorded nothing
+    if missed:
         print(f"judge-check: FAIL {summary}", file=out)
         return 1
     print(f"judge-check: {summary}", file=out)

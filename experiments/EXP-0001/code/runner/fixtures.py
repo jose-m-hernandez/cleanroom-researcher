@@ -59,7 +59,9 @@ MAX_TURN_CHARS = 2000
 # Loading
 # --------------------------------------------------------------------------
 
-def spec_paths(root=None) -> list:
+def spec_paths(root=None, flat: bool = False) -> list:
+    if flat:  # a store: <root>/<id>/spec.json, the split is the spec's own field
+        return sorted(Path(root).glob("*/spec.json"))
     root = Path(root) if root else FIXTURES_DIR
     return sorted(p for split in SPLITS for p in (root / split).glob("*/spec.json"))
 
@@ -68,10 +70,10 @@ def load_spec(path) -> dict:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def load_all(root=None) -> list:
+def load_all(root=None, flat: bool = False) -> list:
     """Return [(path, spec or None)]; None means the file is not valid JSON."""
     out = []
-    for path in spec_paths(root):
+    for path in spec_paths(root, flat):
         try:
             out.append((path, load_spec(path)))
         except (OSError, ValueError):
@@ -476,10 +478,10 @@ def validate_set(specs: list, heldout_complete: bool = False) -> list:
     return out
 
 
-def validate_all(root=None, heldout_complete: bool = False) -> tuple:
+def validate_all(root=None, heldout_complete: bool = False, flat: bool = False) -> tuple:
     """Return (problems, active specs, excluded ids). Problems are '<id>: <label>' lines."""
     problems, specs, valid = [], [], []
-    for path, spec in load_all(root):
+    for path, spec in load_all(root, flat):
         name = path.parent.name
         if spec is None:
             problems.append(f"{name}: spec_not_json")
@@ -495,9 +497,9 @@ def validate_all(root=None, heldout_complete: bool = False) -> tuple:
     return problems, specs, excluded
 
 
-def run_validate(root=None, heldout_complete: bool = False, out=None) -> int:
+def run_validate(root=None, heldout_complete: bool = False, out=None, flat: bool = False) -> int:
     out = out or sys.stdout
-    problems, specs, excluded = validate_all(root, heldout_complete)
+    problems, specs, excluded = validate_all(root, heldout_complete, flat)
     if problems:
         for line in problems:
             print(line, file=out)
@@ -729,7 +731,10 @@ def snapshot_tree(source: Path, dest: Path) -> list:
     return files
 
 
-def fixture_dir(fixture_id: str, root=None) -> Path:
+def fixture_dir(fixture_id: str, root=None, flat: bool = False) -> Path:
+    """<root>/<split>/<id> (the in-repo layout); with flat, <root>/<id> (a store, the layout author writes)."""
+    if flat:
+        return Path(root) / fixture_id
     return Path(root or FIXTURES_DIR) / fixture_id.split("-")[0] / fixture_id
 
 
@@ -912,11 +917,11 @@ def _attempt(spec: dict, cfg: dict, environ, runner, workdir: Path, markers: lis
     return {"ok": True, "labels": [], "out": out, "gen": gen}
 
 
-def generate_fixture(fixture_id: str, cfg: dict, environ, runner=None, root=None, out=None) -> int:
+def generate_fixture(fixture_id: str, cfg: dict, environ, runner=None, root=None, out=None, flat: bool = False) -> int:
     """Generate, normalize, verify and install one fixture. Exit 0 only when it is installed."""
     out = out or sys.stdout
     runner = runner or claude_run.run_claude
-    fdir = fixture_dir(fixture_id, root)
+    fdir = fixture_dir(fixture_id, root, flat)
     try:
         spec = load_spec(fdir / "spec.json")
     except (OSError, ValueError):
@@ -952,9 +957,9 @@ def generate_fixture(fixture_id: str, cfg: dict, environ, runner=None, root=None
     return 1
 
 
-def run_install_check(fixture_id: str, cfg: dict, environ, runner=None, root=None, out=None) -> int:
+def run_install_check(fixture_id: str, cfg: dict, environ, runner=None, root=None, out=None, flat: bool = False) -> int:
     out = out or sys.stdout
-    fdir = fixture_dir(fixture_id, root)
+    fdir = fixture_dir(fixture_id, root, flat)
     try:
         spec = load_spec(fdir / "spec.json")
     except (OSError, ValueError):
@@ -975,11 +980,11 @@ def run_install_check(fixture_id: str, cfg: dict, environ, runner=None, root=Non
 # Offline re-check of an installed fixture
 # --------------------------------------------------------------------------
 
-def install_verify(fixture_id: str, environ=None, root=None, out=None) -> int:
+def install_verify(fixture_id: str, environ=None, root=None, out=None, flat: bool = False) -> int:
     """Evidence gate over an installed fixture. No model call."""
     environ = environ if environ is not None else os.environ
     out = out or sys.stdout
-    fdir = fixture_dir(fixture_id, root)
+    fdir = fixture_dir(fixture_id, root, flat)
     try:
         spec = load_spec(fdir / "spec.json")
         rows = read_jsonl(fdir / "transcript.jsonl")
@@ -1030,10 +1035,10 @@ def _guarded(label: str, work, environ, out) -> int:
     return 1
 
 
-def _excluded_stop(label: str, fixture_id: str, out, root) -> bool:
+def _excluded_stop(label: str, fixture_id: str, out, root, flat: bool = False) -> bool:
     """Print the STOP line and return True when the fixture's spec is excluded. Reads the spec only."""
     try:
-        spec = load_spec(fixture_dir(fixture_id, root) / "spec.json")
+        spec = load_spec(fixture_dir(fixture_id, root, flat) / "spec.json")
     except (OSError, ValueError):
         return False
     if not is_excluded(spec):
@@ -1042,14 +1047,15 @@ def _excluded_stop(label: str, fixture_id: str, out, root) -> bool:
     return True
 
 
-def command_gen_fixture(fixture_id: str, environ=None, out=None, runner=None, root=None) -> int:
-    if _excluded_stop(fixture_id, fixture_id, out, root):
+def command_gen_fixture(fixture_id: str, environ=None, out=None, runner=None, root=None, flat: bool = False) -> int:
+    if _excluded_stop(fixture_id, fixture_id, out, root, flat):
         return 1
-    return _guarded(fixture_id, lambda cfg, env, o: generate_fixture(fixture_id, cfg, env, runner, root, o), environ, out)
+    return _guarded(fixture_id, lambda cfg, env, o: generate_fixture(fixture_id, cfg, env, runner, root, o, flat),
+                    environ, out)
 
 
-def command_install_check(fixture_id: str, environ=None, out=None, runner=None, root=None) -> int:
-    if _excluded_stop(f"install-check {fixture_id}", fixture_id, out, root):
+def command_install_check(fixture_id: str, environ=None, out=None, runner=None, root=None, flat: bool = False) -> int:
+    if _excluded_stop(f"install-check {fixture_id}", fixture_id, out, root, flat):
         return 1
     return _guarded(f"install-check {fixture_id}",
-                    lambda cfg, env, o: run_install_check(fixture_id, cfg, env, runner, root, o), environ, out)
+                    lambda cfg, env, o: run_install_check(fixture_id, cfg, env, runner, root, o, flat), environ, out)

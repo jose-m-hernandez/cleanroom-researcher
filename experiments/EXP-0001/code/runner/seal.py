@@ -47,12 +47,16 @@ _JSON_ESCAPE = re.compile(r"\\[nrtbf]")  # a backslash followed by n, r, t, b or
 GATES_NAME = "gates.json"
 CANARY_KEYS = {"preserve": "C6", "generation": "C7"}  # --type -> the canary's name in the protocol
 CONTROL_KEY = "C1-5"  # the five isolation controls of `control`, recorded as one entry with no token (P:239)
+JUDGE_KEY = "JC"  # the judge-check, recorded as one entry with no token; a PASS opens gen-fixture, run and score
+JUDGE_GATED = ("gen-fixture", "run", "score")
 OUTCOMES = ("PASS", "FAIL", "ERROR")
 # Every command that reaches claude_run.run_claude, except `control` and `canary --type preserve` (P:239, P:243).
-GATED_COMMANDS = ("judge-check", "gen-fixture", "install-check", "run", "score", "pilot", "canary-generation")
+GATED_COMMANDS = ("judge-check", "gen-fixture", "install-check", "run", "score", "pilot", "canary-generation",
+                  "author")
 SANDBOX_NOTE = "canary-note.txt"
 PATTERNS = ("C6 token", "C7 token", "username")
 MANIFEST_NAME, RECORD_NAME, SEAL_NAME, REPAIR_DIR = "manifest.txt", "record.json", "seal.json", "repair-log"
+SUPERSEDED_NAME = "superseded.json"
 LOCKED_ARM_DIRS = ("floor", "oracle")
 AUDIT_SEED = 20261022  # the human audit's draw and blind-order seed, written into the seal before the draw (README P:299)
 
@@ -86,10 +90,11 @@ def gates_path(environ=None) -> Path:
 
 
 def _entry_ok(entry, key=None) -> bool:
-    """A canary entry carries a token; the C1-5 control entry carries none and its outcome is PASS or FAIL only."""
+    """A canary entry carries a token; the C1-5 control entry and the JC judge-check entry carry none and their outcome
+    is PASS or FAIL only."""
     if not (isinstance(entry, dict) and isinstance(entry.get("started_utc"), str)):
         return False
-    if key == CONTROL_KEY:
+    if key in (CONTROL_KEY, JUDGE_KEY):
         return entry.get("outcome") in ("PASS", "FAIL") and isinstance(entry.get("run_id"), str)
     return entry.get("outcome") in OUTCOMES and isinstance(entry.get("token"), str)
 
@@ -98,7 +103,7 @@ def read_gates(environ=None, missing_ok=False) -> tuple:
     """(gates, "") or (None, reason). A missing, unreadable or malformed file is None: every caller fails closed.
 
     With missing_ok a missing file is {} (the first canary creates it); an unreadable or malformed one still is not.
-    The keys are C6, C7 and C1-5 (CONTROL_KEY): the first two carry a token, C1-5 carries none.
+    The keys are C6, C7, C1-5 (CONTROL_KEY) and JC (JUDGE_KEY): the first two carry a token, the others carry none.
     """
     path = gates_path(environ)
     if not path.exists():
@@ -107,7 +112,7 @@ def read_gates(environ=None, missing_ok=False) -> tuple:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None, "gates.json is unreadable"
-    allowed = set(CANARY_KEYS.values()) | {CONTROL_KEY}
+    allowed = set(CANARY_KEYS.values()) | {CONTROL_KEY, JUDGE_KEY}
     if not isinstance(data, dict) or set(data) - allowed or not all(_entry_ok(e, k) for k, e in data.items()):
         return None, "gates.json is malformed"
     return data, ""
@@ -136,11 +141,23 @@ def record_control(entry: dict, environ=None) -> None:
     claude_run.atomic_write(gates_path(environ), _dump(gates))
 
 
+def record_judge_check(entry: dict, environ=None) -> None:
+    """Add the JC entry of `judge-check`. An existing entry is never replaced: a judge-check is not re-run."""
+    gates, reason = read_gates(environ, missing_ok=True)
+    if gates is None:
+        raise SealStop(reason)
+    if JUDGE_KEY in gates:
+        raise SealStop(f"{JUDGE_KEY} already has an entry")
+    gates[JUDGE_KEY] = entry
+    claude_run.atomic_write(gates_path(environ), _dump(gates))
+
+
 def command_gate(command: str, environ=None) -> str:
     """"" when command may launch, else the refusal naming the missing gate (exit 2, before any launch).
 
-    GATED_COMMANDS need C1-5 PASS (checked first: `control` passed all five isolation controls) and then C6 PASS, and
-    gen-fixture needs C7 PASS as well. A FAIL or ERROR entry for C1-5 or either canary stops them all. `control`
+    GATED_COMMANDS need C1-5 PASS (checked first: `control` passed all five isolation controls) and then C6 PASS;
+    gen-fixture, run and score need a JC PASS (the judge-check) after that, and gen-fixture needs C7 PASS as well,
+    checked last. A FAIL or ERROR entry for C1-5, JC or either canary stops them all. `control`
     and `canary --type preserve` are not in the list (`canary --type preserve` has its own C1-5 check in canary_refusal).
     """
     if command not in GATED_COMMANDS:
@@ -156,6 +173,8 @@ def command_gate(command: str, environ=None) -> str:
         return "the C1-C5 controls have not passed: run `control` first"
     if "C6" not in gates:
         return "the C6 canary has not passed: run `canary --type preserve` first"
+    if command in JUDGE_GATED and JUDGE_KEY not in gates:
+        return "the judge-check has not passed: run `judge-check` first"
     if command == "gen-fixture" and "C7" not in gates:
         return "the C7 canary has not passed: run `canary --type generation` first"
     return ""
@@ -625,7 +644,9 @@ def command_seal(fixtures_root, source, repair_log, guide, count_rule, out, envi
                                  mode="replay")
         manifest = "\n".join(manifest_lines(fixtures_root)) + "\n"
         count_text = Path(count_rule).read_bytes().decode("utf-8")
-        record = {"version": 1, "fixtures": record_of_scores(scores), "excluded_fixtures": excluded_fixtures(fixtures_root),
+        sealed_scores = record_of_scores(scores)
+        record = {"version": 1, "fixtures": sealed_scores,  # a fixture with fewer than 3 scorable probes is dropped (P:133)
+                  "excluded_fixtures": dict(sorted({**score.too_few_scorable(sealed_scores), **excluded_fixtures(fixtures_root)}.items())),
                   "count_rule": count_text}
         head = git_head(repo_root)
         fields = {f"excluded block of {fid}": excluded_block_text(block)
@@ -654,6 +675,10 @@ def command_seal(fixtures_root, source, repair_log, guide, count_rule, out, envi
                 "guide": _ref(guide), "count_rule": _ref(count_rule), "audit_seed": AUDIT_SEED,
                 "manifest": _ref(out / MANIFEST_NAME, MANIFEST_NAME), "record": _ref(out / RECORD_NAME, RECORD_NAME),
                 "repair_log": _ref(out / REPAIR_DIR / Path(repair_log).name, f"{REPAIR_DIR}/{Path(repair_log).name}")}
+        # EXP-0001 unblock: the record of a repair re-check travels with the seal
+        if (Path(source) / SUPERSEDED_NAME).is_file():
+            shutil.copyfile(Path(source) / SUPERSEDED_NAME, out / SUPERSEDED_NAME)
+            seal["superseded"] = _ref(out / SUPERSEDED_NAME, SUPERSEDED_NAME)
         (out / SEAL_NAME).write_text(_dump(seal), encoding="utf-8")
     except BaseException:
         shutil.rmtree(out, ignore_errors=True)
@@ -707,6 +732,12 @@ def verify(seal_dir, fixtures_root, results_dir) -> list:
     for ref in files[:3]:
         _check_file(seal_dir / ref["path"], ref["sha256"], f"seal/{ref['path']}", found)
     _check_file(Path(results_dir) / files[3]["path"], files[3]["sha256"], files[3]["path"], found)
+    ref = seal.get("superseded")
+    if ref is not None:
+        try:
+            _check_file(seal_dir / ref["path"], ref["sha256"], f"seal/{ref['path']}", found)
+        except (KeyError, TypeError):
+            return ["unreadable:seal.json"]
     for rel, want in sorted(sessions.items()):
         _check_file(Path(results_dir) / rel, want, rel, found)
     listed = set()
@@ -764,6 +795,38 @@ def manifest_committed(seal_dir, repo_root=None) -> str:
     return ""
 
 
+def seal_files_committed_together(seal_dir, repo_root=None) -> str:
+    """"" when record.json and the repair log are tracked at HEAD with the bytes on disk and were added by the same
+    commit as manifest.txt (P:277), else the message naming the file by label. Call after manifest_committed."""
+    root = Path(repo_root or claude_run.ROOT)
+    seal_dir = Path(seal_dir)
+
+    def rel_of(path):
+        return os.path.relpath(os.path.realpath(path), os.path.realpath(root)).replace(os.sep, "/")
+
+    def git(*args):
+        return subprocess.run(["git", "-C", str(root), *args], capture_output=True, timeout=30)
+
+    logs = sorted(p for p in (seal_dir / REPAIR_DIR).glob("*") if p.is_file()) if (seal_dir / REPAIR_DIR).is_dir() else []
+    files = [(RECORD_NAME, seal_dir / RECORD_NAME)] + ([("the repair log", logs[0])] if logs else [("the repair log", None)])
+    try:
+        added = git("log", "--diff-filter=A", "--format=%H", "-1", "HEAD", "--", rel_of(seal_dir / MANIFEST_NAME)).stdout
+        for label, path in files:
+            if path is None or not path.is_file():
+                return f"{label} is missing: write the seal and commit it with {MANIFEST_NAME}"
+            rel = rel_of(path)
+            blob = git("cat-file", "blob", f"HEAD:{rel}")
+            if blob.returncode != 0:
+                return f"{label} is not committed at HEAD: commit it with {MANIFEST_NAME}"
+            if blob.stdout != path.read_bytes():
+                return f"{label} differs from the committed file: commit it with {MANIFEST_NAME}"
+            if git("log", "--diff-filter=A", "--format=%H", "-1", "HEAD", "--", rel).stdout != added:
+                return f"{label} was not committed in the same commit as {MANIFEST_NAME}: commit them together"
+    except (OSError, subprocess.SubprocessError):
+        return f"git cannot read this repository: {RECORD_NAME} and the repair log are not known to be committed"
+    return ""
+
+
 def is_heldout(split, fids) -> bool:
     return split == "heldout" or any(str(f).startswith("heldout-") for f in fids)
 
@@ -785,7 +848,7 @@ def baseline_guard(split, fids, arm_names, fixtures_root, seal_dir, preseal, rep
         return 0, ""
     if not seal_dir:
         return 2, "an arm other than floor and oracle on held-out fixtures needs --seal naming a committed seal (P:251, P:277)"
-    reason = manifest_committed(seal_dir, repo_root)
+    reason = manifest_committed(seal_dir, repo_root) or seal_files_committed_together(seal_dir, repo_root)
     if reason:
         return 2, reason
     if not carry:
