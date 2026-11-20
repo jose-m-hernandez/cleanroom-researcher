@@ -48,6 +48,10 @@ class ScoreAbort(Exception):
     """Scoring cannot continue; the message is a short label. Labels already paid for stay cached."""
 
 
+class SanityAbort(ScoreAbort):
+    """A judge sanity control failed: the experiment ends with the outcome not determined (P:110 item 4, P:139)."""
+
+
 def _r(x):
     return None if x is None else stats._r(x)
 
@@ -328,7 +332,7 @@ def sanity_controls(specs: dict, labeller: Labeller) -> dict:
               "oracle_recall_min": ORACLE_RECALL_MIN, "mismatch_recall_max": MISMATCH_RECALL_MAX}
     result["ok"] = result["oracle_recall"] >= ORACLE_RECALL_MIN and result["mismatch_recall"] <= MISMATCH_RECALL_MAX
     if not result["ok"]:
-        raise ScoreAbort("judge sanity controls failed: oracle recall %.3f (min %.2f), mismatch recall %.3f (max %.2f)"
+        raise SanityAbort("judge sanity controls failed: oracle recall %.3f (min %.2f), mismatch recall %.3f (max %.2f)"
                          % (result["oracle_recall"], ORACLE_RECALL_MIN, result["mismatch_recall"], MISMATCH_RECALL_MAX))
     return result
 
@@ -368,6 +372,17 @@ def scorable_probes(spec: dict, labels: dict, floor_seeds: list, oracle_seeds: l
         else:
             scorable.append(pid)
     return {"scorable": scorable, "non_abstention": non_abs, "dropped": dropped, "excluded": excluded}
+
+
+MIN_SCORABLE_PROBES = 3  # P:133: a fixture with fewer scorable probes is dropped (the evaluation harness's own minimum)
+
+
+def too_few_scorable(fixtures: dict) -> dict:
+    """{fixture id: {"reason", "scorable": n}} for each fixture of a sealed record's `fixtures` block with fewer than
+    MIN_SCORABLE_PROBES scorable probes (P:133); a fixture with no scorable list counts 0. Counts and a fixed reason only."""
+    return {f: {"reason": "fewer than %d scorable probes" % MIN_SCORABLE_PROBES, "scorable": n}
+            for f, rec in fixtures.items()
+            for n in [len(rec.get("scorable") or []) if isinstance(rec, dict) else 0] if n < MIN_SCORABLE_PROBES}
 
 
 # --------------------------------------------------------------------------
@@ -588,6 +603,122 @@ def summary_line(scores: dict) -> str:
                sum(c["code"] for c in split), sum(c["nocode"] for c in split)))
 
 
+PASSES_NAME = "score-passes.json"
+MAX_PASSES = 2  # the scoring command runs exactly twice per mode; there is no third pass (P:130-131)
+PASS_MODES = ("normal", "final")
+SUPERSEDED_NAME = "superseded.json"
+EARLIER_OCCASION = "scores.json is from an earlier scoring occasion; run score again"
+
+
+def current_occasion(out) -> int:
+    """The scoring occasion of a results folder: 1, or the integer scoring_occasion (>= 2) that superseded.json holds.
+
+    A repair re-check (`run --supersede`) opens a new occasion, and "runs exactly twice" (P:130, clarified at P:458)
+    applies to each occasion. A superseded.json that is not JSON, or whose scoring_occasion is not an integer >= 2,
+    stops scoring (ScoreAbort).
+    """
+    path = Path(out) / SUPERSEDED_NAME
+    if not path.exists():
+        return 1
+    try:
+        data = arms.read_json(path)
+    except (OSError, ValueError):
+        raise ScoreAbort(f"{SUPERSEDED_NAME} unreadable")
+    if not isinstance(data, dict):
+        raise ScoreAbort(f"{SUPERSEDED_NAME} unreadable")
+    if "scoring_occasion" not in data:
+        return 1
+    occasion = data["scoring_occasion"]
+    if type(occasion) is not int or occasion < 2:
+        raise ScoreAbort(f"{SUPERSEDED_NAME} unreadable")
+    return occasion
+
+
+def passes_path(out) -> Path:
+    """The pass counter of the folder's current occasion: score-passes.json for occasion 1, else
+    score-passes-occasion-<n>.json (same schema)."""
+    occasion = current_occasion(out)
+    return Path(out) / (PASSES_NAME if occasion == 1 else f"score-passes-occasion-{occasion}.json")
+
+
+def _passes_read(out) -> dict:
+    """{mode: {"started": n, "aborted": n}} from the current occasion's pass counter (score-passes.json), plus
+    "terminal": true in a mode whose pass failed a judge sanity control; no file is no pass yet. Anything else that
+    is not that shape stops scoring before any call (ScoreAbort)."""
+    path = passes_path(out)
+    fresh = {m: {"started": 0, "aborted": 0} for m in PASS_MODES}
+    if not path.exists():
+        return fresh
+    try:
+        data = arms.read_json(path)
+    except (OSError, ValueError):
+        raise ScoreAbort(f"{path.name} unreadable")
+    if not (isinstance(data, dict) and set(data) == set(PASS_MODES) and all(
+            isinstance(v, dict) and set(v) in ({"started", "aborted"}, {"started", "aborted", "terminal"})
+            and all(type(v[k]) is int and v[k] >= 0 for k in ("started", "aborted")) and v["aborted"] <= v["started"]
+            and v.get("terminal", True) is True
+            for v in data.values())):
+        raise ScoreAbort(f"{path.name} unreadable")
+    return data
+
+
+def pass_refusal(out, mode: str) -> str:
+    """"" when a pass in this mode may start, else the refusal line (exit 2). Two aborted passes end the scoring
+    with the outcome not determined; two started passes are all there are."""
+    counts = _passes_read(out)[mode]
+    if counts.get("terminal"):
+        return "score: STOP the judge sanity controls failed (outcome not determined)"
+    if counts["aborted"] >= MAX_PASSES:
+        return "score: STOP both scoring passes aborted (outcome not determined)"
+    if counts["started"] >= MAX_PASSES:
+        return "score: REFUSED the scoring command has run twice; there is no third pass"
+    return ""
+
+
+def pass_count(out, mode: str, key: str, terminal: bool = False) -> int:
+    """Add one to <out>/score-passes.json under mode and key ("started" or "aborted"); atomic. terminal marks the mode
+    as ended by a failed judge sanity control in the same write. Returns the new count."""
+    data = _passes_read(out)
+    data[mode][key] += 1
+    if terminal:
+        data[mode]["terminal"] = True
+    arms.write_json(passes_path(out), data)
+    return data[mode][key]
+
+
+def pass_problem(out, final: bool, scores: dict) -> str:
+    """"" when scores.json is the result of the last completed pass of the mode being reported, else the refusal label.
+    command_score stamps scores["pass"] = {"mode", "id"} (id = the pass number) when a pass succeeds; a pass that aborts
+    writes nothing, so the first pass's file stands when only the second aborts (id 1 of 2 started). A file from the other
+    mode, or with an id beyond score-passes.json's starts, is refused.
+    A final report always needs the stamp; another report needs it only where the command counted passes (the pilot
+    writes scores.json without the command). The label names no score.
+    """
+    mode = "final" if final else "normal"
+    try:
+        occasion = current_occasion(out)
+    except ScoreAbort as exc:
+        return str(exc)
+    if occasion >= 2 and not passes_path(out).exists():
+        return EARLIER_OCCASION  # whatever the pilot rule says, a stale occasion-1 scores.json is refused
+    if not final and not passes_path(out).exists():
+        return ""
+    try:
+        counts = _passes_read(out)[mode]
+    except ScoreAbort:
+        return f"{passes_path(out).name} unreadable"
+    if counts.get("terminal"):
+        return "the judge sanity controls failed (outcome not determined)"
+    started = counts["started"]
+    stamp = scores.get("pass") if isinstance(scores, dict) else None
+    if occasion >= 2 and not (isinstance(stamp, dict) and stamp.get("occasion") == occasion):
+        return EARLIER_OCCASION
+    if (isinstance(stamp, dict) and stamp.get("mode") == mode and type(stamp.get("id")) is int
+            and 1 <= stamp["id"] <= started):
+        return ""
+    return f"scores.json is not from the last completed {mode} scoring pass; run score again"
+
+
 def command_score(out, fixtures_root, environ=None, stdout=None, label_probe=None, label_items=None, model=None,
                   max_calls=None, seal_dir=None) -> int:
     """Live: the judge calls need CPR_EVAL_LIVE=1, a clean environment and a passing preflight.
@@ -616,20 +747,36 @@ def command_score(out, fixtures_root, environ=None, stdout=None, label_probe=Non
                 if mismatch:
                     print(f"score: STOP the sealed labels.json {mismatch} (outcome not determined)", file=o)
                     return 1
-            scores = score_run(out, specs, config, env, label_probe, label_items, model, max_calls,
-                               "final" if seal_dir else "normal")
+            mode = "final" if seal_dir else "normal"
+            occasion = current_occasion(out)
+            refusal = pass_refusal(out, mode)
+            if refusal:  # a refused call is not a pass; nothing has been asked of the judge
+                print(refusal, file=o)
+                return 2
+            pass_id = pass_count(out, mode, "started")  # a pass starts here, before any judge call
+            try:
+                scores = score_run(out, specs, config, env, label_probe, label_items, model, max_calls, mode)
+            except (ScoreAbort, judge.JudgeBudgetError) as exc:
+                pass_count(out, mode, "aborted", terminal=isinstance(exc, SanityAbort))
+                raise
             if seal_dir:
                 diff = seal_mod.final_record_diff(seal_dir, scores)
                 if diff:
                     print("score: STOP the final scorable record differs from the sealed record (outcome not determined): "
                           + "; ".join(diff), file=o)
                     return 1
+        except SanityAbort as exc:  # terminal: the counter refuses every later pass in this mode
+            print(f"score: ABORT {exc} (outcome not determined)", file=o)
+            return 1
         except ScoreAbort as exc:
             print(f"score: ABORT {exc}", file=o)
             return 1
         except judge.JudgeBudgetError as exc:
             print(f"score: STOP {exc} (labels so far are saved; raise score.max_judge_calls and rerun)", file=o)
             return 1
+        scores["pass"] = {"id": pass_id, "mode": mode}  # report refuses a scores.json whose stamp is not the last start
+        if occasion >= 2:
+            scores["pass"]["occasion"] = occasion
         write_scores(out, scores)
         print(summary_line(scores), file=o)
         return 0

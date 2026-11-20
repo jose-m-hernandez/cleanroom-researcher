@@ -37,7 +37,7 @@ STATE_NAME = "pilot-state.json"
 PILOT_MD = "PILOT.md"
 PIN_KEYS = ("claude_code_version", "model")
 DEFAULT_WAIT_S = 60
-DEFAULT_MIN_SCORABLE = 3
+DEFAULT_MIN_SCORABLE = score.MIN_SCORABLE_PROBES  # one definition, in score.py (P:133)
 FAILED_UNIT_RE = re.compile(r" (?:preserve|probe) failed: (.*)$")
 
 
@@ -352,7 +352,7 @@ def command_pilot(fixtures_root, out, split, wanted, arm_names, seeds, budget_us
     """Live: needs CPR_EVAL_LIVE=1, a clean environment and a passing preflight. --budget-usd above the cap refuses,
     and so does an --out the CLI would refuse, and held-out fixtures (the pilot runs on development fixtures only)."""
     stdout = stdout or sys.stdout
-    refusal = claude_run.out_refusal(None if out is None else str(out))
+    refusal = claude_run.strict_out_refusal(None if out is None else str(out))
     if refusal:
         print(f"pilot: REFUSED {refusal}", file=stdout)
         return 2

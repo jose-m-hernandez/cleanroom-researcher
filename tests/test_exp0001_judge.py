@@ -336,11 +336,14 @@ class ClaudeJudgeTests(unittest.TestCase):
     def test_the_check_has_an_abstention_gold_case_and_accepts_abstained_or_correct_for_it(self):
         case = next(c for c in judge.PROBE_CASES if c["gold"] == judge.ABSTENTION_GOLD)
         self.assertEqual(len(judge.PROBE_CASES), 7)
+        gates = claude_run.eval_root(self.environ) / "gates.json"
         for label in ("abstained", "correct"):
             self.expect[case["id"]] = label
+            gates.unlink(missing_ok=True)  # a judge-check is never re-run: each run starts from no JC entry
             code, out = self.run_check()
             self.assertEqual((code, out.strip()), (0, f"judge-check: backend=claude model={JUDGE_MODEL} isolation=PASS calls 2 probe 7/7 items 5/5"))
         self.expect[case["id"]] = "incorrect"  # a fabricated answer to an abstention probe is not accepted
+        gates.unlink(missing_ok=True)
         code, out = self.run_check()
         self.assertEqual((code, out.strip()), (1, f"judge-check: FAIL backend=claude model={JUDGE_MODEL} isolation=PASS calls 2 probe 6/7 items 5/5"))
 

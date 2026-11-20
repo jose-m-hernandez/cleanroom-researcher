@@ -1,6 +1,6 @@
 """REPORT.md from a results directory.
 
-The output is a pure function of run.json and scores.json and, for a held-out final report, also the seal's
+The output is a pure function of run.json and scores.json (and superseded.json, when the folder holds one) and, for a held-out final report, also the seal's
 record.json and repair log and the audit's audit.json: no clock, no environment, fixed float formatting, so
 regenerating from the same inputs gives the same bytes. Only a held-out final report states the outcome (README
 P:66-70, with the overrides of P:109, P:135 and P:146); every other report is unchanged.
@@ -108,8 +108,10 @@ def decide(lo, hi, sealed, left, kappa) -> tuple:
 def sealed_and_left(record: dict, scores: dict) -> dict:
     """Who is in the primary (P:134-135). The seal records which fixtures it sealed, not which replaced which, so:
     sealed is the fixtures of record.json not in its excluded_fixtures; left is the planned 25 minus sealed (dropped and
-    not replaced; never below 0) plus the sealed fixtures whose baseline primary has no value."""
-    excluded = record["excluded_fixtures"]
+    not replaced; never below 0) plus the sealed fixtures whose baseline primary has no value. A fixture with fewer than
+    3 scorable probes is dropped too (P:133), whether or not the seal listed it."""
+    import score  # inside the function, as in write_report: the one definition of the minimum lives with the scoring
+    excluded = {**score.too_few_scorable(record["fixtures"]), **record["excluded_fixtures"]}
     sealed = [f for f in record["fixtures"] if f not in excluded]
     baseline = scores["per_fixture"].get("baseline", {})
     no_value = [f for f in sealed if (baseline.get(f) or {}).get("primary") is None]
@@ -237,9 +239,32 @@ def load(results_dir) -> tuple:
         raise ReportError("run.json or scores.json missing or unreadable")
 
 
-def build_markdown(run: dict, scores: dict, final=None) -> str:
+def load_superseded(results_dir):
+    """The record <results folder>/superseded.json when it exists, else None; an unreadable or malformed one is a
+    ReportError."""
+    path = Path(results_dir) / "superseded.json"
+    if not path.exists():
+        return None
+    try:
+        record = arms.read_json(path)
+    except (OSError, ValueError):
+        raise ReportError("superseded.json unreadable")
+    if not (isinstance(record, dict) and isinstance(record.get("ids"), list)
+            and isinstance(record.get("excluded_cells"), list)):
+        raise ReportError("superseded.json malformed")
+    return record
+
+
+def superseded_line(superseded: dict) -> str:
+    return ("Superseded after the repair re-check: %d excluded cells of %d fixtures are not counted above; "
+            "they are listed in superseded.json." % (len(superseded["excluded_cells"]), len(superseded["ids"])))
+
+
+def build_markdown(run: dict, scores: dict, final=None, superseded=None) -> str:
     """The report text. final is None for every report but a held-out final one, which passes
-    {"record", "repair_log_text", "audit"}; with None the report is exactly the one without the outcome sections."""
+    {"record", "repair_log_text", "audit"}; with None the report is exactly the one without the outcome sections.
+    superseded is None unless the results folder holds superseded.json; then one line says how many excluded cells
+    the report no longer counts."""
     seed = run["rng_seed"]
     names = scores["arms"]
     fids = scores["fixtures"]
@@ -259,11 +284,15 @@ def build_markdown(run: dict, scores: dict, final=None) -> str:
                 "Isolation re-runs: %d. Cells excluded after a re-run: %d. Runs that failed only outcome checks: %d%s." % (
                     counts.get("isolation_reruns", 0), counts.get("excluded_after_rerun", 0), sum(by_check.values()),
                     " (" + ", ".join(f"{k}: {v}" for k, v in sorted(by_check.items())) + ")" if by_check else ""), ""]
+        if superseded is not None:
+            out += [superseded_line(superseded), ""]
         for entry in run.get("excluded_cells", []):
             out.append("- Excluded: %s, %s, seed %s, %s run; failed %s." % (
                 entry.get("fixture"), entry.get("arm"), entry.get("seed"), entry.get("kind"), ", ".join(entry.get("checks", []))))
         if run.get("excluded_cells"):
             out.append("")
+    elif superseded is not None:
+        out += [superseded_line(superseded), ""]
 
     s = scores["sanity"]
     out += ["## Judge sanity controls", "",
@@ -437,6 +466,7 @@ def write_report(results_dir, out_dir=None, stdout=None, seal_dir=None, audit_pa
     written, and an unreadable record.json, repair log or audit.json is exit 1 with a short label. Any other run
     ignores both and gets the report it always had.
     """
+    import score  # inside the function, as seal is: the pass stamp check lives with the pass counter
     import seal  # inside the function: keeps this module's import list to the report's own
     stdout = stdout or sys.stdout
     for refusal in (claude_run.from_refusal(None if results_dir is None else str(results_dir)),
@@ -446,6 +476,9 @@ def write_report(results_dir, out_dir=None, stdout=None, seal_dir=None, audit_pa
             return 2
     try:
         run, scores = load(results_dir)
+        stale = score.pass_problem(results_dir, seal.is_final(run), scores)
+        if stale:
+            raise ReportError(stale)
         final = None
         if seal.is_final(run):
             if not (seal_dir and audit_path):
@@ -455,7 +488,8 @@ def write_report(results_dir, out_dir=None, stdout=None, seal_dir=None, audit_pa
             for key in ("labels", "multi_value"):
                 if key not in scores:
                     raise ReportError("scores.json has no %s: re-run score" % key)
-        md = build_markdown(run, scores, final)
+        superseded = load_superseded(results_dir)
+        md = build_markdown(run, scores, final) if superseded is None else build_markdown(run, scores, final, superseded)
     except ReportError as exc:
         print(f"report: STOP {exc}", file=stdout)
         return 1

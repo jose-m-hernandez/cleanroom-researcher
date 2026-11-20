@@ -17,6 +17,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from tests import exp0001_paths  # noqa: F401
 
@@ -180,6 +181,11 @@ class Env(unittest.TestCase):
         claude_run.export_plugin = lambda ref, environ=None, overlay_skill=None: self.export
         self.addCleanup(setattr, claude_run, "export_plugin", original)
         self.out = self.tmp / "results"
+        # A batch writes each run's isolation.json under the repository root; no test may write into the real tree.
+        self.repo_root = self.tmp / "repo-root"
+        patched = mock.patch.object(probes, "REPO_ROOT", self.repo_root, create=True)
+        patched.start()
+        self.addCleanup(patched.stop)
 
     def write_plan(self):
         (self.bin / "plan.json").write_text(json.dumps(self.plan), encoding="utf-8")
@@ -1454,7 +1460,8 @@ class CliTests(unittest.TestCase):
         os.makedirs(os.path.join(gated, "cpr-eval"))
         with open(os.path.join(gated, "cpr-eval", "gates.json"), "w", encoding="utf-8") as fh:
             json.dump({"C6": {"outcome": "PASS", "token": "0" * 64, "started_utc": "2026-10-23T00:00:00Z"},
-                       "C1-5": {"outcome": "PASS", "started_utc": "2026-10-23T00:00:00Z", "run_id": "r-1"}}, fh)
+                       "C1-5": {"outcome": "PASS", "started_utc": "2026-10-23T00:00:00Z", "run_id": "r-1"},
+                       "JC": {"outcome": "PASS", "started_utc": "2026-10-23T00:00:00Z", "run_id": "judge-check-0a1b2c3d"}}, fh)
         e["TMPDIR"] = gated
         e.update(env or {})
         return subprocess.run([sys.executable, exp0001_paths.RUN, *args], capture_output=True, text=True,

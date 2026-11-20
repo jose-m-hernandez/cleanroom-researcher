@@ -1207,7 +1207,8 @@ class GenerateTests(GenTestBase):
         (gated / "cpr-eval").mkdir()
         (gated / "cpr-eval" / "gates.json").write_text(json.dumps(
             {**{k: {"outcome": "PASS", "token": "0" * 64, "started_utc": "2026-10-23T00:00:00Z"} for k in ("C6", "C7")},
-             "C1-5": {"outcome": "PASS", "started_utc": "2026-10-23T00:00:00Z", "run_id": "r-1"}}),
+             "C1-5": {"outcome": "PASS", "started_utc": "2026-10-23T00:00:00Z", "run_id": "r-1"},
+             "JC": {"outcome": "PASS", "started_utc": "2026-10-23T00:00:00Z", "run_id": "judge-check-0a1b2c3d"}}),
             encoding="utf-8")
         env["TMPDIR"] = str(gated)
         for command in ("gen-fixture", "install-check"):
@@ -1220,3 +1221,213 @@ class GenerateTests(GenTestBase):
         out = io.StringIO()
         code = fixtures.generate_fixture("dev-099-none", self.cfg, self.environ, GenRunner(self.tmp), self.root, out)
         self.assertEqual((code, out.getvalue().strip()), (1, "dev-099-none: FAIL spec not found"))
+
+
+class FlatStoreTests(GenTestBase):
+    """A store laid out <store>/<id>/spec.json, the layout author writes and run --fixtures-root reads.
+
+    The default layout (<root>/<split>/<id>) is guarded by the tests above, which call everything with the defaults."""
+
+    def setUp(self):
+        super().setUp()
+        self.store = self.tmp / "store"
+        self.sdir = self.store / self.FIXTURE
+        self.sdir.mkdir(parents=True)
+        (self.sdir / "spec.json").write_text(json.dumps(pilot(self.FIXTURE)), encoding="utf-8")
+        original = claude_run.preflight
+        claude_run.preflight = lambda cfg, environ=None: ""
+        self.addCleanup(setattr, claude_run, "preflight", original)
+        original_config = claude_run.load_config
+        claude_run.load_config = lambda path=None: self.cfg
+        self.addCleanup(setattr, claude_run, "load_config", original_config)
+
+    def generate_flat(self, runner=None):
+        out = io.StringIO()
+        code = fixtures.generate_fixture(self.FIXTURE, self.cfg, self.environ, runner or GenRunner(self.tmp),
+                                         self.store, out, flat=True)
+        return code, out.getvalue()
+
+    def test_fixture_dir_adds_the_split_prefix_only_without_flat(self):
+        self.assertEqual(fixtures.fixture_dir(self.FIXTURE, self.store, flat=True), self.store / self.FIXTURE)
+        self.assertEqual(fixtures.fixture_dir(self.FIXTURE, self.store), self.store / "dev" / self.FIXTURE)
+        self.assertEqual(fixtures.fixture_dir(self.FIXTURE), fixtures.FIXTURES_DIR / "dev" / self.FIXTURE)
+
+    def test_generate_installs_the_files_directly_under_the_store_folder(self):
+        code, out = self.generate_flat()
+        self.assertEqual(code, 0, out)
+        for name in ("transcript.jsonl", "gen.json"):
+            self.assertTrue((self.sdir / name).is_file(), name)
+        self.assertTrue((self.sdir / "repo" / "CLAUDE.md").is_file())
+        self.assertEqual(sorted(p.name for p in self.store.iterdir()), [self.FIXTURE])
+        self.assertFalse((self.store / "dev").exists())
+
+    def test_install_check_passes_on_a_generated_store_fixture(self):
+        self.generate_flat()
+        out = io.StringIO()
+        code = fixtures.command_install_check(self.FIXTURE, self.environ, out, GenRunner(self.tmp), self.store, flat=True)
+        self.assertEqual(code, 0, out.getvalue())
+        self.assertEqual(out.getvalue().strip(), f"install-check {self.FIXTURE}: R1 token found; R0 token absent; PASS")
+
+    def test_command_gen_fixture_works_on_the_store(self):
+        out = io.StringIO()
+        code = fixtures.command_gen_fixture(self.FIXTURE, self.environ, out, GenRunner(self.tmp), self.store, flat=True)
+        self.assertEqual(code, 0, out.getvalue())
+        self.assertTrue((self.sdir / "transcript.jsonl").is_file())
+
+    def test_install_verify_passes_on_a_generated_store_fixture(self):
+        self.generate_flat()
+        out = io.StringIO()
+        self.assertEqual(fixtures.install_verify(self.FIXTURE, self.environ, self.store, out, flat=True), 0, out.getvalue())
+        self.assertIn("PASS", out.getvalue())
+
+    def test_install_verify_fails_on_a_store_folder_holding_only_the_spec(self):
+        out = io.StringIO()
+        self.assertEqual(fixtures.install_verify(self.FIXTURE, self.environ, self.store, out, flat=True), 1)
+        self.assertEqual(out.getvalue().strip(), f"install-verify {self.FIXTURE}: FAIL fixture not generated")
+
+    def test_a_store_without_the_spec_fails_with_spec_not_found(self):
+        (self.sdir / "spec.json").unlink()
+        code, out = self.generate_flat()
+        self.assertEqual((code, out.strip()), (1, f"{self.FIXTURE}: FAIL spec not found"))
+        out = io.StringIO()
+        self.assertEqual(fixtures.run_install_check(self.FIXTURE, self.cfg, self.environ, GenRunner(self.tmp),
+                                                    self.store, out, flat=True), 1)
+        self.assertEqual(out.getvalue().strip(), f"install-check {self.FIXTURE}: FAIL spec not found")
+
+    def test_a_flat_store_is_not_read_as_the_split_layout(self):
+        out = io.StringIO()
+        self.assertEqual(fixtures.run_install_check(self.FIXTURE, self.cfg, self.environ, GenRunner(self.tmp),
+                                                    self.store, out), 1)
+        self.assertIn("FAIL spec not found", out.getvalue())
+
+    def test_regenerating_over_a_stale_store_folder_replaces_the_old_files(self):
+        (self.sdir / "repo").mkdir()
+        (self.sdir / "repo" / "stale-marker.txt").write_text("old", encoding="utf-8")
+        (self.sdir / "transcript.jsonl").write_text('{"stale": true}\n', encoding="utf-8")
+        code, out = self.generate_flat()
+        self.assertEqual(code, 0, out)
+        self.assertFalse((self.sdir / "repo" / "stale-marker.txt").exists())
+        self.assertTrue((self.sdir / "repo" / "CLAUDE.md").is_file())
+        text = (self.sdir / "transcript.jsonl").read_text(encoding="utf-8")
+        self.assertNotIn("stale", text)
+
+
+class ValidateStoreTests(unittest.TestCase):
+    """`validate --fixtures-root <store>`: the set rules on a flat store of held-out specs, outside the repository.
+
+    The lint stays its own command; validate never calls it and holds no 25-count rule."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp = Path(self._tmp.name).resolve()
+        self.store = self.tmp / "store"
+        self.store.mkdir()
+
+    def add(self, n, source):
+        spec = pilot(source)
+        sid = f"heldout-{n:03d}-x"
+        spec["id"], spec["split"] = sid, "heldout"
+        (self.store / sid).mkdir()
+        (self.store / sid / "spec.json").write_text(json.dumps(spec), encoding="utf-8")
+        return sid
+
+    def fill(self, longs, shorts=2):
+        for n in range(longs + shorts):
+            self.add(n + 1, "dev-004-chess-clock" if n < longs else "dev-001-tide-table")
+
+    def validate(self, *flags):
+        import run as run_cli
+        shown = io.StringIO()
+        with mock.patch("sys.stdout", new=shown):
+            code = run_cli.main(["validate", "--fixtures-root", str(self.store), *flags])
+        return code, shown.getvalue()
+
+    def test_a_flat_store_of_valid_specs_passes(self):
+        self.fill(2)
+        code, text = self.validate()
+        self.assertEqual(code, 0, text)
+        self.assertIn("validate: 4 fixtures OK (dev 0, heldout 4)", text)
+
+    def test_the_library_call_reads_the_flat_layout_only_with_flat(self):
+        self.fill(2)
+        out = io.StringIO()
+        self.assertEqual(fixtures.run_validate(self.store, out=out, flat=True), 0, out.getvalue())
+        out = io.StringIO()
+        self.assertEqual(fixtures.run_validate(self.store, out=out), 1)  # the split layout finds nothing here
+        self.assertIn("no_fixtures", out.getvalue())
+
+    def test_the_split_field_of_each_spec_decides_dev_or_heldout(self):
+        self.fill(2)
+        (self.store / "dev-001-tide-table").mkdir()
+        (self.store / "dev-001-tide-table" / "spec.json").write_text(json.dumps(pilot()), encoding="utf-8")
+        code, text = self.validate()
+        self.assertEqual(code, 0, text)
+        self.assertIn("(dev 1, heldout 4)", text)
+
+    def test_four_long_fixtures_fail_the_heldout_complete_rule(self):
+        self.fill(4)
+        code, text = self.validate("--heldout-complete")
+        self.assertEqual(code, 1, text)
+        self.assertIn("set: heldout_split_needs_5_long_fixtures", text)
+        self.assertEqual(self.validate()[0], 0)  # without the flag the long count is not asked
+
+    def test_five_long_fixtures_pass_the_heldout_complete_rule(self):
+        self.fill(5)
+        code, text = self.validate("--heldout-complete")
+        self.assertEqual(code, 0, text)
+        self.assertNotIn("25", text)  # no count rule: six fixtures are enough
+
+    def test_duplicate_ids_fail(self):
+        self.fill(2)
+        shutil.copytree(self.store / "heldout-001-x", self.store / "heldout-009-x")
+        # the copy keeps id heldout-001-x, so the directory name and the id disagree and the ids repeat
+        code, text = self.validate()
+        self.assertEqual(code, 1, text)
+        self.assertIn("heldout-009-x", text)
+        spec_path = self.store / "heldout-009-x" / "spec.json"
+        spec = json.loads(spec_path.read_text(encoding="utf-8"))
+        spec["id"] = "heldout-009-x"
+        spec_path.write_text(json.dumps(spec), encoding="utf-8")
+        self.assertEqual(self.validate()[0], 0)  # with its own id the same copy is a valid third fixture
+
+    def test_a_missing_store_refuses_and_runs_nothing(self):
+        import run as run_cli
+        shown = io.StringIO()
+        with mock.patch.object(fixtures, "run_validate") as ran, mock.patch("sys.stdout", new=shown):
+            code = run_cli.main(["validate", "--fixtures-root", str(self.tmp / "nowhere")])
+        self.assertEqual(code, 2)
+        self.assertEqual(shown.getvalue(), "validate: REFUSED --fixtures-root does not exist\n")
+        ran.assert_not_called()
+
+    def test_a_store_with_a_symlink_or_a_git_folder_refuses_and_runs_nothing(self):
+        import run as run_cli
+        self.fill(2)
+        for make in (lambda: os.symlink(self.tmp, self.store / "link"), lambda: (self.store / ".git").mkdir()):
+            make()
+            shown = io.StringIO()
+            with mock.patch.object(fixtures, "run_validate") as ran, mock.patch("sys.stdout", new=shown):
+                code = run_cli.main(["validate", "--fixtures-root", str(self.store)])
+            self.assertEqual(code, 2)
+            self.assertEqual(shown.getvalue(), "validate: REFUSED the fixture store holds a symlink or a git folder\n")
+            ran.assert_not_called()
+            for leftover in (self.store / "link", self.store / ".git"):
+                if leftover.is_symlink():
+                    leftover.unlink()
+                elif leftover.exists():
+                    leftover.rmdir()
+
+    def test_without_the_flag_the_call_is_the_old_one(self):
+        import run as run_cli
+        with mock.patch.object(fixtures, "run_validate", return_value=0) as ran:
+            self.assertEqual(run_cli.main(["validate"]), 0)
+            self.assertEqual(run_cli.main(["validate", "--heldout-complete"]), 0)
+        self.assertEqual([c for c in ran.call_args_list],
+                         [mock.call(heldout_complete=False), mock.call(heldout_complete=True)])
+
+    def test_validate_does_not_run_the_lint(self):
+        import lint
+        self.fill(2)
+        with mock.patch.object(lint, "command_lint") as linted:
+            self.assertEqual(self.validate()[0], 0)
+        linted.assert_not_called()

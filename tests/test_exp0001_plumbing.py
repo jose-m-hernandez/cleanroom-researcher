@@ -741,7 +741,8 @@ class FromInTheCommandLineTests(iso.CloneFolders):
         (gated / "cpr-eval").mkdir()
         (gated / "cpr-eval" / "gates.json").write_text(
             json.dumps({"C6": {"outcome": "PASS", "token": "0" * 64, "started_utc": "2026-10-23T00:00:00Z"},
-                        "C1-5": {"outcome": "PASS", "started_utc": "2026-10-23T00:00:00Z", "run_id": "r-1"}}),
+                        "C1-5": {"outcome": "PASS", "started_utc": "2026-10-23T00:00:00Z", "run_id": "r-1"},
+                        "JC": {"outcome": "PASS", "started_utc": "2026-10-23T00:00:00Z", "run_id": "judge-check-0a1b2c3d"}}),
             encoding="utf-8")
         patch = mock.patch.dict(os.environ, {"TMPDIR": str(gated)})
         patch.start()
