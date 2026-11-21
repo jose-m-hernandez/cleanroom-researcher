@@ -51,14 +51,15 @@ Preregistered text is never edited, moved or deleted, and that includes a typo f
 
 To correct or update preregistered text, add a dated addendum, set off and labelled "Added <YYYY-MM-DD>, after the recorded run:", and list it in the experiment's Changelog (`docs/decisions/2026-11-05-preregistered-sections-take-labelled-addenda-never-edits.md`).
 
-E8 has two messages. "More than the recorded" means the sidecar is wrong: set `readme_lines` to the count at the preregistration. "Fewer than the recorded" has two causes:
+E8 has two count messages. "More than the recorded" means the sidecar is wrong: set `readme_lines` to the count at the preregistration. "Fewer than the recorded" has three causes:
 
 - Preregistered text was edited, moved or deleted: restore it and add an addendum instead.
 - A commit id in `prereg.txt` is no longer in history, so git blame can attribute no lines to it. This follows a history rewrite, or a squash merge of a branch whose sidecar named its own commits, which the merge replaced. Restoring text does not help: the sidecar must name the new ids, as in "After merge".
+- The sidecar itself was changed, so it records a count or ids that no longer match the preregistration. Restore the sidecar from the commit that added it.
 
-To tell them apart, run `git merge-base --is-ancestor <id> HEAD` for each id in the sidecar. It prints nothing and exits 0 when the commit is in HEAD's history, and it fails when the id is not. If every id passes, the cause is the first.
+To tell the first two apart, run `git merge-base --is-ancestor "$ID" HEAD` for each id in the sidecar. It prints nothing and exits 0 when the commit is in HEAD's history, and it fails when the id is not. If every id passes, the cause is the first or the third.
 
-When a pull request is squash-merged, the commits it contained are replaced by one new commit. A pull request that adds or changes a `prereg.txt` must therefore name commit ids that will exist on the default branch after the merge.
+A merge commit keeps the commits it merges, so the commit ids in a `prereg.txt` stay in the default branch's history. A pull request that adds or changes a `prereg.txt` must name commit ids that will exist on the default branch after the merge: that holds for a merge commit and fails for a squash merge, which replaces the commits with one new commit.
 
 A recorded file never changes (E4). To correct one, add a new file with its own `recorded` row in `docs/admissions.md` (A4), and say why in the Changelog.
 
@@ -70,9 +71,9 @@ A README that takes only addenda only grows, and no file other than a generated 
 | --- | --- | --- | --- |
 | `gate-tests` (and the summary job `gate`) | the whole gate, `python3 tools/gate.py` | 3.9 and 3.13 | the clean-environment command in `CONTRIBUTING.md` |
 | `dev-tools` | the test suite under pytest | 3.13 | `python3 -m pytest -q -p no:cacheprovider tests`, after installing `requirements-dev.txt` (`CONTRIBUTING.md`, "Before you open a pull request") |
-| `barred` | the scan, with the secrets | 3.13 | `python3 tools/barred_scan.py`, with `BARRED_STRINGS_PATH` set to the private list |
+| `barred` | the scan, with the secrets | 3.13 | `python3 tools/barred_scan.py`, with `BARRED_STRINGS_PATH` set to the private list, and `BARRED_ALLOW_PATH` set to the private allow list when you approve a finding |
 | `reproduce` | every experiment's generated files | 3.9 and 3.13 | `python3 tools/reproduce.py --all` |
-| `recorded-guard` | the guard, on fork pull requests only | 3.13 | `python3 tools/recorded_guard.py --base <full commit id>`, giving the tip of the pull request's base branch, which is what CI passes |
+| `recorded-guard` | the guard, on fork pull requests only | 3.13 | `python3 tools/recorded_guard.py --base "$BASE_SHA"`, where `$BASE_SHA` is the full commit id of the tip of the pull request's base branch, which is what CI passes |
 
 `--checks-only` is not the gate. It skips the tests stage, one of four, and the tests read the text of some documents and of `.github/workflows/gate.yml`, so a change to words alone can fail there. Four things make a local run differ from CI:
 
@@ -83,11 +84,11 @@ A README that takes only addenda only grows, and no file other than a generated 
 
 ## Running the gate after a rename
 
-The gate builds its file list from git's staging area, plus any untracked files that are not ignored. A file you renamed or deleted but have not staged still appears under its old name, so the gate fails on a file that is no longer there. Stage the change first with `git add -A`, then run the gate with the clean-environment command in `CONTRIBUTING.md`. If you would rather not stage in your working copy, run the gate in a fresh clone where the change is staged.
+The gate builds its file list from git's staging area, plus any untracked files that are not ignored. A file you renamed or deleted but have not staged still appears under its old name, so the gate fails on a file that is no longer there. Stage the change first with `git add -A`, then run the gate with the clean-environment command in `CONTRIBUTING.md`. If you would rather not stage in your working copy, commit the change and run the gate in a fresh clone: a clone sees only commits.
 
 ## Reproduce CI's case-sensitive run on macOS
 
-CI runs on Ubuntu, whose filesystem is case-sensitive, and the gate counts a skipped test as DEAD. A Mac's default volume ignores case, so some cases fail only on CI. To run the gate on a case-sensitive volume, with no sudo, work in an empty folder outside your clone and keep your clone's path in `$CLONE`:
+CI runs on Ubuntu, whose filesystem is case-sensitive, and the gate counts a skipped test as DEAD. A Mac's default volume ignores case, so some cases fail only on CI. To run the gate on a case-sensitive volume, with no sudo, work in an empty folder outside your clone and keep your clone's path in `$CLONE`. Commit first; the clone sees only commits:
 
 ```
 hdiutil create -size 1g -fs 'Case-sensitive APFS' -type SPARSE -volname CRTEST crtest

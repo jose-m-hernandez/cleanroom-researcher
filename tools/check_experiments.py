@@ -875,8 +875,9 @@ def check_e8(
                     sidecar,
                     None,
                     "E8 git blame attributes %d README lines to %s, fewer than the %d recorded: "
-                    "preregistered text was edited, moved or deleted; restore it and add an "
-                    "addendum instead" % (found, commit, expected),
+                    "preregistered text was edited, moved or deleted (restore it and add an "
+                    "addendum instead), or the sidecar names commits no longer in history or "
+                    "was changed (MAINTAINING.md)" % (found, commit, expected),
                 )
             )
         elif found > expected:
